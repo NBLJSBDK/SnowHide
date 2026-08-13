@@ -126,6 +126,17 @@ class MainActivity : ComponentActivity() {
                         ).setAction(com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity.ACTION_TOGGLE_QUICK)
                     )
                     .build(),
+                // 第 4 位：临时「启用全部」（用户测试用，后续可替换）
+                android.content.pm.ShortcutInfo.Builder(this, "enable_all")
+                    .setShortLabel("启用全部")
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_enable_all))
+                    .setIntent(
+                        android.content.Intent(
+                            this,
+                            com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity::class.java,
+                        ).setAction(com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity.ACTION_ENABLE_ALL)
+                    )
+                    .build(),
             )
             scm.setDynamicShortcuts(shortcuts)
         }

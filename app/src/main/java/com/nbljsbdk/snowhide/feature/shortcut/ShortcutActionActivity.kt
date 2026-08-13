@@ -79,6 +79,14 @@ class ShortcutActionActivity : Activity() {
                         r.fold({ it.fold({ null }, { "失败：${it.message}" }) }, { "失败：${it.message}" }),
                     )
                 }
+                ACTION_ENABLE_ALL -> {
+                    val r = runCatching { runBlocking { freezeUseCase.unfreezeAll() } }
+                    Triple(
+                        "启用全部",
+                        r.fold({ it.fold({ "已启用 $it 个应用" }, { null }) }, { null }),
+                        r.fold({ it.fold({ null }, { "失败：${it.message}" }) }, { "失败：${it.message}" }),
+                    )
+                }
                 else -> return@Thread
             }
             runCatching { runBlocking { FrozenStateStore.refresh() } }
@@ -101,8 +109,8 @@ class ShortcutActionActivity : Activity() {
         const val ACTION_SMART_CLEAN = "com.nbljsbdk.snowhide.shortcut.SMART_CLEAN"
         const val ACTION_FREEZE_ALL = "com.nbljsbdk.snowhide.shortcut.FREEZE_ALL"
         const val ACTION_TOGGLE_QUICK = "com.nbljsbdk.snowhide.shortcut.TOGGLE_QUICK"
-        // 第 4 个快捷方式位备用（系统动态上限 5，Android 11+ 桌面显示 4）：
-        // const val ACTION_RESERVED = "com.nbljsbdk.snowhide.shortcut.RESERVED"
+        // 第 4 位：临时「启用全部」（用户测试用，后续可替换）
+        const val ACTION_ENABLE_ALL = "com.nbljsbdk.snowhide.shortcut.ENABLE_ALL"
     }
 }
 
