@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         SettingsRepository.init(applicationContext)
         AppListRepository.init(applicationContext) // 预加载应用列表（避免首次打开增删界面空白）
         com.nbljsbdk.snowhide.ui.util.AppIconLoader.init(applicationContext) // 图标加载器单例
+        applyTransparentBackground()
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {
@@ -76,6 +77,21 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        // 从设置页返回后按最新开关应用窗口背景
+        applyTransparentBackground()
+    }
+
+    /**
+     * 背景透明开关（设计文档 §3.5）：
+     * true → 窗口不绘制背景，透出系统壁纸；
+     * false → 恢复不透明深色背景。
+     */
+    private fun applyTransparentBackground() {
+        if (SettingsRepository.transparentBg.value) {
+            window.setBackgroundDrawable(null)
+        } else {
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0xFF0B1020.toInt()))
+        }
     }
 
     override fun onPause() {

@@ -51,6 +51,7 @@ fun FolderScreen(
     frozenStates: Map<String, Boolean>,
     columns: Int,
     iconSize: Dp,
+    verticalSpace: Int,
     showAppName: Boolean,
     onBackToHome: () -> Unit,
     onAppClick: (String) -> Unit,
@@ -93,7 +94,7 @@ fun FolderScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
         ) {
             items(memberPackages, key = { it }) { pkg ->
                 Column(

@@ -51,6 +51,16 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_TOAST, enabled).apply()
     }
 
+    // ═══════════════════════════════════════
+    // 震动反馈（dock 锁定/解锁，0-4 档，0=关闭）
+    // ═══════════════════════════════════════
+
+    private val _hapticLevel = MutableStateFlow(getInt(KEY_HAPTIC, 2))
+    /** 震感档位 0-4 */
+    val hapticLevel: StateFlow<Int> = _hapticLevel.asStateFlow()
+
+    fun setHapticLevel(value: Int) = save(KEY_HAPTIC, value) { _hapticLevel.value = it }
+
     fun setShowAppName(enabled: Boolean) {
         _showAppName.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_APP_NAME, enabled).apply()
@@ -125,6 +135,7 @@ object SettingsRepository {
     }
 
     private const val KEY_TOAST = "show_toast"
+    private const val KEY_HAPTIC = "haptic_level"
     private const val KEY_APP_NAME = "show_app_name"
     private const val KEY_BACK_DIR = "back_to_last_dir"
     private const val KEY_COLUMNS = "columns"

@@ -115,6 +115,7 @@ fun HomeScreen(
     val folderApps by viewModel.gridRepository.folderApps.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
     val lockedPackages by viewModel.gridRepository.lockedPackages.collectAsState()
+    val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
     val icons by viewModel.icons.collectAsState()
     val labels by viewModel.labels.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
@@ -246,7 +247,8 @@ fun HomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+                    else MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
             )
@@ -258,7 +260,8 @@ fun HomeScreen(
                 modifier = Modifier.padding(bottom = dockIconSize.dp + 12.dp),
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+        else MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         // ═══════════════════════════════════════
         // 循环滑动（设计文档 §3.2）：
@@ -340,7 +343,7 @@ fun HomeScreen(
                             .weight(1f)
                             .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
                     ) {
                         val searchFiltered = if (searchQuery.isBlank()) {
                             gridItems.sortedBy { it.sortOrder }
@@ -478,6 +481,7 @@ fun HomeScreen(
                     frozenStates = frozenStates,
                     columns = columns,
                     iconSize = iconSize.dp,
+                    verticalSpace = verticalSpace,
                     showAppName = showAppName,
                     onBackToHome = {
                         scope.launch { pagerState.animateHome(actualCount) }
