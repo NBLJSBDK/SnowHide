@@ -82,8 +82,16 @@ fun AboutScreen(
         topBar = {
             TopAppBar(
                 title = { Text("关于", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    TextButton(onClick = onClose) { Text("返回") }
+                actions = {
+                    // 右上角返回（用户拍板：返回按钮放右上）
+                    Text(
+                        text = "返回",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable(onClick = onClose)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
