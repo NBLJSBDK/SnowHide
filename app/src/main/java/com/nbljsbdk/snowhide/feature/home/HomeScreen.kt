@@ -455,8 +455,8 @@ fun HomeScreen(
                                 if (shouldVibrate()) {
                                     vibrator?.vibrate(
                                         android.os.VibrationEffect.createOneShot(
-                                            40,
-                                            android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                                            80,
+                                            255,
                                         )
                                     )
                                 }
