@@ -255,11 +255,15 @@ fun HomeScreen(
         ) { LOOP_TOTAL * actualCount }
 
         // 返回键处理：
-        // ① 整理目录模式 → 保存并退出整理，回到主界面
-        // ② 文件夹页 → 滑回主屏页
-        // ③ 主屏非整理 → 默认行为（退出 App）
-        BackHandler(enabled = organizing || pagerState.currentPage % actualCount != 0) {
-            if (organizing) {
+        // ① 搜索框展开 → 关闭搜索并清空（等同「取消」按钮）
+        // ② 整理目录模式 → 保存并退出整理，回到主界面
+        // ③ 文件夹页 → 滑回主屏页
+        // ④ 主屏非整理 → 默认行为（退出 App）
+        BackHandler(enabled = searchOpen || organizing || pagerState.currentPage % actualCount != 0) {
+            if (searchOpen) {
+                searchOpen = false
+                viewModel.setSearchQuery("")
+            } else if (organizing) {
                 organizeViewModel.commitFolderName()
                 viewModel.setOrganizing(false)
             } else {
