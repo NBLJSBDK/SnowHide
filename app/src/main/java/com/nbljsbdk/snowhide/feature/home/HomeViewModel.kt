@@ -255,4 +255,3 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _message.value = null
     }
 }
-}

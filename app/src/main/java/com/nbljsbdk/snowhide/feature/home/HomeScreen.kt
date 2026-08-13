@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
@@ -72,10 +74,11 @@ import com.nbljsbdk.snowhide.ui.util.frosted
  * 结构：顶栏（标题+齿轮+搜索）→ Shizuku 引导卡 → 混排宫格 → 底部图标栏。
  * 无状态组件化：宫格单元/底部栏/菜单均为内部无状态 Composable，逻辑全在 ViewModel。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
+    onRequestShizuku: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application
@@ -148,13 +151,7 @@ fun HomeScreen(
             // Shizuku 未授权引导卡
             if (!engineReady) {
                 ShizukuGuideCard(
-                    onRequest = {
-                        // Shizuku.requestPermission 必须从 Activity 发起，
-                        // 权限回调由 MainActivity.onRequestPermissionsResult 转发
-                        (context as? android.app.Activity)?.let { activity ->
-                            rikka.shizuku.Shizuku.requestPermission(REQUEST_SHIZUKU)
-                        }
-                    },
+                    onRequest = onRequestShizuku,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
@@ -253,9 +250,6 @@ private fun dockPackages(
 
 /** 显示名占位（P0 用包名，后续接 AppInfo 映射） */
 private fun labelOf(pkg: String): String = pkg.substringAfterLast('.')
-
-/** Shizuku 授权请求码（MainActivity.onRequestPermissionsResult 转发用） */
-private const val REQUEST_SHIZUKU = 1
 
 /** Shizuku 未授权引导卡 */
 @Composable

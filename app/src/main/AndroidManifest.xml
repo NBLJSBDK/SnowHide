@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Shizuku API 权限（shell 身份执行冻结/解冻） -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <!-- Android 11+ 查询全部已装应用（增加应用界面） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -22,6 +29,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Shizuku UserService：被 Shizuku 拉起到 shell 身份进程执行 pm 命令 -->
+        <service
+            android:name="com.nbljsbdk.snowhide.core.engine.impl.ShellCommandService"
+            android:exported="false" />
     </application>
 
 </manifest>
