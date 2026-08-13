@@ -61,10 +61,6 @@ fun SettingsScreen(
     val showAppName by settings.showAppName.collectAsState()
     val backToDir by settings.backToLastDir.collectAsState()
     val hapticLevel by settings.hapticLevel.collectAsState()
-    val iconPack by settings.iconPack.collectAsState()
-    val transparent by settings.transparentBg.collectAsState()
-    val iconPacks by viewModel.iconPacks.collectAsState()
-    val pickerOpen by viewModel.pickerOpen.collectAsState()
 
     // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
@@ -109,51 +105,7 @@ fun SettingsScreen(
                     onValue = { settings.setHapticLevel(it.toInt()) },
                 )
             }
-
-            // ── 美化 ──
-            SettingCard("美化") {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.openPicker() },
-                ) {
-                    Text(
-                        text = "图标包：${if (iconPack.isEmpty()) "系统默认" else iconPack}",
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text("选择 ▸", color = MaterialTheme.colorScheme.primary)
-                }
-                SwitchSetting("背景透明（透出壁纸）", transparent) { settings.setTransparentBg(it) }
-            }
         }
-    }
-
-    // 图标包选择器
-    if (pickerOpen) {
-        AlertDialog(
-            onDismissRequest = { viewModel.closePicker() },
-            title = { Text("选择图标包") },
-            text = {
-                Column {
-                    RadioRow(
-                        label = "系统默认",
-                        selected = iconPack.isEmpty(),
-                        onClick = { viewModel.selectIconPack("") },
-                    )
-                    iconPacks.forEach { pack ->
-                        RadioRow(
-                            label = pack.label,
-                            selected = iconPack == pack.pkg,
-                            onClick = { viewModel.selectIconPack(pack.pkg) },
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.closePicker() }) { Text("关闭") }
-            },
-        )
     }
 }
 
@@ -212,23 +164,5 @@ private fun SwitchSetting(
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Checkbox(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-/** 单选行（图标包选择器） */
-@Composable
-private fun RadioRow(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(label)
     }
 }

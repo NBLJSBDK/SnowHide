@@ -166,9 +166,20 @@ fun HomeScreen(
     // 移除应用二级菜单 / 卸载二次确认
     var removeAppTarget by remember { mutableStateOf<String?>(null) }
     var uninstallTarget by remember { mutableStateOf<String?>(null) }
-    // 布局设置透明浮框 / 主屏空白长按菜单
+    // 布局设置透明浮框 / 主屏空白长按菜单 / 美化浮框
     var layoutPanelOpen by remember { mutableStateOf(false) }
     var blankMenuOpen by remember { mutableStateOf(false) }
+    var beautyPanelOpen by remember { mutableStateOf(false) }
+
+    // 美化浮框数据：当前图标包/透明开关 + 已装图标包列表
+    val iconPack by viewModel.settingsRepository.iconPack.collectAsState()
+    val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
+    var iconPacks by remember { mutableStateOf<List<com.nbljsbdk.snowhide.ui.util.AppIconLoader.IconPackInfo>>(emptyList()) }
+    LaunchedEffect(beautyPanelOpen) {
+        if (beautyPanelOpen && iconPacks.isEmpty()) {
+            iconPacks = com.nbljsbdk.snowhide.ui.util.AppIconLoader.queryIconPacks()
+        }
+    }
 
     // 整理目录提示事件 → Snackbar
     val organizeEvent by organizeViewModel.events.collectAsState()
@@ -671,7 +682,7 @@ fun HomeScreen(
                     }
                     DialogAction("美化设置") {
                         blankMenuOpen = false
-                        viewModel.openSettings()
+                        beautyPanelOpen = true
                     }
                 }
             },
@@ -680,6 +691,18 @@ fun HomeScreen(
                     Text("取消")
                 }
             },
+        )
+    }
+
+    // 美化设置透明浮框（与布局设置同款，设计文档 §3.11）
+    if (beautyPanelOpen) {
+        BeautyPanel(
+            iconPack = iconPack,
+            transparentBg = transparentBg,
+            iconPacks = iconPacks,
+            onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
+            onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
+            onDismiss = { beautyPanelOpen = false },
         )
     }
 
