@@ -222,6 +222,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 移除应用：先解冻再移出列表（设计文档 §3.4「解冻并移出」） */
+    fun removeApp(pkg: String) {
+        viewModelScope.launch {
+            freezeUseCase.unfreezeApp(pkg)
+                .onFailure { showMessage("解冻失败：${it.message}") }
+            gridRepository.removeApp(pkg)
+            refreshFrozenStates()
+        }
+    }
+
     /** ⚠️ 安全特例：移除并卸载（用户明确选择+二次确认后调用） */
     fun uninstallApp(pkg: String) {
         viewModelScope.launch {

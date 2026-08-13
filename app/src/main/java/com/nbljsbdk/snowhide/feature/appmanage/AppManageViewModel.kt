@@ -37,6 +37,16 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val context get() = getApplication<Application>()
 
+    /** 移出应用时先解冻（设计文档 §3.4「解冻并移出」） */
+    private val freezeUseCase =
+        com.nbljsbdk.snowhide.domain.FreezeUseCase(
+            com.nbljsbdk.snowhide.core.mode.FreezeExecutor(
+                com.nbljsbdk.snowhide.core.engine.EngineManager
+            ),
+            GridRepository,
+            com.nbljsbdk.snowhide.core.engine.EngineManager,
+        )
+
     /** 排序方式（左右栏各自独立，不持久化） */
     enum class SortMode {
         TIME_DESC,  // 安装时间倒序（默认左栏）
@@ -241,11 +251,14 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** 确认：暂存改动全部落盘（不冻结） */
+    /** 确认：暂存改动全部落盘（移出的应用先解冻再移出，不冻结新加入的） */
     fun confirmChanges() {
         val cur = _pending.value
         cur.added.forEach { pkg -> GridRepository.addAppToHome(pkg) }
-        cur.removed.forEach { pkg -> GridRepository.removeApp(pkg) }
+        cur.removed.forEach { pkg ->
+            viewModelScope.launch { freezeUseCase.unfreezeApp(pkg) }
+            GridRepository.removeApp(pkg)
+        }
         _pending.value = Pending()
     }
 
@@ -254,13 +267,15 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         _pending.value = Pending()
     }
 
-    /** 「应用」按钮：加入列表并立即冻结（待加入的全部冻结） */
+    /** 「应用」按钮：加入列表并立即冻结（移出的先解冻） */
     fun applyAndFreeze() {
-        val freezeUseCase = FreezeUseCase(FreezeExecutor(EngineManager), GridRepository, EngineManager)
         val cur = _pending.value
         val toAdd = cur.added.toList()
         toAdd.forEach { pkg -> GridRepository.addAppToHome(pkg) }
-        cur.removed.forEach { pkg -> GridRepository.removeApp(pkg) }
+        cur.removed.forEach { pkg ->
+            viewModelScope.launch { freezeUseCase.unfreezeApp(pkg) }
+            GridRepository.removeApp(pkg)
+        }
         _pending.value = Pending()
         toAdd.forEach { pkg ->
             viewModelScope.launch { freezeUseCase.freezeApp(pkg) }

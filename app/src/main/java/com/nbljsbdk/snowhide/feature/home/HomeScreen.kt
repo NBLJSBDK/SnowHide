@@ -267,11 +267,15 @@ fun HomeScreen(
             }
         }
 
-        // 整理模式锁定主屏基准。actualCount 变化（整理中创建/删除文件夹）时
-        // 必须重新对齐：PagerState 是 rememberSaveable 不重建，currentPage 可能
-        // 偏离基准倍数，取模结果会漂到文件夹页（scrollHome 为瞬时对齐）。
+        // 文件夹数量变化时的页面锚点对齐：
+        // PagerState 是 rememberSaveable 不重建，currentPage 可能偏离基准倍数，
+        // actualCount 变化会让取模结果漂到别的文件夹页（scrollHome 瞬时对齐）。
+        // - 整理模式：锁定主屏
+        // - 非整理：删除文件夹的唯一入口是主屏长按（用户本在主屏），漂移即对齐回主屏
         LaunchedEffect(organizing, actualCount) {
-            if (organizing) pagerState.scrollHome(actualCount)
+            if (organizing || pagerState.currentPage % actualCount != 0) {
+                pagerState.scrollHome(actualCount)
+            }
         }
 
         HorizontalPager(
@@ -512,9 +516,8 @@ fun HomeScreen(
             text = {
                 Column {
                     DialogAction("是否移除该应用（解冻并移出）") {
-                        viewModel.gridRepository.removeApp(pkg)
+                        viewModel.removeApp(pkg)
                         removeAppTarget = null
-                        viewModel.refreshFrozenStates()
                     }
                     DialogAction("移除并卸载（⚠️ 会删除应用数据）") {
                         removeAppTarget = null
