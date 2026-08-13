@@ -623,7 +623,6 @@ fun HomeScreen(
             targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
             onToggleFreeze = { pkg -> viewModel.toggleFreeze(pkg); longPressTarget = null },
-            onEnable = { pkg -> viewModel.enableApp(pkg); longPressTarget = null },
             onOpen = { pkg -> viewModel.openApp(pkg); longPressTarget = null },
             onRemove = { pkg ->
                 removeAppTarget = pkg
@@ -1069,7 +1068,6 @@ private fun ContextMenu(
     targetFolder: com.nbljsbdk.snowhide.data.model.Folder?,
     onDismiss: () -> Unit,
     onToggleFreeze: (String) -> Unit,
-    onEnable: (String) -> Unit,
     onOpen: (String) -> Unit,
     onRemove: (String) -> Unit,
     onRenameFolder: (Long) -> Unit,
@@ -1096,7 +1094,6 @@ private fun ContextMenu(
                 } else {
                     val pkg = item.pkg ?: return@Column
                     DialogAction(if (frozen) "解冻" else "冻结") { onToggleFreeze(pkg) }
-                    DialogAction("启用应用（不打开）") { onEnable(pkg) }
                     DialogAction("打开应用") { onOpen(pkg) }
                     DialogAction("移除应用") { onRemove(pkg) }
                     DialogAction("布局设置") { onLayoutSettings() }

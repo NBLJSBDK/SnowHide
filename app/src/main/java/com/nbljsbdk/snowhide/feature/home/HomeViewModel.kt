@@ -207,8 +207,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else freezeUseCase.freezeApp(pkg)
             result.onSuccess {
                 refreshFrozenStates()
-                // 用户拍板：底部栏图标消失即反馈，成功不弹提示
-                // （Snackbar 会挡住栏位阻止连续上划操作）
+                // 冻结/解冻成功提示（用户拍板：长按菜单需要反馈）
+                val name = _labels.value[pkg] ?: pkg
+                showMessage(if (frozen) "已解冻：$name" else "已冻结：$name")
             }.onFailure { showMessage("操作失败：${it.message}") }
         }
     }
@@ -233,15 +234,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     showMessage("已卸载并移除：$pkg")
                 }
                 .onFailure { showMessage("卸载失败：${it.message}") }
-        }
-    }
-
-    /** 启用应用（仅解冻，不自动打开——与直接点击不同，设计文档 §3.4） */
-    fun enableApp(pkg: String) {
-        viewModelScope.launch {
-            freezeUseCase.unfreezeApp(pkg)
-                .onSuccess { refreshFrozenStates(); showMessage("已启用") }
-                .onFailure { showMessage("启用失败：${it.message}") }
         }
     }
 
