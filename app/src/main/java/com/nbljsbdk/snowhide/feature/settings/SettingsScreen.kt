@@ -102,7 +102,9 @@ fun SettingsScreen(
         }
     }
 
-    // 导入：SAF 打开文档
+    // 导入：SAF 打开文档；成功后弹「立即重启」确认
+    var restartPrompt by remember { mutableStateOf(false) }
+    var importedCount by remember { mutableStateOf(0) }
     val importLauncher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -113,11 +115,41 @@ fun SettingsScreen(
                 } ?: error("无法读取文件")
                 com.nbljsbdk.snowhide.data.repo.BackupRepository.importBackup(context, json)
             }
-            message = ok.fold(
-                { "导入成功（$it 项），重启应用后生效" },
-                { "导入失败：${it.message}" },
-            )
+            ok.onSuccess { n ->
+                importedCount = n
+                restartPrompt = true
+            }.onFailure {
+                message = "导入失败：${it.message}"
+            }
         }
+    }
+
+    // 导入成功 → 重启确认
+    if (restartPrompt) {
+        AlertDialog(
+            onDismissRequest = { restartPrompt = false },
+            title = { Text("导入成功") },
+            text = { Text("已导入 $importedCount 项数据，是否立即重启应用生效？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    restartPrompt = false
+                    // 重建 Activity + 杀旧进程（单例仓库重新加载数据）
+                    val intent = android.content.Intent(
+                        context,
+                        com.nbljsbdk.snowhide.MainActivity::class.java,
+                    )
+                    intent.addFlags(
+                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    )
+                    context.startActivity(intent)
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                }) { Text("立即重启") }
+            },
+            dismissButton = {
+                TextButton(onClick = { restartPrompt = false }) { Text("稍后") }
+            },
+        )
     }
 
     // 返回键回到主界面（而非退出到桌面）
