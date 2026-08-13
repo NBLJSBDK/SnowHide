@@ -179,7 +179,12 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { exportLauncher.launch("雪藏备份.json") },
+                        .clickable {
+                            // 文件名带时间戳精确到秒：雪藏备份2608132319.json
+                            val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
+                                .format(java.util.Date())
+                            exportLauncher.launch("雪藏备份$stamp.json")
+                        },
                 ) {
                     Text("导出数据", modifier = Modifier.weight(1f))
                     Text("▸", color = MaterialTheme.colorScheme.primary)
