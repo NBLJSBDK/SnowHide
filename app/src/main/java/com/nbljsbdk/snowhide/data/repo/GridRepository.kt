@@ -219,7 +219,14 @@ object GridRepository {
     // 持久化（SharedPreferences + JSON）
     // ═══════════════════════════════════════
 
-    private fun nextId(): Long = System.currentTimeMillis()
+    /**
+     * ID 生成：进程内自增（初始值=当前毫秒）。
+     * 不能用 System.currentTimeMillis() 直接做 id——连续快速操作
+     * （如连点创建文件夹）在同一毫秒内会生成相同 id，
+     * LazyGrid key 冲突导致布局错乱。
+     */
+    private val idCounter = java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis())
+    private fun nextId(): Long = idCounter.incrementAndGet()
 
     private fun getAllFolders(): List<Folder> = _folders.value
 
