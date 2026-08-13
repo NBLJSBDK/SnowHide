@@ -159,7 +159,6 @@ class OrganizeViewModel : ViewModel() {
     fun createFolder() {
         val name = nextFolderName()
         val folder = GridRepository.createFolder(name)
-        android.util.Log.d("SnowHideOrg", "createFolder: id=${folder.id} name=$name")
         _state.value = OrganizeState.FolderSelected(
             folderId = folder.id,
             folderNameInput = name,

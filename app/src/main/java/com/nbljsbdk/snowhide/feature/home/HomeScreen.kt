@@ -261,39 +261,15 @@ fun HomeScreen(
                 organizeViewModel.commitFolderName()
                 viewModel.setOrganizing(false)
             } else {
-                scope.launch {
-                    val base = (pagerState.currentPage / actualCount) * actualCount
-                    pagerState.animateScrollToPage(base)
-                }
+                scope.launch { pagerState.animateHome(actualCount) }
             }
         }
 
-        // 整理模式下锁定主屏页（瞬时对齐，不用动画——动画期间会显示文件夹页）
-        LaunchedEffect(organizing) {
-            android.util.Log.d("SnowHideOrg", "LaunchedEffect(organizing=$organizing) currentPage=${pagerState.currentPage}")
-            if (organizing) {
-                val base = (pagerState.currentPage / actualCount) * actualCount
-                if (pagerState.currentPage != base) pagerState.scrollToPage(base)
-            }
-        }
-
-        // 文件夹数量变化（整理中创建/删除文件夹）→ 立即对齐主屏基准。
-        // 根因修复：PagerState 是 rememberSaveable 不重建，currentPage 可能
-        // 偏离基准倍数，actualCount 变化会让取模结果漂到文件夹页。
-        LaunchedEffect(actualCount) {
-            if (organizing) {
-                val base = (pagerState.currentPage / actualCount) * actualCount
-                if (pagerState.currentPage != base) pagerState.scrollToPage(base)
-                android.util.Log.d("SnowHideOrg", "LaunchedEffect(actualCount=$actualCount) snap base=$base")
-            }
-        }
-
-        // 页码变化日志（定位点+跳页问题）
-        LaunchedEffect(pagerState.currentPage) {
-            android.util.Log.d(
-                "SnowHideOrg",
-                "page=${pagerState.currentPage} actualCount=$actualCount organizing=$organizing"
-            )
+        // 整理模式锁定主屏基准。actualCount 变化（整理中创建/删除文件夹）时
+        // 必须重新对齐：PagerState 是 rememberSaveable 不重建，currentPage 可能
+        // 偏离基准倍数，取模结果会漂到文件夹页（scrollHome 为瞬时对齐）。
+        LaunchedEffect(organizing, actualCount) {
+            if (organizing) pagerState.scrollHome(actualCount)
         }
 
         HorizontalPager(
@@ -359,16 +335,13 @@ fun HomeScreen(
                                                 (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
                                             onClick = {
                                                 if (organizing) {
-                                                    android.util.Log.d("SnowHideOrg", "FolderCell tapFolder id=${folder.id} organizing=$organizing")
                                                     organizeViewModel.tapFolder(folder)
                                                 } else {
-                                                    android.util.Log.d("SnowHideOrg", "FolderCell jump id=${folder.id}")
                                                     // 跳到该文件夹页（循环内当前位置的相邻页）
                                                     val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
                                                     if (folderIndex >= 0) {
                                                         scope.launch {
-                                                            val base = (pagerState.currentPage / actualCount) * actualCount
-                                                            pagerState.animateScrollToPage(base + folderIndex + 1)
+                                                            pagerState.animateToFolder(actualCount, folderIndex)
                                                         }
                                                     }
                                                 }
@@ -467,10 +440,7 @@ fun HomeScreen(
                     iconSize = iconSize.dp,
                     showAppName = showAppName,
                     onBackToHome = {
-                        scope.launch {
-                            val base = (pagerState.currentPage / actualCount) * actualCount
-                            pagerState.animateScrollToPage(base)
-                        }
+                        scope.launch { pagerState.animateHome(actualCount) }
                     },
                     onAppClick = { viewModel.openApp(it) },
                     onAppLongClick = { item -> longPressTarget = item },
