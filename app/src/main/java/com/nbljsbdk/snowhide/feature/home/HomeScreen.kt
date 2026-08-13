@@ -275,10 +275,17 @@ fun HomeScreen(
             }
         }
 
+        // 搜索有词时自动回主屏显示结果（结果只在主屏宫格渲染）
+        LaunchedEffect(searchQuery) {
+            if (searchQuery.isNotBlank()) {
+                pagerState.animateHome(actualCount)
+            }
+        }
+
         HorizontalPager(
             state = pagerState,
-            // 只有一个主屏（没有文件夹）时禁用滑动，避免无意义的页面拖动
-            userScrollEnabled = !organizing && sortedFolders.isNotEmpty(),
+            // 只有一个主屏（没有文件夹）时禁用滑动；搜索/整理期间锁定主屏
+            userScrollEnabled = !organizing && sortedFolders.isNotEmpty() && searchQuery.isBlank(),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
