@@ -41,10 +41,10 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 /**
  * 设置页（设计文档 §3.11 更多选项，P0 子集）
  *
- * - 布局设置（全局通用一套）：每排数量/图标大小/上下间距/底部图标大小
  * - 简单设置：清理后 Toast / 显示应用名 / 退出回目录
  * - 图标包选择器
  * - 壁纸：透明开关（图片选择 P1）
+ * - 布局设置已移到主屏长按菜单 → 透明浮框（实时预览）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,10 +57,6 @@ fun SettingsScreen(
     ),
 ) {
     val settings = viewModel.settings
-    val columns by settings.columns.collectAsState()
-    val iconSize by settings.iconSize.collectAsState()
-    val vSpace by settings.verticalSpace.collectAsState()
-    val dockSize by settings.dockIconSize.collectAsState()
     val showToast by settings.showToast.collectAsState()
     val showAppName by settings.showAppName.collectAsState()
     val backToDir by settings.backToLastDir.collectAsState()
@@ -95,35 +91,6 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── 布局设置 ──
-            SettingCard("布局设置") {
-                SliderSetting(
-                    label = "每排数量：$columns",
-                    value = columns.toFloat(),
-                    range = 3f..7f,
-                    steps = 3,
-                    onValue = { settings.setColumns(it.toInt()) },
-                )
-                SliderSetting(
-                    label = "图标大小：${iconSize}dp",
-                    value = iconSize.toFloat(),
-                    range = 36f..96f,
-                    onValue = { settings.setIconSize(it.toInt()) },
-                )
-                SliderSetting(
-                    label = "上下间距：${vSpace}dp",
-                    value = vSpace.toFloat(),
-                    range = 0f..40f,
-                    onValue = { settings.setVerticalSpace(it.toInt()) },
-                )
-                SliderSetting(
-                    label = "底部图标大小：${dockSize}dp",
-                    value = dockSize.toFloat(),
-                    range = 28f..72f,
-                    onValue = { settings.setDockIconSize(it.toInt()) },
-                )
-            }
-
             // ── 简单设置 ──
             SettingCard("简单设置") {
                 SwitchSetting("清理应用后展示 Toast", showToast) { settings.setShowToast(it) }
@@ -195,26 +162,6 @@ private fun SettingCard(title: String, content: @Composable androidx.compose.fou
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(vertical = 4.dp))
             content()
         }
-    }
-}
-
-/** 滑条设置行 */
-@Composable
-private fun SliderSetting(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    steps: Int = 0,
-    onValue: (Float) -> Unit,
-) {
-    Column {
-        Text(label, style = MaterialTheme.typography.bodySmall)
-        Slider(
-            value = value,
-            onValueChange = onValue,
-            valueRange = range,
-            steps = steps,
-        )
     }
 }
 

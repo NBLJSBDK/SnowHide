@@ -1,41 +1,46 @@
 package com.nbljsbdk.snowhide.core.engine.impl
 
-import android.app.Service
-import android.content.Intent
+import android.content.Context
 import android.os.Binder
-import android.os.IBinder
 import android.os.Parcel
 
 /**
- * Shizuku UserService——被 Shizuku 拉起到 **shell 身份进程** 的命令执行服务
+ * Shizuku UserService——命令执行服务（shell 身份进程）
  *
- * 原理：Shizuku.bindUserService 会把本 Service 启动在 Shizuku server 的
- * 特权进程里，因此这里的 `Runtime.exec` 天然拥有 shell 权限——
- * `pm disable-user/enable` 可直接执行（黑白门 AppGate 同款通道）。
+ * 官方协议（Shizuku-API README「UserService」节，13.1.5 实测核对）：
+ * **服务类必须实现 IBinder 接口**（不是普通 Service！），
+ * 通常直接继承 AIDL Stub。本工程手写 Binder（不引 AIDL 编译），
+ * 故直接继承 [Binder]。
  *
- * 通信：手写 Binder（不依赖 AIDL 编译，AGP 9 下更稳）。
+ * Shizuku.bindUserService 会把本类实例拉起到 Shizuku server 的
+ * 特权进程（root/shell 身份），因此这里的 Runtime.exec 天然拥有
+ * shell 权限——`pm disable-user/enable` 可直接执行。
+ *
+ * 构造器：Shizuku v13 优先用 Context 构造器，旧版用默认构造器，
+ * 两个都保留（官方文档明确）。
+ *
  * 事务码 [TRANSACTION_EXEC]：入参 String(cmd) → 出参 String(输出)。
  */
-class ShellCommandService : Service() {
+class ShellCommandService : Binder {
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    constructor() : super()
 
-    private val binder = object : Binder() {
-        override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-            return when (code) {
-                TRANSACTION_EXEC -> {
-                    val cmd = data.readString() ?: ""
-                    try {
-                        val result = execSh(cmd)
-                        reply?.writeNoException()
-                        reply?.writeString(result)
-                    } catch (e: Exception) {
-                        reply?.writeException(e)
-                    }
-                    true
+    @Suppress("unused") constructor(context: Context?) : super()
+
+    override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+        return when (code) {
+            TRANSACTION_EXEC -> {
+                val cmd = data.readString() ?: ""
+                try {
+                    val result = execSh(cmd)
+                    reply?.writeNoException()
+                    reply?.writeString(result)
+                } catch (e: Exception) {
+                    reply?.writeException(e)
                 }
-                else -> super.onTransact(code, data, reply, flags)
+                true
             }
+            else -> super.onTransact(code, data, reply, flags)
         }
     }
 

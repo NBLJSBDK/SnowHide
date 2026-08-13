@@ -220,6 +220,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val frozen = engineManager.primaryEngine.value
                 ?.listFrozenPackages()?.getOrDefault(emptyList())
                 ?: emptyList()
+            android.util.Log.d("SnowHideDock", "refresh: pkgs=$pkgs frozen=$frozen engine=${engineManager.primaryEngine.value != null}")
             _frozenStates.value = pkgs.associateWith { it in frozen }
         }
     }

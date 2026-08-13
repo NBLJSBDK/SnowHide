@@ -30,11 +30,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Shizuku UserService：被 Shizuku 拉起到 shell 身份进程执行 pm 命令 -->
-        <service
-            android:name="com.nbljsbdk.snowhide.core.engine.impl.ShellCommandService"
-            android:exported="false" />
-
         <!-- ShizukuProvider：Shizuku binder 获取入口（官方文档要求手动声明，
              provider 库的 AAR 只带 meta-data 不自动注册此组件） -->
         <provider

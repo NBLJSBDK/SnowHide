@@ -113,6 +113,7 @@ fun HomeScreen(
     val shizukuRunning by viewModel.shizukuRunning.collectAsState()
     val columns by viewModel.settingsRepository.columns.collectAsState()
     val iconSize by viewModel.settingsRepository.iconSize.collectAsState()
+    val verticalSpace by viewModel.settingsRepository.verticalSpace.collectAsState()
     val dockIconSize by viewModel.settingsRepository.dockIconSize.collectAsState()
     val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
     val message by viewModel.message.collectAsState()
@@ -138,6 +139,8 @@ fun HomeScreen(
     // 移除应用二级菜单 / 卸载二次确认
     var removeAppTarget by remember { mutableStateOf<String?>(null) }
     var uninstallTarget by remember { mutableStateOf<String?>(null) }
+    // 布局设置透明浮框
+    var layoutPanelOpen by remember { mutableStateOf(false) }
 
     // 整理目录提示事件 → Snackbar
     val organizeEvent by organizeViewModel.events.collectAsState()
@@ -570,6 +573,25 @@ fun HomeScreen(
             onUnfreezeFolder = { folder ->
                 viewModel.unfreezeFolder(folder); longPressTarget = null
             },
+            onLayoutSettings = {
+                longPressTarget = null
+                layoutPanelOpen = true
+            },
+        )
+    }
+
+    // 布局设置透明浮框（实时生效，设计文档 §3.5）
+    if (layoutPanelOpen) {
+        LayoutPanel(
+            columns = columns,
+            iconSize = iconSize,
+            verticalSpace = verticalSpace,
+            dockIconSize = dockIconSize,
+            onColumnsChange = { viewModel.settingsRepository.setColumns(it) },
+            onIconSizeChange = { viewModel.settingsRepository.setIconSize(it) },
+            onVerticalSpaceChange = { viewModel.settingsRepository.setVerticalSpace(it) },
+            onDockIconSizeChange = { viewModel.settingsRepository.setDockIconSize(it) },
+            onDismiss = { layoutPanelOpen = false },
         )
     }
 }
@@ -787,7 +809,8 @@ private fun DockBar(
     ) {
         LazyRow(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            // 默认居中开始，放不下时左右滚动（设计文档 §3.6）
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
             items(packages, key = { it }) { pkg ->
                 icons[pkg]?.let { bitmap ->
@@ -894,6 +917,7 @@ private fun ContextMenu(
     onDeleteFolder: (Long) -> Unit,
     onFreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
     onUnfreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
+    onLayoutSettings: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -909,12 +933,14 @@ private fun ContextMenu(
                     }
                     DialogAction("重命名") { item.folderId?.let(onRenameFolder) }
                     DialogAction("删除文件夹") { item.folderId?.let(onDeleteFolder) }
+                    DialogAction("布局设置") { onLayoutSettings() }
                 } else {
                     val pkg = item.pkg ?: return@Column
                     DialogAction(if (frozen) "解冻" else "冻结") { onToggleFreeze(pkg) }
                     DialogAction("启用应用（不打开）") { onEnable(pkg) }
                     DialogAction("打开应用") { onOpen(pkg) }
                     DialogAction("移除应用") { onRemove(pkg) }
+                    DialogAction("布局设置") { onLayoutSettings() }
                 }
             }
         },
