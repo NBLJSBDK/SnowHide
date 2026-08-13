@@ -92,6 +92,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _settingsOpen.value = false
     }
 
+    /** 快速启停管理界面开关 */
+    private val _quickToggleOpen = MutableStateFlow(false)
+    val quickToggleOpen: StateFlow<Boolean> = _quickToggleOpen.asStateFlow()
+
+    fun openQuickToggle() {
+        _menuOpen.value = false
+        _quickToggleOpen.value = true
+    }
+
+    fun closeQuickToggle() {
+        _quickToggleOpen.value = false
+    }
+
+    /** 关于页开关 */
+    private val _aboutOpen = MutableStateFlow(false)
+    val aboutOpen: StateFlow<Boolean> = _aboutOpen.asStateFlow()
+
+    fun openAbout() {
+        _menuOpen.value = false
+        _aboutOpen.value = true
+    }
+
+    fun closeAbout() {
+        _aboutOpen.value = false
+    }
+
     fun openAppManage() {
         _menuOpen.value = false
         _appManageOpen.value = true

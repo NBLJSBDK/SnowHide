@@ -1,4 +1,4 @@
-package com.nbljsbdk.snowhide.feature.appmanage
+package com.nbljsbdk.snowhide.feature.quicktoggle
 
 import android.app.Application
 import androidx.activity.compose.BackHandler
@@ -39,19 +39,19 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 /**
- * 增删应用界面（设计文档 §3.8 用户拍板终版，左右分栏）
+ * 快速启停管理界面（设计文档 §3.9，用户拍板终版）
  *
- * 顶行：搜索框 + 系统应用切换（彩蛋解锁后显示）+ 显示隐藏包名
- * 左栏：未添加应用（默认安装时间倒序，左下排序选项）
- * 右栏：已添加应用（默认名称正序，右下排序选项）
- * 滑动移动：左栏右滑=加入，右栏左滑=解冻并移出
- * 排序 4 档循环切换，不持久化
+ * 仿增删应用的左右分栏：
+ * - 数据源 = 已添加应用（不是全部已装）
+ * - 左栏 = 已添加但未加入快速启停；右滑 = 加入
+ * - 右栏 = 快速启停成员；左滑 = 移出
+ * - 成员在「已添加」里被移出时自动同步剔除（数据一致性）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppManageScreen(
+fun QuickToggleScreen(
     onClose: () -> Unit,
-    viewModel: AppManageViewModel = viewModel(
+    viewModel: QuickToggleViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application
         )
@@ -59,20 +59,24 @@ fun AppManageScreen(
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showPackageName by viewModel.showPackageName.collectAsState()
-    val systemUnlocked by viewModel.systemUnlocked.collectAsState()
-    val showSystemOnly by viewModel.showSystemOnly.collectAsState()
-    val leftSort by viewModel.leftSort.collectAsState()
-    val rightSort by viewModel.rightSort.collectAsState()
+    val members by viewModel.members.collectAsState()
 
-    // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("增删应用", fontWeight = FontWeight.Bold) },
+                title = { Text("快速启停", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TextButton(onClick = onClose) { Text("返回") }
+                },
+                actions = {
+                    TextButton(onClick = { viewModel.toggleShowPackageName() }) {
+                        Text(
+                            text = if (showPackageName) "显示应用名" else "显示包名",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -88,93 +92,66 @@ fun AppManageScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 12.dp),
         ) {
-            // 顶行：搜索 + 系统应用切换（解锁后显示）+ 显示包名
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            // 说明 + 搜索
+            Text(
+                text = "加入的应用：磁贴点亮时记录状态并全部解冻，熄灭时还原。成员只能从已添加应用中选择。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                placeholder = { Text("搜索") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.setSearchQuery(it) },
-                    placeholder = { Text("搜索应用") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
-                if (systemUnlocked) {
-                    TextButton(onClick = { viewModel.toggleSystemOnly() }) {
-                        Text(
-                            text = if (showSystemOnly) "系统应用 ✓" else "系统应用",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (showSystemOnly) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                TextButton(onClick = { viewModel.toggleShowPackageName() }) {
-                    Text(
-                        text = if (showPackageName) "显示应用名" else "显示包名",
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
+            )
 
-            // 左右分栏
             Row(modifier = Modifier.fillMaxSize()) {
-                // ── 左栏：未添加应用 ──
+                // 左栏：已添加但未加入
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .padding(end = 4.dp),
                 ) {
-                    val notAdded = viewModel.notAddedApps()
-                    ColumnLabel("未添加应用（右滑加入）", notAdded.size)
+                    val notMembers = viewModel.notMemberPackages()
+                    ColumnLabel("可加入（右滑加入）", notMembers.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(notAdded, key = { it.pkg }) { app ->
-                            SwipeableAppRow(
-                                label = viewModel.displayLabel(app),
+                        items(notMembers, key = { it }) { pkg ->
+                            SwipeRow(
+                                label = viewModel.displayLabel(pkg),
                                 background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 actionText = "加入",
-                                onSwipe = { viewModel.addApp(app.pkg) },
+                                onSwipe = { viewModel.addMember(pkg) },
                             )
                         }
                     }
-                    // 左下角排序选项（4 档循环，不持久化）
-                    SortButton(label = sortLabel(leftSort), onClick = { viewModel.cycleLeftSort() })
                 }
 
-                // ── 右栏：已添加应用 ──
+                // 右栏：快速启停成员
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .padding(start = 4.dp),
                 ) {
-                    val added = viewModel.addedApps()
-                    ColumnLabel("已添加应用（左滑移出）", added.size)
+                    val memberList = members
+                    ColumnLabel("快速启停成员（左滑移出）", memberList.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(added, key = { it.pkg }) { app ->
-                            SwipeableAppRow(
-                                label = viewModel.displayLabel(app),
+                        items(memberList, key = { it }) { pkg ->
+                            SwipeRow(
+                                label = viewModel.displayLabel(pkg),
                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 actionText = "移出",
-                                onSwipe = { viewModel.removeApp(app.pkg) },
+                                onSwipe = { viewModel.removeMember(pkg) },
                             )
                         }
                     }
-                    SortButton(label = sortLabel(rightSort), onClick = { viewModel.cycleRightSort() })
                 }
             }
         }
     }
-}
-
-/** 排序 4 档显示文案 */
-private fun sortLabel(mode: AppManageViewModel.SortMode): String = when (mode) {
-    AppManageViewModel.SortMode.TIME_DESC -> "时间倒序"
-    AppManageViewModel.SortMode.TIME_ASC -> "时间正序"
-    AppManageViewModel.SortMode.NAME_DESC -> "名字倒序"
-    AppManageViewModel.SortMode.NAME_ASC -> "名字正序"
 }
 
 /** 栏标题 + 数量 */
@@ -189,22 +166,10 @@ private fun ColumnLabel(text: String, count: Int) {
     )
 }
 
-/** 排序选项按钮（栏底） */
-@Composable
-private fun SortButton(label: String, onClick: () -> Unit) {
-    TextButton(onClick = onClick, modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(
-            text = "排序：$label ▸",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/** 可滑动应用行：滑动触发动作后自动回弹 */
+/** 可滑动行（与增删应用同款交互） */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeableAppRow(
+private fun SwipeRow(
     label: String,
     background: androidx.compose.ui.graphics.Color,
     actionText: String,
@@ -214,7 +179,7 @@ private fun SwipeableAppRow(
         confirmValueChange = { value ->
             if (value != SwipeToDismissBoxValue.Settled) {
                 onSwipe()
-                false // 不真正移除列表项，由数据刷新驱动
+                false
             } else true
         },
     )

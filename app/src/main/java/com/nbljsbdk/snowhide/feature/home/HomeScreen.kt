@@ -73,9 +73,11 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.feature.about.AboutScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
+import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
 import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
@@ -208,7 +210,9 @@ fun HomeScreen(
                             onUnfreezeAll = { viewModel.unfreezeAll() },
                             onFreezeAll = { viewModel.freezeAll() },
                             onAppManage = { viewModel.openAppManage() },
+                            onQuickToggle = { viewModel.openQuickToggle() },
                             onSettings = { viewModel.openSettings() },
+                            onAbout = { viewModel.openAbout() },
                         )
                     }
                 },
@@ -429,6 +433,18 @@ fun HomeScreen(
     val settingsOpen by viewModel.settingsOpen.collectAsState()
     if (settingsOpen) {
         SettingsScreen(onClose = { viewModel.closeSettings() })
+    }
+
+    // 快速启停管理（全屏覆盖，设计文档 §3.9）
+    val quickToggleOpen by viewModel.quickToggleOpen.collectAsState()
+    if (quickToggleOpen) {
+        QuickToggleScreen(onClose = { viewModel.closeQuickToggle() })
+    }
+
+    // 关于页（全屏覆盖，含版本号彩蛋）
+    val aboutOpen by viewModel.aboutOpen.collectAsState()
+    if (aboutOpen) {
+        AboutScreen(onClose = { viewModel.closeAbout() })
     }
 
     // 文件夹重命名对话框
@@ -824,15 +840,13 @@ private fun GearMenu(
     onUnfreezeAll: () -> Unit,
     onFreezeAll: () -> Unit,
     onAppManage: () -> Unit,
+    onQuickToggle: () -> Unit,
     onSettings: () -> Unit,
+    onAbout: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text("增加应用") },
-            onClick = { onDismiss(); onAppManage() },
-        )
-        DropdownMenuItem(
-            text = { Text("移除应用") },
+            text = { Text("增删应用") },
             onClick = { onDismiss(); onAppManage() },
         )
         DropdownMenuItem(
@@ -848,8 +862,8 @@ private fun GearMenu(
             onClick = { onDismiss(); onFreezeAll() },
         )
         DropdownMenuItem(
-            text = { Text("快速启停（未开放）") },
-            onClick = onDismiss,
+            text = { Text("快速启停") },
+            onClick = { onDismiss(); onQuickToggle() },
         )
         DropdownMenuItem(
             text = { Text("更多选项") },
@@ -857,7 +871,7 @@ private fun GearMenu(
         )
         DropdownMenuItem(
             text = { Text("关于") },
-            onClick = onDismiss,
+            onClick = { onDismiss(); onAbout() },
         )
     }
 }
