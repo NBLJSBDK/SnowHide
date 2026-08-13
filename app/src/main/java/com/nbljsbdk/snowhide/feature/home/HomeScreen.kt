@@ -899,8 +899,11 @@ private fun DockBar(
     ) {
         LazyRow(
             modifier = Modifier.weight(1f),
-            // 默认居中开始，放不下时左右滚动（设计文档 §3.6）
+            // 默认居中开始，放不下时左右滚动（设计文档 §3.6）。
+            // 扫帚占掉右侧宽度后视口中心左移，start padding 补偿半个扫帚宽
+            // 使图标相对整个 dock 栏居中
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 48.dp),
         ) {
             items(packages, key = { it }) { pkg ->
                 icons[pkg]?.let { bitmap ->
