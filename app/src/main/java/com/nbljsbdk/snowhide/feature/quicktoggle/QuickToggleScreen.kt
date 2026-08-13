@@ -60,6 +60,8 @@ fun QuickToggleScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showPackageName by viewModel.showPackageName.collectAsState()
     val members by viewModel.members.collectAsState()
+    // 订阅刷新触发器：宫格/成员变化时立即重组
+    val refreshTrigger by viewModel.refresh.collectAsState()
 
     BackHandler(onBack = onClose)
 

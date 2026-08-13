@@ -38,16 +38,22 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     private val _showPackageName = MutableStateFlow(false)
     val showPackageName: StateFlow<Boolean> = _showPackageName.asStateFlow()
 
+    /** 刷新触发器：宫格数据变化时 +1，UI 订阅它触发重组 */
+    private val _refresh = MutableStateFlow(0)
+    val refresh: StateFlow<Int> = _refresh.asStateFlow()
+
     init {
         // 数据一致性：订阅宫格数据，成员中已移出的应用自动剔除
         viewModelScope.launch {
             GridRepository.gridItems.collect { _ ->
                 syncMembers()
+                _refresh.value++
             }
         }
         viewModelScope.launch {
             GridRepository.folderApps.collect { _ ->
                 syncMembers()
+                _refresh.value++
             }
         }
     }

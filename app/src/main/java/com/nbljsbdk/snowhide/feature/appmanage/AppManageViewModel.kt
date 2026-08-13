@@ -75,8 +75,21 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
     private val _rightSort = MutableStateFlow(SortMode.NAME_ASC)
     val rightSort: StateFlow<SortMode> = _rightSort.asStateFlow()
 
+    /**
+     * 刷新触发器：GridRepository 数据变化时 +1，UI 订阅它触发重组
+     * （增删操作后列表立即刷新的关键——否则派生函数不会被重新调用）
+     */
+    private val _refresh = MutableStateFlow(0)
+    val refresh: StateFlow<Int> = _refresh.asStateFlow()
+
     init {
         refreshInstalledApps()
+        viewModelScope.launch {
+            GridRepository.gridItems.collect { _refresh.value++ }
+        }
+        viewModelScope.launch {
+            GridRepository.folderApps.collect { _refresh.value++ }
+        }
     }
 
     /** 加载全部已装应用（含系统，含安装时间） */

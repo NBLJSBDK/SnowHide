@@ -63,6 +63,8 @@ fun AppManageScreen(
     val showSystemOnly by viewModel.showSystemOnly.collectAsState()
     val leftSort by viewModel.leftSort.collectAsState()
     val rightSort by viewModel.rightSort.collectAsState()
+    // 订阅刷新触发器：宫格数据变化时立即重组（增删操作后列表实时刷新）
+    val refreshTrigger by viewModel.refresh.collectAsState()
 
     // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
