@@ -108,6 +108,7 @@ fun HomeScreen(
     val folderApps by viewModel.gridRepository.folderApps.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
     val icons by viewModel.icons.collectAsState()
+    val labels by viewModel.labels.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
     val shizukuRunning by viewModel.shizukuRunning.collectAsState()
     val columns by viewModel.settingsRepository.columns.collectAsState()
@@ -143,6 +144,15 @@ fun HomeScreen(
     LaunchedEffect(organizeFinished) {
         if (organizeFinished) {
             viewModel.setOrganizing(false)
+        }
+    }
+
+    // 整理目录提示事件 → Snackbar
+    val organizeEvent by organizeViewModel.events.collectAsState()
+    LaunchedEffect(organizeEvent) {
+        organizeEvent?.let {
+            snackbarHostState.showSnackbar(it)
+            organizeViewModel.consumeEvent()
         }
     }
 
@@ -298,7 +308,7 @@ fun HomeScreen(
                             gridItems.sortedBy { it.sortOrder }
                         } else {
                             gridItems.filter { item ->
-                                val name = item.pkg?.let { labelOf(it) } ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
+                                val name = item.pkg?.let { labels[it] ?: it } ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
                                 name.contains(searchQuery, ignoreCase = true) ||
                                     (item.pkg?.contains(searchQuery, ignoreCase = true) == true)
                             }.sortedBy { it.sortOrder }
@@ -340,7 +350,7 @@ fun HomeScreen(
                                 item.pkg != null -> {
                                     AppCell(
                                         pkg = item.pkg,
-                                        label = labelOf(item.pkg),
+                                        label = labels[item.pkg] ?: item.pkg,
                                         size = iconSize.dp,
                                         frozen = frozenStates[item.pkg] == true,
                                         icon = icons[item.pkg],
@@ -380,7 +390,7 @@ fun HomeScreen(
                             onDelete = { organizeViewModel.requestDeleteFolder() },
                             onNameChange = { name -> organizeViewModel.updateFolderName(name) },
                             onNameCommit = { organizeViewModel.commitFolderName() },
-                            onAppLabel = { labelOf(it) },
+                            onAppLabel = { pkg -> labels[pkg] ?: pkg },
                         )
                         // 删除文件夹二次确认
                         organizeViewModel.pendingDelete.collectAsState().value?.let { folder ->
@@ -434,7 +444,7 @@ fun HomeScreen(
                     },
                     onAppClick = { viewModel.openApp(it) },
                     onAppLongClick = { item -> longPressTarget = item },
-                    onAppLabel = { labelOf(it) },
+                    onAppLabel = { pkg -> labels[pkg] ?: pkg },
                 )
             }
         }
@@ -536,7 +546,7 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { uninstallTarget = null },
             title = { Text("确认卸载") },
-            text = { Text("确定要卸载 ${labelOf(pkg)} 吗？\n\n⚠️ 这会删除该应用及其全部数据，且不可恢复。") },
+            text = { Text("确定要卸载 ${labels[pkg] ?: pkg} 吗？\n\n⚠️ 这会删除该应用及其全部数据，且不可恢复。") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     viewModel.uninstallApp(pkg)
@@ -555,6 +565,7 @@ fun HomeScreen(
             item = target,
             frozen = target.pkg?.let { frozenStates[it] == true } ?: false,
             folderName = folders.find { it.id == target.folderId }?.name ?: "",
+            appLabel = target.pkg?.let { labels[it] ?: it } ?: "",
             targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
             onToggleFreeze = { pkg -> viewModel.toggleFreeze(pkg); longPressTarget = null },
@@ -596,9 +607,6 @@ private fun dockPackages(
     val all = (gridItems.mapNotNull { it.pkg } + folderApps.map { it.pkg }).distinct()
     return all.filter { frozenStates[it] != true }
 }
-
-/** 显示名占位（P0 用包名，后续接 AppInfo 映射） */
-private fun labelOf(pkg: String): String = pkg.substringAfterLast('.')
 
 /** Shizuku 引导卡（区分「服务未运行」与「未授权」两种状态） */
 @Composable
@@ -899,6 +907,7 @@ private fun ContextMenu(
     item: GridItem,
     frozen: Boolean,
     folderName: String,
+    appLabel: String,
     targetFolder: com.nbljsbdk.snowhide.data.model.Folder?,
     onDismiss: () -> Unit,
     onToggleFreeze: (String) -> Unit,
@@ -913,7 +922,7 @@ private fun ContextMenu(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (item.type == "folder") folderName else item.pkg?.substringAfterLast('.') ?: "")
+            Text(if (item.type == "folder") folderName else appLabel)
         },
         text = {
             Column {

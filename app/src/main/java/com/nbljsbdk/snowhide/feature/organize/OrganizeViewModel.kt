@@ -49,6 +49,14 @@ class OrganizeViewModel : ViewModel() {
     private val _pendingDelete = MutableStateFlow<Folder?>(null)
     val pendingDelete: StateFlow<Folder?> = _pendingDelete.asStateFlow()
 
+    /** 一次性提示事件（UI Snackbar） */
+    private val _events = MutableStateFlow<String?>(null)
+    val events: StateFlow<String?> = _events.asStateFlow()
+
+    fun consumeEvent() {
+        _events.value = null
+    }
+
     /** 是否已保存退出（true=完成整理） */
     private val _finished = MutableStateFlow(false)
     val finished: StateFlow<Boolean> = _finished.asStateFlow()
@@ -158,9 +166,14 @@ class OrganizeViewModel : ViewModel() {
         markDirty()
     }
 
-    /** 删除：只对选中文件夹，二次确认；内应用按排序续补主屏后 */
+    /** 删除：只对选中文件夹，二次确认；未选中时给提示（避免无声灰显） */
     fun requestDeleteFolder() {
-        currentFolder?.let { _pendingDelete.value = it }
+        val folder = currentFolder
+        if (folder == null) {
+            _events.value = "请先选择一个文件夹"
+        } else {
+            _pendingDelete.value = folder
+        }
     }
 
     fun confirmDeleteFolder() {

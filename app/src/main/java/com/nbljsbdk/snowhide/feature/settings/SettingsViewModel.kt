@@ -20,7 +20,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val context get() = getApplication<Application>()
     val settings = SettingsRepository
-    private val iconLoader = AppIconLoader(context)
 
     private val _iconPacks = MutableStateFlow<List<AppIconLoader.IconPackInfo>>(emptyList())
     /** 已装图标包列表（设置页选择器数据源） */
@@ -35,7 +34,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun refreshIconPacks() {
         viewModelScope.launch {
-            _iconPacks.value = iconLoader.queryIconPacks()
+            _iconPacks.value = AppIconLoader.queryIconPacks()
         }
     }
 

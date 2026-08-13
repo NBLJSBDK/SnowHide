@@ -15,6 +15,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -24,6 +26,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
@@ -61,7 +65,6 @@ fun OrganizeOverlay(
     val canLeftRight = homeAppSelected || folderSelected != null
     val canUp = folderSelected?.subFolderAppPkg != null
     val canDown = folderSelected?.subHomeApp != null
-    val canDelete = folderSelected != null
 
     Column(
         modifier = Modifier
@@ -78,23 +81,26 @@ fun OrganizeOverlay(
             OrganizeKeyIcon(R.drawable.ic_arrow_down, enabled = canDown, onClick = onMoveDown)
             OrganizeKeyIcon(R.drawable.ic_arrow_left, enabled = canLeftRight, onClick = { onShift(-1) })
             OrganizeKeyIcon(R.drawable.ic_arrow_right, enabled = canLeftRight, onClick = { onShift(1) })
-            OrganizeKeyIcon(R.drawable.ic_trash, enabled = canDelete, onClick = onDelete)
+            OrganizeKeyIcon(R.drawable.ic_trash, enabled = true, onClick = onDelete)
             OrganizeKeyIcon(R.drawable.ic_folder_plus, enabled = true, onClick = onCreate)
         }
 
-        // 文件夹名输入行（③ 时显示）
+        // 文件夹名输入行（③ 时显示，自动聚焦弹键盘）
         if (folderSelected != null) {
+            val focusRequester = remember { FocusRequester() }
+            LaunchedEffect(folderSelected.folderId) {
+                focusRequester.requestFocus()
+            }
             OutlinedTextField(
                 value = folderSelected.folderNameInput,
                 onValueChange = onNameChange,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(focusRequester)
                     .padding(vertical = 4.dp),
                 placeholder = { Text("文件夹名字") },
                 singleLine = true,
             )
-            // 输入焦点丢失即提交改名
-            // （P0 简化：确认按钮提交；这里 onNameCommit 由确认键调用）
         }
 
         // 文件夹内应用横排（③ 时显示）

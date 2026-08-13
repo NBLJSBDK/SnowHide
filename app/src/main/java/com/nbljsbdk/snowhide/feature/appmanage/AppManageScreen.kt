@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
+import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
 
 /**
  * 增删应用界面（设计文档 §3.8 用户拍板终版，左右分栏）
@@ -240,28 +241,34 @@ private fun SwipeableAppRow(
             )
         },
     ) {
-        Column(
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(background)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (showPackageName) {
+            // 左侧应用图标（懒加载）
+            LazyAppIcon(pkg = pkg, size = 36.dp)
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(start = 10.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = pkg,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (showPackageName) {
+                    Text(
+                        text = pkg,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

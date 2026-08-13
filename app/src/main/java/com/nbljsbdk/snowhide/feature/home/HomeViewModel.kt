@@ -10,6 +10,7 @@ import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
@@ -34,7 +35,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val gridRepository = GridRepository
     val settingsRepository = SettingsRepository
     private val freezeUseCase = FreezeUseCase(FreezeExecutor(engineManager), gridRepository, engineManager)
-    private val iconLoader = AppIconLoader(context)
 
     /** 应用显示名（宫格/列表展示） */
     data class AppInfo(val pkg: String, val label: String, val icon: android.graphics.drawable.Drawable?)
@@ -54,6 +54,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** 图标缓存（pkg → 图标） */
     private val _icons = MutableStateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap())
     val icons: StateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>> = _icons.asStateFlow()
+
+    /** 应用显示名映射（pkg → 中文名，来自全局预加载列表） */
+    private val _labels = MutableStateFlow<Map<String, String>>(emptyMap())
+    val labels: StateFlow<Map<String, String>> = _labels.asStateFlow()
 
     /** 操作提示（Snackbar 文案） */
     private val _message = MutableStateFlow<String?>(null)
@@ -141,13 +145,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshInstalledApps()
-        refreshIcons()
-        iconLoader.iconPackPkg = settingsRepository.iconPack.value
+        AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
+        // 订阅宫格数据变化：新加入的应用自动加载图标 + 刷新中文名
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(
+                gridRepository.gridItems,
+                gridRepository.folderApps,
+                AppListRepository.installedApps,
+            ) { items, folderApps, apps ->
+                val pkgs = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).distinct()
+                pkgs.forEach { pkg ->
+                    if (pkg !in _icons.value) {
+                        launch { loadIcon(pkg) }
+                    }
+                }
+                // 中文名映射（从预加载的全局应用列表取）
+                val labelMap = apps.associate { it.pkg to it.label }
+                _labels.value = labelMap
+            }.collect { }
+        }
         viewModelScope.launch {
             EngineManager.primaryEngine.collect { _engineReady.value = it != null }
         }
         viewModelScope.launch {
             EngineManager.shizukuBinderConnected.collect { _shizukuRunning.value = it }
+        }
+    }
+
+    private suspend fun loadIcon(pkg: String) {
+        runCatching {
+            AppIconLoader.loadIcon(pkg)
+        }.onSuccess { icon ->
+            _icons.value = _icons.value + (pkg to icon)
         }
     }
 
@@ -195,22 +224,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 异步加载图标（图标包优先，系统回退） */
-    fun refreshIcons(pkgs: List<String> = gridRepository.allAddedPackages()) {
-        viewModelScope.launch {
-            pkgs.forEach { pkg ->
-                val icon = iconLoader.loadIcon(pkg)
-                _icons.value = _icons.value + (pkg to icon)
-            }
-        }
-    }
-
     /** 用户从设置切换图标包后刷新 */
     fun applyIconPack(pkg: String) {
-        iconLoader.iconPackPkg = pkg
-        iconLoader.clearCache()
+        AppIconLoader.iconPackPkg = pkg
+        AppIconLoader.clearCache()
         _icons.value = emptyMap()
-        refreshIcons()
+        // 重新加载全部已添加应用图标
+        gridRepository.allAddedPackages().forEach { p ->
+            viewModelScope.launch { loadIcon(p) }
+        }
     }
 
     // ═══════════════════════════════════════

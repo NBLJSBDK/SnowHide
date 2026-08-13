@@ -25,7 +25,15 @@ import kotlin.coroutines.resume
  * - 请求：RESOLVE_ICON 有序广播（extra 包名）→ 图标包返回 Bitmap
  * - 失败/未选择 → 回退系统默认图标
  */
-class AppIconLoader(private val context: Context) {
+object AppIconLoader {
+
+    private lateinit var context: Context
+
+    /** 初始化（MainActivity 启动时调用一次） */
+    fun init(context: Context) {
+        if (::context.isInitialized) return
+        AppIconLoader.context = context.applicationContext
+    }
 
     /** 已装图标包信息（设置页选择器数据源） */
     data class IconPackInfo(val pkg: String, val label: String, val icon: ImageBitmap)
@@ -129,11 +137,9 @@ class AppIconLoader(private val context: Context) {
         return bitmap.asImageBitmap()
     }
 
-    companion object {
-        const val ACTION_INSTALL_ICON_PACK = "com.android.launcher.action.INSTALL_ICON_PACK"
-        const val ACTION_RESOLVE_ICON = "com.android.launcher.action.RESOLVE_ICON"
-        const val EXTRA_PACKAGE = "package"
-        const val EXTRA_COMPONENT = "component"
-        const val EXTRA_ICON = "icon"
-    }
+    const val ACTION_INSTALL_ICON_PACK = "com.android.launcher.action.INSTALL_ICON_PACK"
+    const val ACTION_RESOLVE_ICON = "com.android.launcher.action.RESOLVE_ICON"
+    const val EXTRA_PACKAGE = "package"
+    const val EXTRA_COMPONENT = "component"
+    const val EXTRA_ICON = "icon"
 }

@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         GridRepository.init(applicationContext)
         SettingsRepository.init(applicationContext)
         AppListRepository.init(applicationContext) // 预加载应用列表（避免首次打开增删界面空白）
+        com.nbljsbdk.snowhide.ui.util.AppIconLoader.init(applicationContext) // 图标加载器单例
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {
