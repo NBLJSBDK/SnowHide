@@ -273,7 +273,8 @@ fun HomeScreen(
 
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = !organizing,
+            // 只有一个主屏（没有文件夹）时禁用滑动，避免无意义的页面拖动
+            userScrollEnabled = !organizing && sortedFolders.isNotEmpty(),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
