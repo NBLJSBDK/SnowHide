@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.ui.util.frosted
@@ -117,16 +119,26 @@ fun FolderScreen(
                         )
                         .padding(4.dp),
                 ) {
-                    icons[pkg]?.let { bmp ->
-                        Image(
-                            bitmap = bmp,
-                            contentDescription = pkg,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .size(iconSize)
-                                .clip(RoundedCornerShape(iconSize.value * 0.22f))
-                                .frosted(enabled = frozenStates[pkg] == true, style = freezeStyle),
-                        )
+                    Box(contentAlignment = Alignment.TopStart) {
+                        icons[pkg]?.let { bmp ->
+                            Image(
+                                bitmap = bmp,
+                                contentDescription = pkg,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .size(iconSize)
+                                    .clip(RoundedCornerShape(iconSize.value * 0.22f))
+                                    .frosted(enabled = frozenStates[pkg] == true, style = freezeStyle),
+                            )
+                        }
+                        // 雪花角标（与主屏一致）
+                        if (frozenStates[pkg] == true) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_snowflake),
+                                contentDescription = "已冻结",
+                                modifier = Modifier.size(iconSize * 0.38f),
+                            )
+                        }
                     }
                     if (showAppName) {
                         Text(
