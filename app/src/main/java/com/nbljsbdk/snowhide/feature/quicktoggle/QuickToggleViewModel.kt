@@ -106,9 +106,8 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
         persist()
     }
 
-    /** 应用显示名（包名切换） */
+    /** 应用显示名（包名由 UI 追加显示在名称下方，不再二选一） */
     fun displayLabel(pkg: String): String {
-        if (_showPackageName.value) return pkg
         return runCatching {
             val pm = context.packageManager
             val info = pm.getApplicationInfo(pkg, 0)

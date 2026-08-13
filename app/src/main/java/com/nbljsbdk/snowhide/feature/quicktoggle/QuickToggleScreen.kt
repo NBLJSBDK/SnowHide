@@ -123,8 +123,9 @@ fun QuickToggleScreen(
                         items(notMembers, key = { it }) { pkg ->
                             SwipeRow(
                                 label = viewModel.displayLabel(pkg),
+                                pkg = pkg,
+                                showPackageName = showPackageName,
                                 background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                actionText = "加入",
                                 onSwipe = { viewModel.addMember(pkg) },
                             )
                         }
@@ -144,8 +145,9 @@ fun QuickToggleScreen(
                         items(memberList, key = { it }) { pkg ->
                             SwipeRow(
                                 label = viewModel.displayLabel(pkg),
+                                pkg = pkg,
+                                showPackageName = showPackageName,
                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                actionText = "移出",
                                 onSwipe = { viewModel.removeMember(pkg) },
                             )
                         }
@@ -168,13 +170,14 @@ private fun ColumnLabel(text: String, count: Int) {
     )
 }
 
-/** 可滑动行（与增删应用同款交互） */
+/** 可滑动行（与增删应用同款交互）；显示应用名+（开关时）包名两行 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeRow(
     label: String,
+    pkg: String,
+    showPackageName: Boolean,
     background: androidx.compose.ui.graphics.Color,
-    actionText: String,
     onSwipe: () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
@@ -188,31 +191,37 @@ private fun SwipeRow(
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
+            // 无文字提示，仅淡色背景
             Box(
-                contentAlignment = Alignment.CenterEnd,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-            ) {
-                Text(
-                    text = actionText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                    .background(background),
+            )
         },
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
                 .background(background)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-        )
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (showPackageName) {
+                Text(
+                    text = pkg,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }

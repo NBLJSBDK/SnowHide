@@ -216,8 +216,8 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         GridRepository.removeApp(pkg)
     }
 
-    fun displayLabel(app: AppInfo): String =
-        if (_showPackageName.value) app.pkg else app.label
+    /** 应用显示名（包名由 UI 按 showPackageName 开关追加显示在名称下方，不再二选一） */
+    fun displayLabel(app: AppInfo): String = app.label
 
     companion object {
         private const val KEY_SYSTEM_UNLOCKED = "system_apps_unlocked"
