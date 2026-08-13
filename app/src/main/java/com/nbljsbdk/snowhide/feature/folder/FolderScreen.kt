@@ -4,6 +4,7 @@ package com.nbljsbdk.snowhide.feature.folder
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
@@ -60,6 +62,7 @@ fun FolderScreen(
     onAppClick: (String) -> Unit,
     onAppLongClick: (GridItem) -> Unit,
     onAppLabel: (String) -> String,
+    onBlankLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -95,7 +98,13 @@ fun FolderScreen(
             columns = GridCells.Fixed(columns),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 12.dp)
+                // 空白处长按 → 布局设计/美化设置菜单（与主屏一致）
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { onBlankLongPress() },
+                    )
+                },
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
         ) {

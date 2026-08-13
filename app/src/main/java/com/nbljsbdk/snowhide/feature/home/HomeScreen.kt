@@ -474,6 +474,7 @@ fun HomeScreen(
                     onAppClick = { viewModel.openApp(it) },
                     onAppLongClick = { item -> longPressTarget = item },
                     onAppLabel = { pkg -> labels[pkg] ?: "" },
+                    onBlankLongPress = { blankMenuOpen = true },
                 )
             }
         }
