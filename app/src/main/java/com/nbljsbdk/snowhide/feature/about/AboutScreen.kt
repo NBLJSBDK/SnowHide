@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
 
 /**
@@ -60,6 +62,19 @@ fun AboutScreen(
     // 彩蛋点击计数 + 警告弹窗
     var tapCount by remember { mutableIntStateOf(0) }
     var showWarning by remember { mutableStateOf(false) }
+
+    // 神之一手（临时调试）：解冻设备上全部已冻结应用
+    val godHandScope = rememberCoroutineScope()
+    val godHandUseCase = remember {
+        com.nbljsbdk.snowhide.domain.FreezeUseCase(
+            com.nbljsbdk.snowhide.core.mode.FreezeExecutor(
+                com.nbljsbdk.snowhide.core.engine.EngineManager
+            ),
+            com.nbljsbdk.snowhide.data.repo.GridRepository,
+            com.nbljsbdk.snowhide.core.engine.EngineManager,
+        )
+    }
+    var godHandMessage by remember { mutableStateOf<String?>(null) }
 
     BackHandler(onBack = onClose)
 
@@ -124,7 +139,34 @@ fun AboutScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(modifier = Modifier.height(24.dp))
+            // ═══════════════════════════════════
+            // 神之一手（临时调试：解冻全部已冻结应用，含系统/未列表应用）
+            // 之后可能注释掉不用
+            // ═══════════════════════════════════
+            TextButton(
+                onClick = {
+                    godHandScope.launch {
+                        godHandMessage = godHandUseCase.unfreezeEverything().fold(
+                            onSuccess = { "神之一手：已解冻 $it 个应用" },
+                            onFailure = { "神之一手失败：${it.message}" },
+                        )
+                    }
+                },
+            ) { Text("神之一手") }
         }
+    }
+
+    // 神之一手结果弹窗
+    godHandMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { godHandMessage = null },
+            title = { Text("神之一手") },
+            text = { Text(msg) },
+            confirmButton = {
+                TextButton(onClick = { godHandMessage = null }) { Text("知道了") }
+            },
+        )
     }
 
     // 系统应用解锁警告

@@ -102,4 +102,25 @@ class FreezeUseCase(
         return if (failures.isEmpty()) Result.success(success)
         else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
     }
+
+    /**
+     * ⚠️ 神之一手（关于页临时调试按钮，之后可能注释掉不用）
+     *
+     * 解冻设备上**全部**已冻结应用——包括未加入列表的应用与系统应用。
+     * 数据源 `pm list packages -d`，逐个 `pm enable`。
+     */
+    suspend fun unfreezeEverything(): Result<Int> {
+        val engine = executorEngine()
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        val frozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }
+        var success = 0
+        val failures = mutableListOf<String>()
+        frozen.forEach { pkg ->
+            executor.unfreeze(FreezeMode.FREEZE, pkg)
+                .onSuccess { success++ }
+                .onFailure { failures.add("$pkg: ${it.message}") }
+        }
+        return if (failures.isEmpty()) Result.success(success)
+        else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
+    }
 }
