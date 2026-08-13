@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -49,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,8 +64,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.feature.folder.FolderScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
@@ -107,6 +112,7 @@ fun HomeScreen(
     val organizeFinished by organizeViewModel.finished.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     // 长按菜单状态
@@ -180,125 +186,187 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
-        Column(
+        // ═══════════════════════════════════════
+        // 循环滑动（设计文档 §3.2）：
+        // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按 sortOrder）
+        // 左右滑动循环切换；从哪个文件夹进入就从哪里开始
+        // ═══════════════════════════════════════
+        val sortedFolders = folders.sortedBy { it.sortOrder }
+        val actualCount = sortedFolders.size + 1 // 主屏 + N 文件夹
+        val pagerState = rememberPagerState(
+            initialPage = LOOP_BASE * actualCount,
+        ) { LOOP_TOTAL * actualCount }
+
+        // 整理模式下锁定主屏页
+        LaunchedEffect(organizing) {
+            if (organizing) {
+                val base = (pagerState.currentPage / actualCount) * actualCount
+                pagerState.animateScrollToPage(base)
+            }
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = !organizing,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Shizuku 未授权引导卡
-            if (!engineReady) {
-                ShizukuGuideCard(
-                    onRequest = onRequestShizuku,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
+                .padding(innerPadding),
+        ) { page ->
+            val idx = ((page % actualCount) + actualCount) % actualCount
+            if (idx == 0) {
+                // ── 主屏页 ──
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    // Shizuku 未授权引导卡
+                    if (!engineReady) {
+                        ShizukuGuideCard(
+                            onRequest = onRequestShizuku,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
 
-            // 混排宫格
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(gridItems.sortedBy { it.sortOrder }, key = { it.id }) { item ->
-                    when {
-                        item.type == "folder" -> {
-                            val folder = folders.find { it.id == item.folderId }
-                            if (folder != null) {
-                                FolderCell(
-                                    folderId = folder.id,
-                                    name = folder.name,
-                                    size = iconSize.dp,
-                                    previewPackages = folderApps
-                                        .filter { it.folderId == folder.id }
-                                        .sortedBy { it.sortOrder }
-                                        .map { it.pkg }
-                                        .take(4),
-                                    icons = icons,
-                                    selected = organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
-                                        (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
-                                    onClick = {
-                                        if (organizing) organizeViewModel.tapFolder(folder)
-                                        else viewModel.showMessage("文件夹页下一轮接入")
-                                    },
-                                    onLongPress = { longPressTarget = item },
-                                )
+                    // 混排宫格
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(gridItems.sortedBy { it.sortOrder }, key = { it.id }) { item ->
+                            when {
+                                item.type == "folder" -> {
+                                    val folder = folders.find { it.id == item.folderId }
+                                    if (folder != null) {
+                                        FolderCell(
+                                            folderId = folder.id,
+                                            name = folder.name,
+                                            size = iconSize.dp,
+                                            previewPackages = folderApps
+                                                .filter { it.folderId == folder.id }
+                                                .sortedBy { it.sortOrder }
+                                                .map { it.pkg }
+                                                .take(4),
+                                            icons = icons,
+                                            selected = organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
+                                                (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
+                                            onClick = {
+                                                if (organizing) organizeViewModel.tapFolder(folder)
+                                                else {
+                                                    // 跳到该文件夹页（循环内当前位置的相邻页）
+                                                    val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
+                                                    if (folderIndex >= 0) {
+                                                        scope.launch {
+                                                            val base = (pagerState.currentPage / actualCount) * actualCount
+                                                            pagerState.animateScrollToPage(base + folderIndex + 1)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onLongPress = { longPressTarget = item },
+                                        )
+                                    }
+                                }
+                                item.pkg != null -> {
+                                    AppCell(
+                                        pkg = item.pkg,
+                                        label = labelOf(item.pkg),
+                                        size = iconSize.dp,
+                                        frozen = frozenStates[item.pkg] == true,
+                                        icon = icons[item.pkg],
+                                        showName = showAppName,
+                                        selected = when (val s = organizeState) {
+                                            is OrganizeViewModel.OrganizeState.HomeAppSelected -> s.app.id == item.id
+                                            is OrganizeViewModel.OrganizeState.FolderSelected -> s.subHomeApp?.id == item.id
+                                            else -> false
+                                        },
+                                        onClick = {
+                                            if (organizing) organizeViewModel.tapHomeApp(item)
+                                            else viewModel.openApp(item.pkg)
+                                        },
+                                        onLongPress = {
+                                            if (!organizing) longPressTarget = item
+                                        },
+                                    )
+                                }
                             }
                         }
-                        item.pkg != null -> {
-                            AppCell(
-                                pkg = item.pkg,
-                                label = labelOf(item.pkg),
-                                size = iconSize.dp,
-                                frozen = frozenStates[item.pkg] == true,
-                                icon = icons[item.pkg],
-                                showName = showAppName,
-                                selected = when (val s = organizeState) {
-                                    is OrganizeViewModel.OrganizeState.HomeAppSelected -> s.app.id == item.id
-                                    is OrganizeViewModel.OrganizeState.FolderSelected -> s.subHomeApp?.id == item.id
-                                    else -> false
+                    }
+
+                    // 底部：整理模式显示操作区，否则底部图标栏
+                    if (organizing) {
+                        OrganizeOverlay(
+                            state = organizeState,
+                            folders = folders,
+                            folderApps = organizeViewModel.currentFolderApps,
+                            icons = icons,
+                            onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
+                            onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
+                            onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
+                            onShift = { step -> organizeViewModel.shift(step) },
+                            onMoveUp = { organizeViewModel.moveUp() },
+                            onMoveDown = { organizeViewModel.moveDown() },
+                            onCreate = { organizeViewModel.createFolder() },
+                            onDelete = { organizeViewModel.requestDeleteFolder() },
+                            onNameChange = { name -> organizeViewModel.updateFolderName(name) },
+                            onNameCommit = { organizeViewModel.commitFolderName() },
+                            onAppLabel = { labelOf(it) },
+                        )
+                        // 删除文件夹二次确认
+                        organizeViewModel.pendingDelete.collectAsState().value?.let { folder ->
+                            AlertDialog(
+                                onDismissRequest = { organizeViewModel.cancelDeleteFolder() },
+                                title = { Text("删除文件夹") },
+                                text = { Text("删除「${folder.name}」？其中 ${organizeViewModel.currentFolderApps.size} 个应用将移回主屏幕。") },
+                                confirmButton = {
+                                    androidx.compose.material3.TextButton(onClick = { organizeViewModel.confirmDeleteFolder() }) {
+                                        Text("删除", color = MaterialTheme.colorScheme.error)
+                                    }
                                 },
-                                onClick = {
-                                    if (organizing) organizeViewModel.tapHomeApp(item)
-                                    else viewModel.openApp(item.pkg)
-                                },
-                                onLongPress = {
-                                    if (!organizing) longPressTarget = item
+                                dismissButton = {
+                                    androidx.compose.material3.TextButton(onClick = { organizeViewModel.cancelDeleteFolder() }) {
+                                        Text("取消")
+                                    }
                                 },
                             )
                         }
+                    } else {
+                        DockBar(
+                            packages = dockPackages(gridItems, folderApps, frozenStates),
+                            icons = icons,
+                            iconSize = dockIconSize.dp,
+                            onQuickClean = { viewModel.quickClean() },
+                            onAppClick = { viewModel.openApp(it) },
+                            onAppLongClick = { pkg -> viewModel.gridRepository.toggleLock(pkg) },
+                        )
                     }
                 }
-            }
-
-            // 底部：整理模式显示操作区，否则底部图标栏
-            if (organizing) {
-                OrganizeOverlay(
-                    state = organizeState,
-                    folders = folders,
-                    folderApps = organizeViewModel.currentFolderApps,
-                    icons = icons,
-                    onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
-                    onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
-                    onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
-                    onShift = { step -> organizeViewModel.shift(step) },
-                    onMoveUp = { organizeViewModel.moveUp() },
-                    onMoveDown = { organizeViewModel.moveDown() },
-                    onCreate = { organizeViewModel.createFolder() },
-                    onDelete = { organizeViewModel.requestDeleteFolder() },
-                    onNameChange = { name -> organizeViewModel.updateFolderName(name) },
-                    onNameCommit = { organizeViewModel.commitFolderName() },
-                    onAppLabel = { labelOf(it) },
-                )
-                // 删除文件夹二次确认
-                organizeViewModel.pendingDelete.collectAsState().value?.let { folder ->
-                    AlertDialog(
-                        onDismissRequest = { organizeViewModel.cancelDeleteFolder() },
-                        title = { Text("删除文件夹") },
-                        text = { Text("删除「${folder.name}」？其中 ${organizeViewModel.currentFolderApps.size} 个应用将移回主屏幕。") },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(onClick = { organizeViewModel.confirmDeleteFolder() }) {
-                                Text("删除", color = MaterialTheme.colorScheme.error)
-                            }
-                        },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(onClick = { organizeViewModel.cancelDeleteFolder() }) {
-                                Text("取消")
-                            }
-                        },
-                    )
-                }
             } else {
-                DockBar(
-                    packages = dockPackages(gridItems, folderApps, frozenStates),
+                // ── 文件夹页（全屏，循环滑动的一页） ──
+                val folder = sortedFolders[idx - 1]
+                FolderScreen(
+                    folder = folder,
+                    memberPackages = folderApps
+                        .filter { it.folderId == folder.id }
+                        .sortedBy { it.sortOrder }
+                        .map { it.pkg },
                     icons = icons,
-                    iconSize = dockIconSize.dp,
-                    onQuickClean = { viewModel.quickClean() },
+                    frozenStates = frozenStates,
+                    columns = columns,
+                    iconSize = iconSize.dp,
+                    showAppName = showAppName,
+                    onBackToHome = {
+                        scope.launch {
+                            val base = (pagerState.currentPage / actualCount) * actualCount
+                            pagerState.animateScrollToPage(base)
+                        }
+                    },
                     onAppClick = { viewModel.openApp(it) },
-                    onAppLongClick = { pkg -> viewModel.gridRepository.toggleLock(pkg) },
+                    onAppLongClick = { item -> longPressTarget = item },
+                    onAppLabel = { labelOf(it) },
                 )
             }
         }
@@ -616,3 +684,7 @@ private fun DialogAction(label: String, onClick: () -> Unit) {
             .padding(vertical = 12.dp),
     )
 }
+
+/** 循环 Pager 放大倍数（大页数实现无缝循环，取模定位真实页） */
+private const val LOOP_BASE = 500
+private const val LOOP_TOTAL = 1000
