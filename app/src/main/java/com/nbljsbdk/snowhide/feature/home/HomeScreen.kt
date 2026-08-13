@@ -115,7 +115,6 @@ fun HomeScreen(
     val folderApps by viewModel.gridRepository.folderApps.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
     val lockedPackages by viewModel.gridRepository.lockedPackages.collectAsState()
-    val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
     val icons by viewModel.icons.collectAsState()
     val labels by viewModel.labels.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
@@ -247,8 +246,7 @@ fun HomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
-                    else MaterialTheme.colorScheme.background,
+                    containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
             )
@@ -260,8 +258,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(bottom = dockIconSize.dp + 12.dp),
             )
         },
-        containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
-        else MaterialTheme.colorScheme.background,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         // ═══════════════════════════════════════
         // 循环滑动（设计文档 §3.2）：
