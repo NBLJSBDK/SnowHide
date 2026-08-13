@@ -1,0 +1,276 @@
+package com.nbljsbdk.snowhide.data.repo
+
+import android.content.Context
+import com.nbljsbdk.snowhide.data.model.Folder
+import com.nbljsbdk.snowhide.data.model.FolderApp
+import com.nbljsbdk.snowhide.data.model.GridItem
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * 宫格数据仓库——主屏混排 / 文件夹 / 排序 / 整理目录的全部数据操作
+ *
+ * P0 实现：SharedPreferences + JSON（数据规模小：几十个应用 + 文件夹，
+ * 无需 Room；MediaSync 同款已验证方案）。
+ *
+ * UI 永不直连本仓库——所有读写通过 domain 层用例。
+ */
+class GridRepository(context: Context) {
+
+    private val prefs = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
+
+    private val _gridItems = MutableStateFlow(loadGridItems())
+    /** 主屏混排项（按 sortOrder 升序） */
+    val gridItems: StateFlow<List<GridItem>> = _gridItems.asStateFlow()
+
+    private val _folders = MutableStateFlow(loadFolders())
+    /** 文件夹列表（按 sortOrder 升序，即循环滑动顺序） */
+    val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
+
+    private val _folderApps = MutableStateFlow(loadFolderApps())
+    /** 全部文件夹成员关系（按 sortOrder 升序） */
+    val folderApps: StateFlow<List<FolderApp>> = _folderApps.asStateFlow()
+
+    // ═══════════════════════════════════════
+    // 应用管理（增加应用界面）
+    // ═══════════════════════════════════════
+
+    /** 应用是否已添加（主屏或任一文件夹） */
+    fun isAppAdded(pkg: String): Boolean =
+        _gridItems.value.any { it.pkg == pkg } || _folderApps.value.any { it.pkg == pkg }
+
+    /** 添加应用到主屏末尾 */
+    fun addAppToHome(pkg: String) {
+        if (isAppAdded(pkg)) return
+        val items = _gridItems.value.toMutableList()
+        items.add(
+            GridItem(
+                id = nextId(),
+                type = "app",
+                pkg = pkg,
+                sortOrder = (items.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+            )
+        )
+        _gridItems.value = items
+        persist()
+    }
+
+    /** 从宫格体系完全移除应用（移除应用界面：解冻并移出） */
+    fun removeApp(pkg: String) {
+        _gridItems.value = _gridItems.value.filterNot { it.pkg == pkg }
+        _folderApps.value = _folderApps.value.filterNot { it.pkg == pkg }
+        persist()
+    }
+
+    // ═══════════════════════════════════════
+    // 文件夹操作（整理目录 + 文件夹长按菜单）
+    // ═══════════════════════════════════════
+
+    /** 创建文件夹并加入主屏末尾（整理目录「创建」自动聚焦用） */
+    fun createFolder(name: String): Folder {
+        val folder = Folder(
+            id = nextId(),
+            name = name,
+            sortOrder = (getAllFolders().maxOfOrNull { it.sortOrder } ?: -1) + 1,
+        )
+        _folders.value = getAllFolders() + folder
+        _gridItems.value = _gridItems.value + GridItem(
+            id = nextId(),
+            type = "folder",
+            folderId = folder.id,
+            sortOrder = (_gridItems.value.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+        )
+        persist()
+        return folder
+    }
+
+    /** 重命名文件夹 */
+    fun renameFolder(folderId: Long, name: String) {
+        _folders.value = _folders.value.map { if (it.id == folderId) it.copy(name = name) else it }
+        persist()
+    }
+
+    /**
+     * 删除文件夹（整理目录垃圾桶，二次确认后调用）
+     * 文件夹内应用按原有 sortOrder 续补到主屏后面（应用不丢，设计文档 §3.10）
+     */
+    fun deleteFolder(folderId: Long) {
+        val members = _folderApps.value.filter { it.folderId == folderId }.sortedBy { it.sortOrder }
+        val items = _gridItems.value.filterNot { it.folderId == folderId }.toMutableList()
+        var maxSort = items.maxOfOrNull { it.sortOrder } ?: -1
+        members.forEach { member ->
+            maxSort++
+            items.add(
+                GridItem(
+                    id = nextId(),
+                    type = "app",
+                    pkg = member.pkg,
+                    sortOrder = maxSort,
+                )
+            )
+        }
+        _gridItems.value = items
+        _folders.value = _folders.value.filterNot { it.id == folderId }
+        _folderApps.value = _folderApps.value.filterNot { it.folderId == folderId }
+        persist()
+    }
+
+    // ═══════════════════════════════════════
+    // 整理目录移动操作（状态机键位规则，设计文档 §3.10）
+    // ═══════════════════════════════════════
+
+    /** 区内线性移位：把 item 向左(step=-1)/右(step=+1)移动一位，不循环、到头即止 */
+    fun shiftItem(itemId: Long, step: Int) {
+        val items = _gridItems.value.sortedBy { it.sortOrder }.toMutableList()
+        val index = items.indexOfFirst { it.id == itemId }
+        val target = index + step
+        if (index < 0 || target < 0 || target >= items.size) return // 到头即止
+        // 与相邻项交换 sortOrder
+        val a = items[index]
+        val b = items[target]
+        items[index] = b
+        items[target] = a
+        _gridItems.value = items.mapIndexed { i, item -> item.copy(sortOrder = i) }
+        persist()
+    }
+
+    /** 文件夹内应用移位（区内排序，不循环） */
+    fun shiftFolderApp(folderId: Long, pkg: String, step: Int) {
+        val members = _folderApps.value.filter { it.folderId == folderId }.sortedBy { it.sortOrder }.toMutableList()
+        val index = members.indexOfFirst { it.pkg == pkg }
+        val target = index + step
+        if (index < 0 || target < 0 || target >= members.size) return
+        val a = members[index]
+        val b = members[target]
+        members[index] = b
+        members[target] = a
+        val others = _folderApps.value.filter { it.folderId != folderId }
+        _folderApps.value = others + members.mapIndexed { i, m -> m.copy(sortOrder = i) }
+        persist()
+    }
+
+    /** 上/下跨区转移：主屏 app 加入文件夹最后（下键） */
+    fun moveAppToFolder(pkg: String, folderId: Long) {
+        _gridItems.value = _gridItems.value.filterNot { it.pkg == pkg }
+        val members = _folderApps.value.filter { it.folderId == folderId }
+        _folderApps.value = _folderApps.value + FolderApp(
+            folderId = folderId,
+            pkg = pkg,
+            sortOrder = (members.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+        )
+        persist()
+    }
+
+    /** 上/下跨区转移：文件夹内 app 移回主屏最后（上键） */
+    fun moveAppToHome(pkg: String) {
+        _folderApps.value = _folderApps.value.filterNot { it.pkg == pkg }
+        val items = _gridItems.value.toMutableList()
+        items.add(
+            GridItem(
+                id = nextId(),
+                type = "app",
+                pkg = pkg,
+                sortOrder = (items.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+            )
+        )
+        _gridItems.value = items
+        persist()
+    }
+
+    // ═══════════════════════════════════════
+    // 底部图标栏锁定
+    // ═══════════════════════════════════════
+
+    /** 切换底部图标栏锁定（持久化，豁免快速清理/息屏清理） */
+    fun toggleLock(pkg: String) {
+        _gridItems.value = _gridItems.value.map { item ->
+            if (item.pkg == pkg) item.copy(locked = !item.locked) else item
+        }
+        persist()
+    }
+
+    /** 查询应用锁定状态 */
+    fun isLocked(pkg: String): Boolean =
+        _gridItems.value.any { it.pkg == pkg && it.locked }
+
+    // ═══════════════════════════════════════
+    // 循环滑动序列（设计文档 §3.2）
+    // ═══════════════════════════════════════
+
+    /** 已添加的全部应用包名（底部图标栏数据源：已添加且解冻的应用） */
+    fun allAddedPackages(): List<String> =
+        (_gridItems.value.mapNotNull { it.pkg } + _folderApps.value.map { it.pkg }).distinct()
+
+    // ═══════════════════════════════════════
+    // 持久化（SharedPreferences + JSON）
+    // ═══════════════════════════════════════
+
+    private fun nextId(): Long = System.currentTimeMillis()
+
+    private fun getAllFolders(): List<Folder> = _folders.value
+
+    private fun persist() {
+        prefs.edit()
+            .putString(KEY_ITEMS, toJson(_gridItems.value) { obj, item ->
+                obj.put("id", item.id)
+                    .put("type", item.type)
+                    .put("pkg", item.pkg ?: JSONObject.NULL)
+                    .put("folderId", item.folderId ?: JSONObject.NULL)
+                    .put("sortOrder", item.sortOrder)
+                    .put("frozenMode", item.frozenMode)
+                    .put("locked", item.locked)
+            })
+            .putString(KEY_FOLDERS, toJson(_folders.value) { obj, folder ->
+                obj.put("id", folder.id).put("name", folder.name).put("sortOrder", folder.sortOrder)
+            })
+            .putString(KEY_FOLDER_APPS, toJson(_folderApps.value) { obj, fa ->
+                obj.put("folderId", fa.folderId).put("pkg", fa.pkg).put("sortOrder", fa.sortOrder)
+            })
+            .apply()
+    }
+
+    private fun loadGridItems(): List<GridItem> = load(KEY_ITEMS) { obj ->
+        GridItem(
+            id = obj.optLong("id"),
+            type = obj.optString("type"),
+            pkg = if (obj.isNull("pkg")) null else obj.optString("pkg"),
+            folderId = if (obj.isNull("folderId")) null else obj.optLong("folderId"),
+            sortOrder = obj.optInt("sortOrder"),
+            frozenMode = obj.optString("frozenMode", "FREEZE"),
+            locked = obj.optBoolean("locked", false),
+        )
+    }
+
+    private fun loadFolders(): List<Folder> = load(KEY_FOLDERS) { obj ->
+        Folder(obj.optLong("id"), obj.optString("name"), obj.optInt("sortOrder"))
+    }
+
+    private fun loadFolderApps(): List<FolderApp> = load(KEY_FOLDER_APPS) { obj ->
+        FolderApp(obj.optLong("folderId"), obj.optString("pkg"), obj.optInt("sortOrder"))
+    }
+
+    private fun <T> load(key: String, parse: (JSONObject) -> T): List<T> {
+        val json = prefs.getString(key, "[]") ?: "[]"
+        val array = JSONArray(json)
+        val list = mutableListOf<T>()
+        for (i in 0 until array.length()) {
+            list.add(parse(array.getJSONObject(i)))
+        }
+        return list
+    }
+
+    private fun <T> toJson(list: List<T>, fill: (JSONObject, T) -> JSONObject): String {
+        val array = JSONArray()
+        list.forEach { item -> array.put(fill(JSONObject(), item)) }
+        return array.toString()
+    }
+
+    companion object {
+        private const val KEY_ITEMS = "grid_items"
+        private const val KEY_FOLDERS = "folders"
+        private const val KEY_FOLDER_APPS = "folder_apps"
+    }
+}
