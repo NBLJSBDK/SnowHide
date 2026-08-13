@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
+import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
 import com.nbljsbdk.snowhide.ui.theme.IceBlue
 import com.nbljsbdk.snowhide.ui.theme.WarmOrange
@@ -97,12 +99,25 @@ fun HomeScreen(
     val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
     val message by viewModel.message.collectAsState()
     val menuOpen by viewModel.menuOpen.collectAsState()
+    val organizing by viewModel.organizing.collectAsState()
+
+    // 整理目录状态机
+    val organizeViewModel: OrganizeViewModel = viewModel()
+    val organizeState by organizeViewModel.state.collectAsState()
+    val organizeFinished by organizeViewModel.finished.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
+
+    // 整理完成 → 关闭整理模式并刷新
+    LaunchedEffect(organizeFinished) {
+        if (organizeFinished) {
+            viewModel.setOrganizing(false)
+        }
+    }
 
     LaunchedEffect(message) {
         message?.let {
@@ -120,19 +135,41 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("雪藏", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = { /* 搜索（P0 占位） */ }) {
-                        Icon(Icons.Default.Search, contentDescription = "搜索")
+                    if (organizing) {
+                        // 整理模式：取消（二次确认丢弃）/ 确认（保存）
+                        Text(
+                            text = "取消",
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier
+                                .clickable { viewModel.setOrganizing(false) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                        Text(
+                            text = "确认",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable {
+                                    organizeViewModel.commitFolderName()
+                                    organizeViewModel.finish()
+                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    } else {
+                        IconButton(onClick = { /* 搜索（P0 占位） */ }) {
+                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        }
+                        IconButton(onClick = { viewModel.toggleMenu() }) {
+                            Icon(Icons.Default.Settings, contentDescription = "设置")
+                        }
+                        GearMenu(
+                            expanded = menuOpen,
+                            onDismiss = { viewModel.dismissMenu() },
+                            onOrganize = { viewModel.setOrganizing(true) },
+                            onUnfreezeAll = { viewModel.unfreezeAll() },
+                            onFreezeAll = { viewModel.freezeAll() },
+                        )
                     }
-                    IconButton(onClick = { viewModel.toggleMenu() }) {
-                        Icon(Icons.Default.Settings, contentDescription = "设置")
-                    }
-                    GearMenu(
-                        expanded = menuOpen,
-                        onDismiss = { viewModel.dismissMenu() },
-                        onOrganize = { viewModel.setOrganizing(true) },
-                        onUnfreezeAll = { viewModel.unfreezeAll() },
-                        onFreezeAll = { viewModel.freezeAll() },
-                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -181,6 +218,12 @@ fun HomeScreen(
                                         .map { it.pkg }
                                         .take(4),
                                     icons = icons,
+                                    selected = organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
+                                        (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
+                                    onClick = {
+                                        if (organizing) organizeViewModel.tapFolder(folder)
+                                        else viewModel.showMessage("文件夹页下一轮接入")
+                                    },
                                     onLongPress = { longPressTarget = item },
                                 )
                             }
@@ -193,23 +236,71 @@ fun HomeScreen(
                                 frozen = frozenStates[item.pkg] == true,
                                 icon = icons[item.pkg],
                                 showName = showAppName,
-                                onClick = { viewModel.openApp(item.pkg) },
-                                onLongPress = { longPressTarget = item },
+                                selected = when (val s = organizeState) {
+                                    is OrganizeViewModel.OrganizeState.HomeAppSelected -> s.app.id == item.id
+                                    is OrganizeViewModel.OrganizeState.FolderSelected -> s.subHomeApp?.id == item.id
+                                    else -> false
+                                },
+                                onClick = {
+                                    if (organizing) organizeViewModel.tapHomeApp(item)
+                                    else viewModel.openApp(item.pkg)
+                                },
+                                onLongPress = {
+                                    if (!organizing) longPressTarget = item
+                                },
                             )
                         }
                     }
                 }
             }
 
-            // 底部图标栏
-            DockBar(
-                packages = dockPackages(gridItems, folderApps, frozenStates),
-                icons = icons,
-                iconSize = dockIconSize.dp,
-                onQuickClean = { viewModel.quickClean() },
-                onAppClick = { viewModel.openApp(it) },
-                onAppLongClick = { pkg -> viewModel.gridRepository.toggleLock(pkg) },
-            )
+            // 底部：整理模式显示操作区，否则底部图标栏
+            if (organizing) {
+                OrganizeOverlay(
+                    state = organizeState,
+                    folders = folders,
+                    folderApps = organizeViewModel.currentFolderApps,
+                    icons = icons,
+                    onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
+                    onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
+                    onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
+                    onShift = { step -> organizeViewModel.shift(step) },
+                    onMoveUp = { organizeViewModel.moveUp() },
+                    onMoveDown = { organizeViewModel.moveDown() },
+                    onCreate = { organizeViewModel.createFolder() },
+                    onDelete = { organizeViewModel.requestDeleteFolder() },
+                    onNameChange = { name -> organizeViewModel.updateFolderName(name) },
+                    onNameCommit = { organizeViewModel.commitFolderName() },
+                    onAppLabel = { labelOf(it) },
+                )
+                // 删除文件夹二次确认
+                organizeViewModel.pendingDelete.collectAsState().value?.let { folder ->
+                    AlertDialog(
+                        onDismissRequest = { organizeViewModel.cancelDeleteFolder() },
+                        title = { Text("删除文件夹") },
+                        text = { Text("删除「${folder.name}」？其中 ${organizeViewModel.currentFolderApps.size} 个应用将移回主屏幕。") },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { organizeViewModel.confirmDeleteFolder() }) {
+                                Text("删除", color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { organizeViewModel.cancelDeleteFolder() }) {
+                                Text("取消")
+                            }
+                        },
+                    )
+                }
+            } else {
+                DockBar(
+                    packages = dockPackages(gridItems, folderApps, frozenStates),
+                    icons = icons,
+                    iconSize = dockIconSize.dp,
+                    onQuickClean = { viewModel.quickClean() },
+                    onAppClick = { viewModel.openApp(it) },
+                    onAppLongClick = { pkg -> viewModel.gridRepository.toggleLock(pkg) },
+                )
+            }
         }
     }
 
@@ -230,11 +321,6 @@ fun HomeScreen(
                 viewModel.toggleFolderFreeze(folder); longPressTarget = null
             },
         )
-    }
-
-    // 整理目录页（P0 状态机入口，下一轮补全交互）
-    if (viewModel.organizing.collectAsState().value) {
-        OrganizePlaceholder(onClose = { viewModel.setOrganizing(false) })
     }
 }
 
@@ -288,6 +374,7 @@ private fun AppCell(
     frozen: Boolean,
     icon: ImageBitmap?,
     showName: Boolean,
+    selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -296,7 +383,11 @@ private fun AppCell(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongPress)
-            .padding(4.dp),
+            .padding(4.dp)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                else androidx.compose.ui.graphics.Color.Transparent,
+            ),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (icon != null) {
@@ -343,14 +434,20 @@ private fun FolderCell(
     size: androidx.compose.ui.unit.Dp,
     previewPackages: List<String>,
     icons: Map<String, ImageBitmap>,
+    selected: Boolean = false,
+    onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .combinedClickable(onClick = { /* 进入文件夹（下一轮接全屏文件夹页） */ }, onLongClick = onLongPress)
-            .padding(4.dp),
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+            .padding(4.dp)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                else androidx.compose.ui.graphics.Color.Transparent,
+            ),
     ) {
         Icon(
             Icons.Default.Settings, // P0 占位图标，后续换 FontAwesome folder
@@ -517,18 +614,5 @@ private fun DialogAction(label: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
-    )
-}
-
-/** 整理目录占位页（P0 下一轮补全状态机交互） */
-@Composable
-private fun OrganizePlaceholder(onClose: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("整理目录") },
-        text = { Text("整理目录交互（状态机）下一轮实现") },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onClose) { Text("关闭") }
-        },
     )
 }

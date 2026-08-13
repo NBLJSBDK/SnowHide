@@ -16,11 +16,20 @@ import org.json.JSONObject
  * P0 实现：SharedPreferences + JSON（数据规模小：几十个应用 + 文件夹，
  * 无需 Room；MediaSync 同款已验证方案）。
  *
+ * 单例设计：全工程唯一数据源，各 ViewModel 共享同一实例，
+ * 避免多处各自 new 导致状态不同步。
+ *
  * UI 永不直连本仓库——所有读写通过 domain 层用例。
  */
-class GridRepository(context: Context) {
+object GridRepository {
 
-    private val prefs = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
+    private lateinit var prefs: android.content.SharedPreferences
+
+    /** 初始化（Application 启动时调用一次） */
+    fun init(context: Context) {
+        if (::prefs.isInitialized) return
+        prefs = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
+    }
 
     private val _gridItems = MutableStateFlow(loadGridItems())
     /** 主屏混排项（按 sortOrder 升序） */
@@ -213,6 +222,7 @@ class GridRepository(context: Context) {
     private fun getAllFolders(): List<Folder> = _folders.value
 
     private fun persist() {
+        if (!::prefs.isInitialized) return
         prefs.edit()
             .putString(KEY_ITEMS, toJson(_gridItems.value) { obj, item ->
                 obj.put("id", item.id)
@@ -253,6 +263,7 @@ class GridRepository(context: Context) {
     }
 
     private fun <T> load(key: String, parse: (JSONObject) -> T): List<T> {
+        if (!::prefs.isInitialized) return emptyList()
         val json = prefs.getString(key, "[]") ?: "[]"
         val array = JSONArray(json)
         val list = mutableListOf<T>()
@@ -268,9 +279,7 @@ class GridRepository(context: Context) {
         return array.toString()
     }
 
-    companion object {
-        private const val KEY_ITEMS = "grid_items"
-        private const val KEY_FOLDERS = "folders"
-        private const val KEY_FOLDER_APPS = "folder_apps"
-    }
+    private const val KEY_ITEMS = "grid_items"
+    private const val KEY_FOLDERS = "folders"
+    private const val KEY_FOLDER_APPS = "folder_apps"
 }

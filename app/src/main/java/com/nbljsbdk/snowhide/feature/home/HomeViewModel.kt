@@ -31,8 +31,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val context get() = getApplication<Application>()
 
     val engineManager = EngineManager
-    val gridRepository = GridRepository(context)
-    val settingsRepository = SettingsRepository(context)
+    val gridRepository = GridRepository
+    val settingsRepository = SettingsRepository
     private val freezeUseCase = FreezeUseCase(FreezeExecutor(engineManager), gridRepository)
     private val iconLoader = AppIconLoader(context)
 

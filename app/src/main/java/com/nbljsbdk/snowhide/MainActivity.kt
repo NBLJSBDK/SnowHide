@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
+import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.feature.home.HomeScreen
 import com.nbljsbdk.snowhide.ui.theme.SnowHideTheme
 import rikka.shizuku.Shizuku
@@ -34,6 +36,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         EngineRegistry.init(applicationContext)
+        GridRepository.init(applicationContext)
+        SettingsRepository.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {
