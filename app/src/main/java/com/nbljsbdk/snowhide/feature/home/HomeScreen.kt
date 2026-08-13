@@ -3,6 +3,7 @@
 package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.clickable
@@ -235,6 +236,22 @@ fun HomeScreen(
         val pagerState = rememberPagerState(
             initialPage = LOOP_BASE * actualCount,
         ) { LOOP_TOTAL * actualCount }
+
+        // 返回键处理：
+        // ① 整理目录模式 → 保存并退出整理，回到主界面
+        // ② 文件夹页 → 滑回主屏页
+        // ③ 主屏非整理 → 默认行为（退出 App）
+        BackHandler(enabled = organizing || pagerState.currentPage % actualCount != 0) {
+            if (organizing) {
+                organizeViewModel.commitFolderName()
+                viewModel.setOrganizing(false)
+            } else {
+                scope.launch {
+                    val base = (pagerState.currentPage / actualCount) * actualCount
+                    pagerState.animateScrollToPage(base)
+                }
+            }
+        }
 
         // 整理模式下锁定主屏页
         LaunchedEffect(organizing) {
