@@ -234,7 +234,13 @@ fun HomeScreen(
                 ),
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            // 上移避开底部 dock 栏（用户拍板：Snackbar 不挡栏位）
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = dockIconSize.dp + 12.dp),
+            )
+        },
         containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         // ═══════════════════════════════════════
