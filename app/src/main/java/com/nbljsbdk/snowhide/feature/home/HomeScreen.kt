@@ -917,11 +917,11 @@ private fun DockBar(
             }
         }
         Spacer(modifier = Modifier.width(6.dp))
-        // 快速清理按钮（暖橙强调，P0 用扫帚图标占位）
+        // 智能清理按钮（暖橙强调，豁免锁定）
         IconButton(onClick = onQuickClean) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_broom),
-                contentDescription = "快速清理",
+                contentDescription = "智能清理",
                 modifier = Modifier.size(iconSize * 0.9f),
             )
         }

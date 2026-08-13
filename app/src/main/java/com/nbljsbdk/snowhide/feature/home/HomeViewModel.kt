@@ -245,7 +245,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 快速清理：停用底部栏所有打开应用（除锁定） */
+    /** 智能清理：停用底部栏所有打开应用（除锁定） */
     fun quickClean() {
         viewModelScope.launch {
             freezeUseCase.quickClean()
@@ -266,10 +266,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 停用全部（除锁定） */
+    /** 停用全部（用户拍板：连锁定的也冻结——与智能清理豁免锁定区分开） */
     fun freezeAll() {
         viewModelScope.launch {
-            freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = true)
+            freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = false)
                 .onSuccess { n -> refreshFrozenStates(); showMessage("已停用 $n 个应用") }
                 .onFailure { showMessage(it.message ?: "操作失败") }
         }
