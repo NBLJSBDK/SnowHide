@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,7 +72,7 @@ fun FolderScreen(
                 modifier = Modifier.align(Alignment.CenterStart),
             ) {
                 Icon(
-                    Icons.Default.KeyboardArrowUp,
+                    Icons.Filled.Home,
                     contentDescription = "返回主屏",
                     tint = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.size(iconSize),

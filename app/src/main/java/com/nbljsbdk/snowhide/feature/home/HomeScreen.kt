@@ -307,13 +307,18 @@ fun HomeScreen(
             }
         }
 
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
         HorizontalPager(
             state = pagerState,
             // 只有一个主屏（没有文件夹）时禁用滑动；搜索/整理期间锁定主屏
             userScrollEnabled = !organizing && sortedFolders.isNotEmpty() && searchQuery.isBlank(),
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+                .fillMaxWidth()
+                .weight(1f),
         ) { page ->
             // 整理模式强制渲染主屏：创建/删除文件夹的瞬间 actualCount 已变而
             // currentPage 还未对齐，取模结果会漂到文件夹页造成闪动。
@@ -422,55 +427,6 @@ fun HomeScreen(
                             }
                         }
                     }
-
-                    // 底部：整理模式显示操作区，否则底部图标栏
-                    if (organizing) {
-                        OrganizeOverlay(
-                            state = organizeState,
-                            folders = folders,
-                            folderApps = organizeViewModel.currentFolderApps,
-                            icons = icons,
-                            onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
-                            onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
-                            onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
-                            onShift = { step -> organizeViewModel.shift(step) },
-                            onMoveUp = { organizeViewModel.moveUp() },
-                            onMoveDown = { organizeViewModel.moveDown() },
-                            onCreate = { organizeViewModel.createFolder() },
-                            onDelete = { organizeViewModel.requestDeleteFolder() },
-                            onNameChange = { name -> organizeViewModel.updateFolderName(name) },
-                            onNameCommit = { organizeViewModel.commitFolderName() },
-                            onAppLabel = { pkg -> labels[pkg] ?: "" },
-                        )
-                    } else {
-                        DockBar(
-                            packages = dockPackages(gridItems, folderApps, frozenStates),
-                            lockedPackages = lockedPackages,
-                            icons = icons,
-                            iconSize = dockIconSize.dp,
-                            onQuickClean = { viewModel.quickClean() },
-                            onAppClick = { viewModel.openApp(it) },
-                            onAppLongClick = { pkg ->
-                                viewModel.gridRepository.toggleLock(pkg)
-                                // 锁定与解锁都短震；档位 0 不震，系统静音/勿扰不震
-                                if (shouldVibrate()) {
-                                    val (duration, amplitude) = when (hapticLevel) {
-                                        1 -> 30 to 96
-                                        2 -> 50 to 160
-                                        3 -> 70 to 224
-                                        else -> 90 to 255
-                                    }
-                                    vibrator?.vibrate(
-                                        android.os.VibrationEffect.createOneShot(
-                                            duration.toLong(),
-                                            amplitude,
-                                        )
-                                    )
-                                }
-                            },
-                            onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
-                        )
-                    }
                 }
             } else {
                 // ── 文件夹页（全屏，循环滑动的一页） ──
@@ -495,6 +451,57 @@ fun HomeScreen(
                     onAppLabel = { pkg -> labels[pkg] ?: "" },
                 )
             }
+        }
+
+        // 底部：整理模式显示操作区，否则底部图标栏
+        // （用户拍板：主桌面与文件夹页都显示 dock 栏）
+        if (organizing) {
+            OrganizeOverlay(
+                state = organizeState,
+                folders = folders,
+                folderApps = organizeViewModel.currentFolderApps,
+                icons = icons,
+                onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
+                onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
+                onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
+                onShift = { step -> organizeViewModel.shift(step) },
+                onMoveUp = { organizeViewModel.moveUp() },
+                onMoveDown = { organizeViewModel.moveDown() },
+                onCreate = { organizeViewModel.createFolder() },
+                onDelete = { organizeViewModel.requestDeleteFolder() },
+                onNameChange = { name -> organizeViewModel.updateFolderName(name) },
+                onNameCommit = { organizeViewModel.commitFolderName() },
+                onAppLabel = { pkg -> labels[pkg] ?: "" },
+            )
+        } else {
+            DockBar(
+                packages = dockPackages(gridItems, folderApps, frozenStates),
+                lockedPackages = lockedPackages,
+                icons = icons,
+                iconSize = dockIconSize.dp,
+                onQuickClean = { viewModel.quickClean() },
+                onAppClick = { viewModel.openApp(it) },
+                onAppLongClick = { pkg ->
+                    viewModel.gridRepository.toggleLock(pkg)
+                    // 锁定与解锁都短震；档位 0 不震，系统静音/勿扰不震
+                    if (shouldVibrate()) {
+                        val (duration, amplitude) = when (hapticLevel) {
+                            1 -> 30 to 96
+                            2 -> 50 to 160
+                            3 -> 70 to 224
+                            else -> 90 to 255
+                        }
+                        vibrator?.vibrate(
+                            android.os.VibrationEffect.createOneShot(
+                                duration.toLong(),
+                                amplitude,
+                            )
+                        )
+                    }
+                },
+                onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
+            )
+        }
         }
     }
 
