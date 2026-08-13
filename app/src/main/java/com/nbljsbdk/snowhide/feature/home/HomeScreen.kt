@@ -358,6 +358,7 @@ fun HomeScreen(
                                                 .map { it.pkg }
                                                 .take(4),
                                             icons = icons,
+                                            frozenStates = frozenStates,
                                             selected = organizing &&
                                                 organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
                                                 (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
@@ -750,7 +751,7 @@ private fun AppCell(
     }
 }
 
-/** 文件夹宫格单元（P0 先单一文件夹图标，2×2 拼贴下一轮美化） */
+/** 文件夹宫格单元（2×2 拼贴，冻结成员霜化+雪花角标） */
 @Composable
 private fun FolderCell(
     folderId: Long,
@@ -758,6 +759,7 @@ private fun FolderCell(
     size: androidx.compose.ui.unit.Dp,
     previewPackages: List<String>,
     icons: Map<String, ImageBitmap>,
+    frozenStates: Map<String, Boolean> = emptyMap(),
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -799,15 +801,27 @@ private fun FolderCell(
                                     modifier = Modifier.size(size * 0.5f),
                                 ) {
                                     if (pkg != null) {
+                                        val frozen = frozenStates[pkg] == true
                                         icons[pkg]?.let { bmp ->
-                                            androidx.compose.foundation.Image(
-                                                bitmap = bmp,
-                                                contentDescription = pkg,
-                                                contentScale = ContentScale.Fit,
-                                                modifier = Modifier
-                                                    .size(size * 0.44f)
-                                                    .clip(RoundedCornerShape(size.value * 0.1f)),
-                                            )
+                                            Box(contentAlignment = Alignment.TopStart) {
+                                                androidx.compose.foundation.Image(
+                                                    bitmap = bmp,
+                                                    contentDescription = pkg,
+                                                    contentScale = ContentScale.Fit,
+                                                    modifier = Modifier
+                                                        .size(size * 0.44f)
+                                                        .clip(RoundedCornerShape(size.value * 0.1f))
+                                                        .frosted(enabled = frozen),
+                                                )
+                                                if (frozen) {
+                                                    // 雪花角标（2×2 预览内冻结成员）
+                                                    androidx.compose.foundation.Image(
+                                                        painter = painterResource(R.drawable.ic_snowflake),
+                                                        contentDescription = "已冻结",
+                                                        modifier = Modifier.size(size * 0.16f),
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
