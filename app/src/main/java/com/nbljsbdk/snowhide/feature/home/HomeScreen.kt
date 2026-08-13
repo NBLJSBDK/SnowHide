@@ -114,6 +114,7 @@ fun HomeScreen(
     val folders by viewModel.gridRepository.folders.collectAsState()
     val folderApps by viewModel.gridRepository.folderApps.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
+    val lockedPackages by viewModel.gridRepository.lockedPackages.collectAsState()
     val icons by viewModel.icons.collectAsState()
     val labels by viewModel.labels.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
@@ -419,6 +420,7 @@ fun HomeScreen(
                     } else {
                         DockBar(
                             packages = dockPackages(gridItems, folderApps, frozenStates),
+                            lockedPackages = lockedPackages,
                             icons = icons,
                             iconSize = dockIconSize.dp,
                             onQuickClean = { viewModel.quickClean() },
@@ -824,6 +826,7 @@ private fun FolderCell(
 @Composable
 private fun DockBar(
     packages: List<String>,
+    lockedPackages: Set<String>,
     icons: Map<String, ImageBitmap>,
     iconSize: androidx.compose.ui.unit.Dp,
     onQuickClean: () -> Unit,
@@ -849,6 +852,7 @@ private fun DockBar(
                         pkg = pkg,
                         bitmap = bitmap,
                         iconSize = iconSize,
+                        locked = pkg in lockedPackages,
                         onClick = { onAppClick(pkg) },
                         onLongClick = { onAppLongClick(pkg) },
                         onSwipeUp = { onAppSwipeUp(pkg) },
@@ -880,6 +884,7 @@ private fun DockIcon(
     pkg: String,
     bitmap: ImageBitmap,
     iconSize: androidx.compose.ui.unit.Dp,
+    locked: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onSwipeUp: () -> Unit,
@@ -890,44 +895,56 @@ private fun DockIcon(
     val maxDrag = iconSize.value * 1.4f
     val threshold = -iconSize.value * 0.9f
 
-    androidx.compose.foundation.Image(
-        bitmap = bitmap,
-        contentDescription = pkg,
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .offset { IntOffset(0, offsetY.value.roundToInt()) }
-            .graphicsLayer {
-                alpha = 1f - (offsetY.value / -maxDrag).coerceIn(0f, 1f) * 0.55f
-            }
-            .size(iconSize)
-            .clip(RoundedCornerShape(iconSize.value * 0.22f))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
-            .pointerInput(pkg) {
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, amount ->
-                        // Main.immediate：launch 同步执行，跟手无延迟
-                        scope.launch {
-                            offsetY.snapTo((offsetY.value + amount).coerceIn(-maxDrag, 0f))
-                        }
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        if (offsetY.value <= threshold) {
-                            // 上划到位并松手 → 确认冻结（成功后图标从栏中消失）
-                            onSwipeUp()
-                        }
-                        // 无论触发与否都回弹：失败时回到原位，成功时 item 即将移除
-                        scope.launch { offsetY.animateTo(0f) }
-                    },
-                    onDragCancel = {
-                        scope.launch { offsetY.animateTo(0f) }
-                    },
+    Box {
+        androidx.compose.foundation.Image(
+            bitmap = bitmap,
+            contentDescription = pkg,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .offset { IntOffset(0, offsetY.value.roundToInt()) }
+                .graphicsLayer {
+                    alpha = 1f - (offsetY.value / -maxDrag).coerceIn(0f, 1f) * 0.55f
+                }
+                .size(iconSize)
+                .clip(RoundedCornerShape(iconSize.value * 0.22f))
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
                 )
-            },
-    )
+                .pointerInput(pkg) {
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { change, amount ->
+                            // Main.immediate：launch 同步执行，跟手无延迟
+                            scope.launch {
+                                offsetY.snapTo((offsetY.value + amount).coerceIn(-maxDrag, 0f))
+                            }
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            if (offsetY.value <= threshold) {
+                                // 上划到位并松手 → 确认冻结（成功后图标从栏中消失）
+                                onSwipeUp()
+                            }
+                            // 无论触发与否都回弹：失败时回到原位，成功时 item 即将移除
+                            scope.launch { offsetY.animateTo(0f) }
+                        },
+                        onDragCancel = {
+                            scope.launch { offsetY.animateTo(0f) }
+                        },
+                    )
+                },
+        )
+        // 锁定角标（长按锁定，豁免快速清理/磁贴熄灭冻回）
+        if (locked) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.ic_lock),
+                contentDescription = "已锁定",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(iconSize * 0.42f),
+            )
+        }
+    }
 }
 
 /** 齿轮二级菜单（设计文档 §3.7 八项，P0 接入核心四项） */

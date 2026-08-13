@@ -3,6 +3,7 @@ package com.nbljsbdk.snowhide.feature.quicktoggle
 import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -28,6 +30,9 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,22 +70,27 @@ fun QuickToggleScreen(
     val leftApps by viewModel.leftApps.collectAsState()
     val rightApps by viewModel.rightApps.collectAsState()
 
+    val context = LocalContext.current
+
     BackHandler(onBack = onClose)
+
+    // 磁贴手动添加引导弹窗（requestAddTileService 是系统隐藏 API，第三方不可用）
+    var showTileHelp by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("快速启停", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    TextButton(onClick = onClose) { Text("返回") }
-                },
                 actions = {
-                    TextButton(onClick = { viewModel.toggleShowPackageName() }) {
-                        Text(
-                            text = if (showPackageName) "显示应用名" else "显示包名",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
+                    // 右上角确认 = 返回（加入/移出即时生效，无需暂存）
+                    Text(
+                        text = "确认",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable(onClick = onClose)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -96,20 +106,39 @@ fun QuickToggleScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 12.dp),
         ) {
-            // 说明 + 搜索
+            // 说明 + 磁贴申请
             Text(
-                text = "加入的应用：磁贴点亮时记录状态并全部解冻，熄灭时还原。成员只能从已添加应用中选择。",
+                text = "点亮磁贴 = 解冻成员中已冻结的应用；熄灭 = 冻回本批（有锁定的跳过并提示）。成员只能从已添加应用中选择。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("搜索") },
-                singleLine = true,
+            TextButton(
+                onClick = { showTileHelp = true },
+                modifier = Modifier.padding(vertical = 2.dp),
+            ) {
+                Text("如何添加下拉磁贴", style = MaterialTheme.typography.labelLarge)
+            }
+
+            // 搜索 + 显示包名（用户拍板：显示包名放搜索右边）
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
-            )
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    placeholder = { Text("搜索") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { viewModel.toggleShowPackageName() }) {
+                    Text(
+                        text = if (showPackageName) "显示应用名" else "显示包名",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
 
             Row(modifier = Modifier.fillMaxSize()) {
                 // 左栏：已添加但未加入
@@ -150,11 +179,30 @@ fun QuickToggleScreen(
                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 onSwipe = { viewModel.removeMember(pkg) },
                             )
-                        }
-                    }
                 }
             }
         }
+    }
+
+    // 磁贴手动添加引导
+    if (showTileHelp) {
+        AlertDialog(
+            onDismissRequest = { showTileHelp = false },
+            title = { Text("添加下拉磁贴") },
+            text = {
+                Text(
+                    "系统限制，应用无法自动申请磁贴，请手动添加：\n\n" +
+                        "1. 下拉两次展开快速设置面板\n" +
+                        "2. 点编辑（铅笔图标）\n" +
+                        "3. 在列表里找到「快速启停」拖到面板上"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showTileHelp = false }) { Text("知道了") }
+            },
+        )
+    }
+}
     }
 }
 

@@ -30,6 +30,18 @@
             </intent-filter>
         </activity>
 
+        <!-- 快速启停下拉磁贴（§3.9） -->
+        <service
+            android:name=".service.QuickToggleTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_toggle_off"
+            android:label="快速启停"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- ShizukuProvider：Shizuku binder 获取入口（官方文档要求手动声明，
              provider 库的 AAR 只带 meta-data 不自动注册此组件） -->
         <provider

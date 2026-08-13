@@ -34,6 +34,10 @@ object GridRepository {
         _gridItems.value = loadGridItems()
         _folders.value = loadFolders()
         _folderApps.value = loadFolderApps()
+        // 锁定集：独立存储（覆盖文件夹内应用）；旧版 GridItem.locked=true 迁移进来
+        val migratedLocked = _gridItems.value.filter { it.locked }.mapNotNull { it.pkg }
+        _lockedPackages.value = loadLockedPackages() + migratedLocked
+        if (migratedLocked.isNotEmpty()) persistLocked()
         // 关键：把 id 种子推进到已有数据最大 id 之上。
         // 种子默认=当前毫秒，但进程被系统杀掉重启后时间可能回拨
         // （手动调时间/网络校时），新 id 撞上旧数据 id 会导致
@@ -59,6 +63,10 @@ object GridRepository {
     private val _folderApps = MutableStateFlow<List<FolderApp>>(emptyList())
     /** 全部文件夹成员关系（按 sortOrder 升序） */
     val folderApps: StateFlow<List<FolderApp>> = _folderApps.asStateFlow()
+
+    private val _lockedPackages = MutableStateFlow<Set<String>>(emptySet())
+    /** 锁定应用包名集合（覆盖主屏与文件夹成员，持久化） */
+    val lockedPackages: StateFlow<Set<String>> = _lockedPackages.asStateFlow()
 
     // ═══════════════════════════════════════
     // 应用管理（增加应用界面）
@@ -215,17 +223,36 @@ object GridRepository {
     // 底部图标栏锁定
     // ═══════════════════════════════════════
 
-    /** 切换底部图标栏锁定（持久化，豁免快速清理/息屏清理） */
+    /** 切换底部图标栏锁定（持久化，豁免快速清理/磁贴熄灭冻回） */
     fun toggleLock(pkg: String) {
-        _gridItems.value = _gridItems.value.map { item ->
-            if (item.pkg == pkg) item.copy(locked = !item.locked) else item
+        _lockedPackages.value = if (pkg in _lockedPackages.value) {
+            _lockedPackages.value - pkg
+        } else {
+            _lockedPackages.value + pkg
         }
-        persist()
+        persistLocked()
     }
 
-    /** 查询应用锁定状态 */
-    fun isLocked(pkg: String): Boolean =
-        _gridItems.value.any { it.pkg == pkg && it.locked }
+    /** 查询应用锁定状态（主屏与文件夹成员通用） */
+    fun isLocked(pkg: String): Boolean = pkg in _lockedPackages.value
+
+    /** 锁定集持久化 */
+    private fun persistLocked() {
+        if (!::prefs.isInitialized) return
+        val arr = org.json.JSONArray()
+        _lockedPackages.value.forEach { arr.put(it) }
+        prefs.edit().putString(KEY_LOCKED, arr.toString()).apply()
+    }
+
+    private fun loadLockedPackages(): Set<String> {
+        if (!::prefs.isInitialized) return emptySet()
+        val json = prefs.getString(KEY_LOCKED, "[]") ?: "[]"
+        return runCatching {
+            org.json.JSONArray(json).let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }.toSet()
+            }
+        }.getOrDefault(emptySet())
+    }
 
     // ═══════════════════════════════════════
     // 循环滑动序列（设计文档 §3.2）
@@ -311,4 +338,5 @@ object GridRepository {
     private const val KEY_ITEMS = "grid_items"
     private const val KEY_FOLDERS = "folders"
     private const val KEY_FOLDER_APPS = "folder_apps"
+    private const val KEY_LOCKED = "locked_packages"
 }
