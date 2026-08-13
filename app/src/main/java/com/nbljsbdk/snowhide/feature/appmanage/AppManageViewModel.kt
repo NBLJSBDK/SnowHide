@@ -64,25 +64,6 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         val rightSort: SortMode,
     )
 
-    /** 暂存改动（本次会话未确认的增删） */
-    data class Pending(
-        val added: Set<String> = emptySet(),
-        val removed: Set<String> = emptySet(),
-    )
-
-    private val _pending = MutableStateFlow(Pending())
-
-    val pendingAdded: StateFlow<Set<String>> =
-        _pending.map { it.added }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
-
-    val pendingRemoved: StateFlow<Set<String>> =
-        _pending.map { it.removed }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
-
-    /** 是否有未确认的改动（取消二次确认用） */
-    val hasPendingChanges: StateFlow<Boolean> =
-        _pending.map { it.added.isNotEmpty() || it.removed.isNotEmpty() }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
     private val _showPackageName = MutableStateFlow(false)
     /** 显示隐藏包名（按钮切换：应用名下方追加一行包名） */
     val showPackageName: StateFlow<Boolean> = _showPackageName.asStateFlow()
@@ -98,42 +79,33 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         )
     )
 
-    /** 左栏：未添加应用（combine 派生，含暂存状态；确认前不改动宫格数据） */
+    /** 左栏：未添加应用（combine 派生，滑动加入/移出即时生效） */
     val leftApps: StateFlow<List<AppListRepository.AppInfo>> = combine(
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
         _filter,
-        _pending,
-    ) { apps, items, folderApps, filter, pending ->
-        val pendingAdd = pending.added
-        val pendingRemove = pending.removed
-        val base = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
-        // 有效已添加 = 现有 - 待移出 + 待加入
-        val effective = base - pendingRemove + pendingAdd
+    ) { apps, items, folderApps, filter ->
+        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
         sortApps(
             apps.filter { app ->
-                systemOk(app, filter) && queryOk(app, filter.query) && app.pkg !in effective
+                systemOk(app, filter) && queryOk(app, filter.query) && app.pkg !in added
             },
             filter.leftSort,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** 右栏：已添加应用（combine 派生，含暂存状态） */
+    /** 右栏：已添加应用（combine 派生，滑动加入/移出即时生效） */
     val rightApps: StateFlow<List<AppListRepository.AppInfo>> = combine(
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
         _filter,
-        _pending,
-    ) { apps, items, folderApps, filter, pending ->
-        val pendingAdd = pending.added
-        val pendingRemove = pending.removed
-        val base = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
-        val effective = base - pendingRemove + pendingAdd
+    ) { apps, items, folderApps, filter ->
+        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
         sortApps(
             apps.filter { app ->
-                systemOk(app, filter) && queryOk(app, filter.query) && app.pkg in effective
+                systemOk(app, filter) && queryOk(app, filter.query) && app.pkg in added
             },
             filter.rightSort,
         )
@@ -235,53 +207,30 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         SortMode.NAME_ASC -> SortMode.TIME_DESC
     }
 
-    /** 右滑加入（暂存，确认后落盘） */
+    /** 右滑加入（即时落盘，列表立即更新） */
     fun addApp(pkg: String) {
-        val cur = _pending.value
-        _pending.value = cur.copy(added = cur.added + pkg, removed = cur.removed - pkg)
+        GridRepository.addAppToHome(pkg)
     }
 
-    /** 左滑移出（暂存，确认后落盘） */
+    /** 左滑移出（即时解冻并移出，列表立即更新） */
     fun removeApp(pkg: String) {
-        val cur = _pending.value
-        _pending.value = if (pkg in cur.added) {
-            cur.copy(added = cur.added - pkg) // 撤销暂存加入
-        } else {
-            cur.copy(removed = cur.removed + pkg)
-        }
-    }
-
-    /** 确认：暂存改动全部落盘（移出的应用先解冻再移出，不冻结新加入的） */
-    fun confirmChanges() {
-        val cur = _pending.value
-        cur.added.forEach { pkg -> GridRepository.addAppToHome(pkg) }
-        val removed = cur.removed.toList()
-        removed.forEach { pkg -> GridRepository.removeApp(pkg) }
-        _pending.value = Pending()
-        // 解冻移出的应用，完成后刷新共享冻结状态（主屏霜化/dock 同步）
         viewModelScope.launch {
-            removed.forEach { pkg -> freezeUseCase.unfreezeApp(pkg) }
+            freezeUseCase.unfreezeApp(pkg)
+            GridRepository.removeApp(pkg)
             com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
         }
     }
 
-    /** 取消：丢弃暂存改动 */
-    fun cancelChanges() {
-        _pending.value = Pending()
-    }
-
-    /** 「应用」按钮：加入列表并立即冻结（移出的先解冻） */
+    /**
+     * 「应用」按钮（用户拍板）：冻结**已添加列表**里所有未冻结的应用。
+     * 移出是即时生效的，本按钮只管冻结，不管移出。
+     */
     fun applyAndFreeze() {
-        val cur = _pending.value
-        val toAdd = cur.added.toList()
-        val removed = cur.removed.toList()
-        toAdd.forEach { pkg -> GridRepository.addAppToHome(pkg) }
-        removed.forEach { pkg -> GridRepository.removeApp(pkg) }
-        _pending.value = Pending()
-        // 移出的解冻 + 新加入的冻结，完成后刷新共享冻结状态
         viewModelScope.launch {
-            removed.forEach { pkg -> freezeUseCase.unfreezeApp(pkg) }
-            toAdd.forEach { pkg -> freezeUseCase.freezeApp(pkg) }
+            val states = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value
+            val targets = GridRepository.allAddedPackages()
+                .filter { states[it] != true }
+            targets.forEach { pkg -> freezeUseCase.freezeApp(pkg) }
             com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
         }
     }

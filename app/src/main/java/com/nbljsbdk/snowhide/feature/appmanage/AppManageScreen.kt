@@ -78,32 +78,20 @@ fun AppManageScreen(
     val leftApps by viewModel.leftApps.collectAsState()
     val rightApps by viewModel.rightApps.collectAsState()
     val loaded by AppListRepository.loaded.collectAsState()
-    val pendingAdded by viewModel.pendingAdded.collectAsState()
-    val pendingRemoved by viewModel.pendingRemoved.collectAsState()
-    val hasPending by viewModel.hasPendingChanges.collectAsState()
 
-    // 顶栏弹窗：back / confirm / apply / help-back / help-confirm / help-apply
+    // 顶栏弹窗：apply / help-confirm / help-apply
     var dialog by remember { mutableStateOf<String?>(null) }
 
-    // 返回键 = 丢弃并返回（同「返回」按钮）
-    BackHandler(onBack = {
-        viewModel.cancelChanges()
-        onClose()
-    })
+    // 返回键 = 直接退出（滑动加入/移出即时生效，无暂存可丢）
+    BackHandler(onBack = onClose)
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("增删应用", fontWeight = FontWeight.Bold) },
                 actions = {
-                    TopBarAction("返回", onClick = {
-                        if (hasPending) dialog = "back"
-                        else {
-                            viewModel.cancelChanges()
-                            onClose()
-                        }
-                    }, onLongClick = { dialog = "help-back" })
-                    TopBarAction("确认", onClick = { dialog = "confirm" },
+                    // 两按钮：确认=退出；应用=冻结已添加列表未冻结项并退出（长按=说明）
+                    TopBarAction("确认", onClick = { onClose() },
                         onLongClick = { dialog = "help-confirm" })
                     TopBarAction("应用", onClick = { dialog = "apply" },
                         onLongClick = { dialog = "help-apply" })
@@ -206,41 +194,11 @@ fun AppManageScreen(
 
     // ── 顶栏弹窗 ──
     when (dialog) {
-        "back" -> AlertDialog(
-            onDismissRequest = { dialog = null },
-            title = { Text("丢弃改动？") },
-            text = {
-                Text("将丢弃本次改动：${pendingAdded.size} 个加入、${pendingRemoved.size} 个移出。")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.cancelChanges(); dialog = null; onClose()
-                }) { Text("丢弃并返回", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { dialog = null }) { Text("继续编辑") }
-            },
-        )
-        "confirm" -> AlertDialog(
-            onDismissRequest = { dialog = null },
-            title = { Text("确认加入列表？") },
-            text = {
-                Text("${pendingAdded.size} 个应用将加入列表（不立即冻结），${pendingRemoved.size} 个将移出。")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.confirmChanges(); dialog = null; onClose()
-                }) { Text("确认") }
-            },
-            dismissButton = {
-                TextButton(onClick = { dialog = null }) { Text("取消") }
-            },
-        )
         "apply" -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("加入并立即冻结？") },
+            title = { Text("冻结已添加应用？") },
             text = {
-                Text("${pendingAdded.size} 个应用将加入列表并立即冻结，${pendingRemoved.size} 个将移出。")
+                Text("将冻结「已添加应用」列表里所有未冻结的应用并退出。\n（移出是即时生效的，本按钮不管移出）")
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -251,9 +209,8 @@ fun AppManageScreen(
                 TextButton(onClick = { dialog = null }) { Text("取消") }
             },
         )
-        "help-back" -> HelpDialog("返回", "丢弃本次所有改动并返回主界面。未确认的加入/移出都不会生效。") { dialog = null }
-        "help-confirm" -> HelpDialog("确认", "将本次改动加入列表，但不立即冻结。应用加入后处于解冻状态。") { dialog = null }
-        "help-apply" -> HelpDialog("应用", "将本次改动加入列表，并立即冻结新加入的应用（图标消失、进程全断）。") { dialog = null }
+        "help-confirm" -> HelpDialog("确认", "加入/移出已即时生效，点击确认直接返回主界面。") { dialog = null }
+        "help-apply" -> HelpDialog("应用", "冻结「已添加应用」列表里所有未冻结的应用并返回主界面。") { dialog = null }
     }
 }
 
