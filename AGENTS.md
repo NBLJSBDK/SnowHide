@@ -166,6 +166,7 @@ bridge/                — 应用桥预留（BridgeCoordinator 接口，现在�
   - `moe.shizuku.manager` **不是可启动包名**，只是权限/组件的命名空间前缀（如 `moe.shizuku.manager.permission.API_V23`）
   - 打开 Shizuku 管理器、检查进程都要用 `privileged.api`
 - **Shizuku 授权与权限**：授权结果走 `OnRequestPermissionResultListener` 回调（listener 模式，**不是** onRequestPermissionsResult 转发——13.x 无此方法）。`requestPermission` 前必须 `pingBinder()` 检查，否则抛 `binder haven't been received`。**执行 pm 命令用 UserService 方案**：`Shizuku.bindUserService` 把 ShellCommandService 拉起到 shell 身份进程，手写 Binder 事务执行 `pm disable-user/enable`（13.1.5 的 `newProcess` 是 private 不可用）。
+- **R8 混淆会杀死 Shizuku UserService（release 专属坑）**：ShellCommandService 由 Shizuku server 端实例化（构造器/onTransact 经框架调用），release 混淆后构造器被破坏 → 所有 pm 命令静默挂起（冻结解冻无效、增删界面移出卡死）。**proguard-rules.pro 必须 keep 该类**（已加，勿删）。
 - **卸载重装会清掉 Shizuku 授权**：API_V23 是 dangerous 权限，覆盖安装（`install -r`）保留、卸载重装清零且可能带「不再询问」标记 → 授权弹窗弹不出。真机调试需要时用 `adb shell pm grant <pkg> moe.shizuku.manager.permission.API_V23`。
 - **ColorOS 吞后台 Toast** → 通知兜底（本项目 P0 前台操作为主，受影响小）。
 - **OPPO 静态 shortcuts 崩** → 用动态 ShortcutManager（MediaSync 已验证方案）。
