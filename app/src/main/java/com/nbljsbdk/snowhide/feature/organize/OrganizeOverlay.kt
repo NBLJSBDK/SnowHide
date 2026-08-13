@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -73,62 +75,7 @@ fun OrganizeOverlay(
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             .padding(8.dp),
     ) {
-        // ① 文件夹名称输入行（最上；不自动聚焦，用户点输入框才弹键盘）
-        if (folderSelected != null) {
-            OutlinedTextField(
-                value = folderSelected.folderNameInput,
-                onValueChange = onNameChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                placeholder = { Text("文件夹名字") },
-                singleLine = true,
-            )
-        }
-
-        // ② 文件夹内应用图标横排（中间）
-        if (folderSelected != null) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
-            ) {
-                folderApps.forEach { pkg ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onTapFolderApp(pkg) }
-                            .padding(4.dp)
-                            .background(
-                                if (folderSelected.subFolderAppPkg == pkg)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                                else MaterialTheme.colorScheme.surface,
-                            ),
-                    ) {
-                        icons[pkg]?.let { bmp ->
-                            Image(
-                                bitmap = bmp,
-                                contentDescription = pkg,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(40.dp),
-                            )
-                        }
-                        Text(
-                            text = onAppLabel(pkg),
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-        }
-
-        // ③ 键位行（固定最底）：[上][下][左][右][垃圾桶][+]
+        // ① 键位行（固定最上，用户拍板）：[上][下][左][右][垃圾桶][+]
         Row(
             horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxWidth(),
@@ -139,6 +86,68 @@ fun OrganizeOverlay(
             OrganizeKeyIcon(R.drawable.ic_arrow_right, enabled = canLeftRight, onClick = { onShift(1) })
             OrganizeKeyIcon(R.drawable.ic_trash, enabled = canDelete, onClick = onDelete)
             OrganizeKeyIcon(R.drawable.ic_folder_plus, enabled = true, onClick = onCreate)
+        }
+
+        // ② 名称/内应用区：选中文件夹时显示，未选中时固定留白
+        // （用户拍板：操作区高度恒定，选中不跳动不弹出）
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(136.dp),
+        ) {
+            if (folderSelected != null) {
+                Column {
+                    // 文件夹名称输入行（不自动聚焦，点输入框才弹键盘）
+                    OutlinedTextField(
+                        value = folderSelected.folderNameInput,
+                        onValueChange = onNameChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        placeholder = { Text("文件夹名字") },
+                        singleLine = true,
+                    )
+                    // 文件夹内应用图标横排
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(vertical = 4.dp),
+                    ) {
+                        folderApps.forEach { pkg ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onTapFolderApp(pkg) }
+                                    .padding(4.dp)
+                                    .background(
+                                        if (folderSelected.subFolderAppPkg == pkg)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                                        else MaterialTheme.colorScheme.surface,
+                                    ),
+                            ) {
+                                icons[pkg]?.let { bmp ->
+                                    Image(
+                                        bitmap = bmp,
+                                        contentDescription = pkg,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.size(40.dp),
+                                    )
+                                }
+                                Text(
+                                    text = onAppLabel(pkg),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
