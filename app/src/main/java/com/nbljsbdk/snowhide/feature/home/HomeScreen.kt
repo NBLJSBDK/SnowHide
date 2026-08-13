@@ -321,7 +321,16 @@ fun HomeScreen(
                         val searchFiltered = if (searchQuery.isBlank()) {
                             gridItems.sortedBy { it.sortOrder }
                         } else {
-                            gridItems.filter { item ->
+                            // 搜索范围 = 主屏项 + 文件夹内应用（文件夹成员也能搜到，结果点击直接打开）
+                            val memberItems = folderApps.map { fa ->
+                                GridItem(
+                                    id = (fa.folderId shl 32) xor fa.pkg.hashCode().toLong(),
+                                    type = "app",
+                                    pkg = fa.pkg,
+                                    sortOrder = Int.MAX_VALUE,
+                                )
+                            }
+                            (gridItems + memberItems).filter { item ->
                                 val name = item.pkg?.let { labels[it] ?: it } ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
                                 name.contains(searchQuery, ignoreCase = true) ||
                                     (item.pkg?.contains(searchQuery, ignoreCase = true) == true)

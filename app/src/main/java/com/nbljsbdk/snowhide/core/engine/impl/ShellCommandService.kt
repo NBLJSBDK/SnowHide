@@ -53,12 +53,14 @@ class ShellCommandService : Binder {
     /** shell 身份执行命令（本进程已是 shell 权限） */
     private fun execSh(cmd: String): String {
         val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-        val output = process.inputStream.bufferedReader().readText()
+        // 并发读 stdout/stderr 防止管道写满死锁
+        val stdout = process.inputStream.bufferedReader().use { it.readText() }
+        val stderr = process.errorStream.bufferedReader().use { it.readText() }
         val exit = process.waitFor()
         if (exit != 0) {
-            throw IllegalStateException("exit=$exit：$output")
+            throw IllegalStateException("exit=$exit：${stderr.ifBlank { stdout }}")
         }
-        return output.trim()
+        return stdout.trim()
     }
 
     companion object {
