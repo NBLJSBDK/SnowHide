@@ -175,58 +175,47 @@ bridge/                — 应用桥预留（BridgeCoordinator 接口，现在�
 ## 11. Recent features (current state — 2026-08-13)
 
 ```
+2227595 feat: 长按菜单文件夹重命名/删除接线
+ae86bfb feat: FontAwesome 图标转换 VectorDrawable 并替换全部占位
+5621b75 feat: 增加/移除应用左右分栏界面（§3.8）
+d4b64d2 feat: 文件夹全屏页 + 主屏⇄文件夹循环滑动
+493bb9d feat: 整理目录状态机完整实现（§3.10 终版）
+64d8ce2 fix: 修复 8 个编译错误，P0 骨架可编译
+6e61030 chore: gitignore 补充密钥配置文件忽略规则
+d8ddd73 docs: 重写 AGENTS.md——仿 MediaSync 结构 15 节详尽版
 fa02251 feat: 初始化 SnowHide——P0 架构骨架   ← 已 push（唯一一次）
 ```
 
-已完成：工程创建（minSdk 29 / 包名 / 签名配置 / build bat）+ core 引擎层（接口/管理器/三引擎/注册表）+ mode 层 + data 层（GridRepository/SettingsRepository）+ domain（FreezeUseCase）+ feature/home（主屏 UI 骨架）+ 霜冻主题 + 图标加载器 + 霜化 Modifier + Shizuku 权限声明。
+已完成：P0 全部核心界面可编译——
+- core 引擎层（PowerEngine 接口/注册表/Shizuku UserService 实现/root+DO 空壳）
+- data（GridRepository/SettingsRepository 单例，SP+JSON）
+- 主屏混排宫格 + 底部图标栏（锁定/上划冻结预留/快速清理）+ 齿轮菜单
+- 整理目录完整状态机（①→②→③ 键位规则，§3.10）
+- 文件夹全屏页 + HorizontalPager 循环滑动
+- 增加/移除应用左右分栏（右滑加入/左滑移出/搜索/显示包名）
+- 霜冻主题 + 霜化 Modifier + FontAwesome 19 图标转 VectorDrawable
+- Shizuku 授权（listener 模式）+ 引导卡
 
-**未完成（当前正在做）**：编译错误修复（见 §12 第 1 条）+ P0 剩余界面。
-
----
+**未完成（候选下一步）**：
+1. 真机验证 Shizuku 冻结/解冻链路（pm disable-user 是否按预期，`pm list packages -d` 解析）
+2. 底部图标栏「上划冻结」手势（当前只有锁定/点击/快速清理）
+3. 文件夹 2×2 拼贴预览图标（当前单文件夹图标）
+4. 搜索（顶栏放大镜占位）
+5. 设置页（布局/壁纸/图标包选择器）、简单设置三项 UI
+6. 移除应用界面「移除并卸载」安全特例（卸载流程）
+7. 图标包协议真机验证（RESOLVE_ICON 有序广播）
+8. P1：休眠模式、锁屏自动清理、划卡停用（无障碍）、快速启停磁贴
 
 ## 12. Known limitations / candidate next tasks
 
-1. **编译错误（8 个，待修）**：
-   - `ShizukuEngineImpl`：`Shizuku.newProcess` 是 private——换 Shizuku 公开 API 执行命令（UserService 或 Binder 直调）
-   - `MainActivity.onRequestPermissionsResult` Unresolved——ComponentActivity 需要 override 签名核对（可能 needs `onRequestPermissionsResult` 在 androidx.activity 是 final？查）
-   - `HomeViewModel.kt:258` 语法错误（多余右括号）
-   - `AppIconLoader`：`toBitmap()` unresolved（Drawable 转 Bitmap 用 BitmapDrawable/Canvas 方式）
-   - `FrostModifiers`：`animateFloatAsState`/`colorFilter` import 错误（animation-core 路径 + graphicsLayer 内 colorFilter 用法）
-   - `HomeScreen`：foundation API experimental（`combinedClickable` 需 `@OptIn(ExperimentalFoundationApi::class)`）
-2. **P0 剩余界面**：整理目录状态机 UI、文件夹全屏页+循环滑动、增加/移除应用左右分栏、设置页（布局/壁纸/图标包选择）、齿轮菜单接线、长按菜单接线。
-3. **占位图标**：齿轮/文件夹/快速清理目前用系统图标占位，下一步从 FontAwesome 转 VectorDrawable 替换（附录 A 清单）。
-4. **无自动化测试**：验证 = WSL 编译 + 用户真机测试。
-5. **应用桥**：预留不实现（用户没研究清楚，后加）。
+1. **Shizuku 链路未真机验证**：UserService 方案（bindUserService → shell 身份进程执行 pm 命令）已编译通过，但 `pm disable-user` / `pm list packages -d` 在 ColorOS 真机上的实际行为待验证（设备差异风险）。
+2. **占位遗留**：底部图标栏「上划冻结」手势未实现；文件夹 2×2 拼贴未做；顶栏搜索按钮无功能。
+3. **设置页缺失**：布局设置/壁纸/图标包选择器 UI 未建（数据层已就绪）。
+4. **卸载特例未做**：移除应用界面的「移除并卸载」（安全特例，需用户二次确认）未实现。
+5. **图标包协议未验证**：AppIconLoader 的 RESOLVE_ICON 有序广播在真机上的兼容性待测。
+6. **无自动化测试**：验证 = WSL 编译 + 用户真机测试。
+7. **应用桥**：预留不实现（用户没研究清楚，后加）。
 
 ---
 
 ## 13. Repo / git
-
-- Remote: `git@github.com:NBLJSBDK/SnowHide.git`, branch `master`。
-- **提交规范（用户新定，强制）**：
-  - 格式：`type: 中文描述`，type ∈ `feat / fix / refactor / perf / docs / test / chore / wip`
-  - **禁止**：`add`、`update`、`modify`、`big` 等宽泛词
-  - 示例：`feat: 增加应用界面左右分栏滑动移动`、`fix: 修复 Shizuku newProcess 私有 API 编译错误`
-- **工作模式（用户拍板）**：开发阶段允许 agent **commit 小功能存档**；**push 只做 init 那一次**，之后推送必须用户明确命令。
-- 不提交：`session-*.md`、`local.properties`、keystore（`.gitignore` 已覆盖）。
-- amend/force-push：必须用户明确批准。
-
----
-
-## 14. adb usage
-
-- adb 位置：`C:\Users\nbljsbdk\AppData\Local\Android\Sdk\platform-tools\adb.exe`（WSL 全路径调用）。
-- **纪律**：agent 只执行**安全操作**（`adb devices`、`logcat` 只读诊断）；**安装/卸载/清数据等危险操作必须先征得用户同意**。
-- 无线调试：配对端口 ≠ 连接端口（动态）；offline 用 `kill-server` 清除；多设备加 `-s <ip:port>`。
-- logcat：`-c` 清 → 复现 → `-d -s <TAG>`（崩溃看 `AndroidRuntime`）。
-- 安装：`adb -s <ip:port> install -r app/build/outputs/apk/debug/app-debug.apk`（versionCode 恒 1，覆盖装永远有效）。
-
----
-
-## 15. Working agreement (for the agent)
-
-- 用**中文**沟通；代码注释中文 KDoc（MediaSync 风格）。
-- 铁律：§6 文件安全、§4 versionCode、§13 git 纪律。
-- 分层纪律：feature 间零 import、UI 无状态、注册表驱动、impl 隔离。
-- 改权限/版本/插件/架构时，同步更新本文件与 `~/opencode_dev/冻结工具设计.md`。
-- 每个可编译的小功能点 → commit 存档（§13 规范）。
