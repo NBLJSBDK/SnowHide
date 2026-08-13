@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
                     .build(),
                 android.content.pm.ShortcutInfo.Builder(this, "freeze_all")
                     .setShortLabel("全部停用")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_lock))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_freeze_all))
                     .setIntent(
                         android.content.Intent(
                             this,
@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
                     .build(),
                 android.content.pm.ShortcutInfo.Builder(this, "toggle_quick")
                     .setShortLabel("快速启停")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_toggle_on))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_toggle))
                     .setIntent(
                         android.content.Intent(
                             this,
