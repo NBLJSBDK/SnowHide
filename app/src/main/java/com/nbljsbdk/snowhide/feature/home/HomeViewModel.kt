@@ -67,9 +67,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _menuOpen = MutableStateFlow(false)
     val menuOpen: StateFlow<Boolean> = _menuOpen.asStateFlow()
 
+    /** 搜索状态 */
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun setSearchQuery(q: String) {
+        _searchQuery.value = q
+    }
+
     /** 增加/移除应用界面开关 */
     private val _appManageOpen = MutableStateFlow(false)
     val appManageOpen: StateFlow<Boolean> = _appManageOpen.asStateFlow()
+
+    /** 设置页开关 */
+    private val _settingsOpen = MutableStateFlow(false)
+    val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
+
+    fun openSettings() {
+        _menuOpen.value = false
+        _settingsOpen.value = true
+    }
+
+    fun closeSettings() {
+        _settingsOpen.value = false
+    }
 
     fun openAppManage() {
         _menuOpen.value = false

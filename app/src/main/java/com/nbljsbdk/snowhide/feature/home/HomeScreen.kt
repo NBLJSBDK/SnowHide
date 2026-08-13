@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -75,6 +76,7 @@ import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
+import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
 import com.nbljsbdk.snowhide.ui.theme.IceBlue
@@ -111,6 +113,8 @@ fun HomeScreen(
     val message by viewModel.message.collectAsState()
     val menuOpen by viewModel.menuOpen.collectAsState()
     val organizing by viewModel.organizing.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    var searchOpen by remember { mutableStateOf(false) }
 
     // 整理目录状态机
     val organizeViewModel: OrganizeViewModel = viewModel()
@@ -171,8 +175,23 @@ fun HomeScreen(
                                 }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
+                    } else if (searchOpen) {
+                        // 搜索框（过滤宫格）
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text("搜索应用") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 4.dp),
+                        )
+                        TextButton(onClick = {
+                            searchOpen = false
+                            viewModel.setSearchQuery("")
+                        }) { Text("取消") }
                     } else {
-                        IconButton(onClick = { /* 搜索（P0 占位） */ }) {
+                        IconButton(onClick = { searchOpen = true }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索")
                         }
                         IconButton(onClick = { viewModel.toggleMenu() }) {
@@ -185,6 +204,7 @@ fun HomeScreen(
                             onUnfreezeAll = { viewModel.unfreezeAll() },
                             onFreezeAll = { viewModel.freezeAll() },
                             onAppManage = { viewModel.openAppManage() },
+                            onSettings = { viewModel.openSettings() },
                         )
                     }
                 },
@@ -247,7 +267,16 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(gridItems.sortedBy { it.sortOrder }, key = { it.id }) { item ->
+                        val searchFiltered = if (searchQuery.isBlank()) {
+                            gridItems.sortedBy { it.sortOrder }
+                        } else {
+                            gridItems.filter { item ->
+                                val name = item.pkg?.let { labelOf(it) } ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
+                                name.contains(searchQuery, ignoreCase = true) ||
+                                    (item.pkg?.contains(searchQuery, ignoreCase = true) == true)
+                            }.sortedBy { it.sortOrder }
+                        }
+                        items(searchFiltered, key = { it.id }) { item ->
                             when {
                                 item.type == "folder" -> {
                                     val folder = folders.find { it.id == item.folderId }
@@ -388,6 +417,12 @@ fun HomeScreen(
     val appManageOpen by viewModel.appManageOpen.collectAsState()
     if (appManageOpen) {
         AppManageScreen(onClose = { viewModel.closeAppManage() })
+    }
+
+    // 设置页（全屏覆盖，设计文档 §3.11）
+    val settingsOpen by viewModel.settingsOpen.collectAsState()
+    if (settingsOpen) {
+        SettingsScreen(onClose = { viewModel.closeSettings() })
     }
 
     // 文件夹重命名对话框
@@ -723,6 +758,7 @@ private fun GearMenu(
     onUnfreezeAll: () -> Unit,
     onFreezeAll: () -> Unit,
     onAppManage: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
@@ -751,7 +787,7 @@ private fun GearMenu(
         )
         DropdownMenuItem(
             text = { Text("更多选项") },
-            onClick = onDismiss,
+            onClick = { onDismiss(); onSettings() },
         )
         DropdownMenuItem(
             text = { Text("关于") },
