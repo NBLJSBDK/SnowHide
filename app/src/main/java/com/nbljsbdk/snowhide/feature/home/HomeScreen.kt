@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -165,8 +166,9 @@ fun HomeScreen(
     // 移除应用二级菜单 / 卸载二次确认
     var removeAppTarget by remember { mutableStateOf<String?>(null) }
     var uninstallTarget by remember { mutableStateOf<String?>(null) }
-    // 布局设置透明浮框
+    // 布局设置透明浮框 / 主屏空白长按菜单
     var layoutPanelOpen by remember { mutableStateOf(false) }
+    var blankMenuOpen by remember { mutableStateOf(false) }
 
     // 整理目录提示事件 → Snackbar
     val organizeEvent by organizeViewModel.events.collectAsState()
@@ -344,7 +346,13 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 12.dp)
+                            // 空白处长按 → 布局设计/美化设置菜单（用户拍板）
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onLongPress = { blankMenuOpen = true },
+                                )
+                            },
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
                     ) {
@@ -647,9 +655,30 @@ fun HomeScreen(
             onUnfreezeFolder = { folder ->
                 viewModel.unfreezeFolder(folder); longPressTarget = null
             },
-            onLayoutSettings = {
-                longPressTarget = null
-                layoutPanelOpen = true
+        )
+    }
+
+    // 主屏空白处长按菜单：布局设计 / 美化设置（用户拍板）
+    if (blankMenuOpen) {
+        AlertDialog(
+            onDismissRequest = { blankMenuOpen = false },
+            title = { Text("主屏幕") },
+            text = {
+                Column {
+                    DialogAction("布局设计") {
+                        blankMenuOpen = false
+                        layoutPanelOpen = true
+                    }
+                    DialogAction("美化设置") {
+                        blankMenuOpen = false
+                        viewModel.openSettings()
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { blankMenuOpen = false }) {
+                    Text("取消")
+                }
             },
         )
     }
@@ -1074,7 +1103,6 @@ private fun ContextMenu(
     onDeleteFolder: (Long) -> Unit,
     onFreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
     onUnfreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
-    onLayoutSettings: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1090,13 +1118,11 @@ private fun ContextMenu(
                     }
                     DialogAction("重命名") { item.folderId?.let(onRenameFolder) }
                     DialogAction("删除文件夹") { item.folderId?.let(onDeleteFolder) }
-                    DialogAction("布局设置") { onLayoutSettings() }
                 } else {
                     val pkg = item.pkg ?: return@Column
                     DialogAction(if (frozen) "解冻" else "冻结") { onToggleFreeze(pkg) }
                     DialogAction("打开应用") { onOpen(pkg) }
                     DialogAction("移除应用") { onRemove(pkg) }
-                    DialogAction("布局设置") { onLayoutSettings() }
                 }
             }
         },
