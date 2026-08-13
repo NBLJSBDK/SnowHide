@@ -988,12 +988,13 @@ private fun DockBar(
             }
         }
         Spacer(modifier = Modifier.width(6.dp))
-        // 智能清理按钮（暖橙强调，豁免锁定）
+        // 智能清理按钮（暖橙强调，豁免锁定；与 dock 应用图标同大小，
+        // 避免调底部图标大小时 dock 栏忽大忽小）
         IconButton(onClick = onQuickClean) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_broom),
                 contentDescription = "智能清理",
-                modifier = Modifier.size(iconSize * 0.9f),
+                modifier = Modifier.size(iconSize),
             )
         }
     }
