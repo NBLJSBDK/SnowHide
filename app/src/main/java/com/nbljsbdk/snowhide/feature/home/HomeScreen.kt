@@ -357,7 +357,7 @@ fun HomeScreen(
                                 item.pkg != null -> {
                                     AppCell(
                                         pkg = item.pkg,
-                                        label = labels[item.pkg] ?: item.pkg,
+                                        label = labels[item.pkg] ?: "",
                                         size = iconSize.dp,
                                         frozen = frozenStates[item.pkg] == true,
                                         icon = icons[item.pkg],
@@ -397,7 +397,7 @@ fun HomeScreen(
                             onDelete = { organizeViewModel.requestDeleteFolder() },
                             onNameChange = { name -> organizeViewModel.updateFolderName(name) },
                             onNameCommit = { organizeViewModel.commitFolderName() },
-                            onAppLabel = { pkg -> labels[pkg] ?: pkg },
+                            onAppLabel = { pkg -> labels[pkg] ?: "" },
                         )
                     } else {
                         DockBar(
@@ -430,7 +430,7 @@ fun HomeScreen(
                     },
                     onAppClick = { viewModel.openApp(it) },
                     onAppLongClick = { item -> longPressTarget = item },
-                    onAppLabel = { pkg -> labels[pkg] ?: pkg },
+                    onAppLabel = { pkg -> labels[pkg] ?: "" },
                 )
             }
         }
@@ -691,6 +691,14 @@ private fun AppCell(
                         .size(size)
                         .clip(RoundedCornerShape(size.value * 0.22f))
                         .frosted(enabled = frozen),
+                )
+            } else {
+                // 图标未加载：灰色占位块（不显示包名文字）
+                Box(
+                    modifier = Modifier
+                        .size(size)
+                        .clip(RoundedCornerShape(size.value * 0.22f))
+                        .background(androidx.compose.ui.graphics.Color(0xFF2A2F38)),
                 )
             }
             if (frozen) {

@@ -97,20 +97,23 @@ object GridRepository {
     // 文件夹操作（整理目录 + 文件夹长按菜单）
     // ═══════════════════════════════════════
 
-    /** 创建文件夹并加入主屏末尾（整理目录「创建」自动聚焦用） */
+    /** 创建文件夹并加入主屏最前（用户拍板：新文件夹排最前，其余依次后移） */
     fun createFolder(name: String): Folder {
         val folder = Folder(
             id = nextId(),
             name = name,
-            sortOrder = (getAllFolders().maxOfOrNull { it.sortOrder } ?: -1) + 1,
+            sortOrder = 0,
         )
-        _folders.value = getAllFolders() + folder
-        _gridItems.value = _gridItems.value + GridItem(
-            id = nextId(),
-            type = "folder",
-            folderId = folder.id,
-            sortOrder = (_gridItems.value.maxOfOrNull { it.sortOrder } ?: -1) + 1,
-        )
+        // 已有文件夹与主屏项全部后移一位，新文件夹占首位
+        _folders.value = listOf(folder) + getAllFolders().map { it.copy(sortOrder = it.sortOrder + 1) }
+        _gridItems.value = listOf(
+            GridItem(
+                id = nextId(),
+                type = "folder",
+                folderId = folder.id,
+                sortOrder = 0,
+            )
+        ) + _gridItems.value.map { it.copy(sortOrder = it.sortOrder + 1) }
         persist()
         return folder
     }

@@ -46,16 +46,36 @@ object AppListRepository {
         if (_loaded.value || loading) return
         loading = true
         scope.launch {
-            val apps = loadApps(context)
+            // 第一段：名称/系统标记立即发布（getPackageInfo 排序是重 IPC，
+            // 不阻塞主屏中文名就位——否则启动时闪英文包名）
+            val apps = withContext(Dispatchers.IO) { loadApps(context) }
             _installedApps.value = apps
             _loaded.value = true
+            // 第二段：补齐安装时间并排序（新装最前）
+            val sorted = withContext(Dispatchers.IO) {
+                apps.map { app ->
+                    app.copy(installTime = runCatching {
+                        context.applicationContext.packageManager
+                            .getPackageInfo(app.pkg, 0).firstInstallTime
+                    }.getOrDefault(0L))
+                }.sortedByDescending { it.installTime }
+            }
+            _installedApps.value = sorted
             loading = false
         }
     }
 
     /** 主动刷新（应用安装/卸载后调用） */
     suspend fun refresh(context: Context) {
-        _installedApps.value = loadApps(context)
+        val apps = withContext(Dispatchers.IO) { loadApps(context) }
+        _installedApps.value = withContext(Dispatchers.IO) {
+            apps.map { app ->
+                app.copy(installTime = runCatching {
+                    context.applicationContext.packageManager
+                        .getPackageInfo(app.pkg, 0).firstInstallTime
+                }.getOrDefault(0L))
+            }.sortedByDescending { it.installTime }
+        }
         _loaded.value = true
     }
 
@@ -65,17 +85,13 @@ object AppListRepository {
             pm.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { it.packageName != context.packageName } // 排除自己
                 .map { info ->
-                    val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                     AppInfo(
                         pkg = info.packageName,
                         label = pm.getApplicationLabel(info).toString(),
-                        isSystem = isSystem,
-                        installTime = runCatching {
-                            pm.getPackageInfo(info.packageName, 0).firstInstallTime
-                        }.getOrDefault(0L),
+                        isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+                        installTime = 0L,
                     )
                 }
-                .sortedByDescending { it.installTime } // 新装最前
         }
 
     /** 应用显示名（单查） */

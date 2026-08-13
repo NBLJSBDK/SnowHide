@@ -36,16 +36,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val settingsRepository = SettingsRepository
     private val freezeUseCase = FreezeUseCase(FreezeExecutor(engineManager), gridRepository, engineManager)
 
-    /** 应用显示名（宫格/列表展示） */
-    data class AppInfo(val pkg: String, val label: String, val icon: android.graphics.drawable.Drawable?)
-
     // ═══════════════════════════════════════
     // 状态
     // ═══════════════════════════════════════
-
-    /** 全部已安装应用信息（增加应用界面数据源，含系统应用） */
-    private val _installedApps = MutableStateFlow<List<AppInfo>>(emptyList())
-    val installedApps: StateFlow<List<AppInfo>> = _installedApps.asStateFlow()
 
     /** 冻结状态映射（pkg → 是否冻结） */
     private val _frozenStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -144,7 +137,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
 
     init {
-        refreshInstalledApps()
         AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
         // 订阅宫格数据变化：新加入的应用自动加载图标 + 刷新中文名
         viewModelScope.launch {
@@ -183,30 +175,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** 手动刷新引擎状态（从 Shizuku 管理器返回后调用） */
     fun refreshEngineStatus() {
         EngineManager.refresh()
-    }
-
-    /** 刷新已安装应用列表（P0 不含系统应用，显示隐藏包名默认关） */
-    fun refreshInstalledApps() {
-        viewModelScope.launch {
-            val apps = withContext(Dispatchers.IO) {
-                val pm = context.packageManager
-                pm.getInstalledApplications(PackageManager.GET_META_DATA)
-                    .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
-                    .sortedByDescending { info ->
-                        runCatching {
-                            pm.getPackageInfo(info.packageName, 0).firstInstallTime
-                        }.getOrDefault(0L)
-                    }
-                    .map { info ->
-                        AppInfo(
-                            pkg = info.packageName,
-                            label = pm.getApplicationLabel(info).toString(),
-                            icon = info.loadIcon(pm),
-                        )
-                    }
-            }
-            _installedApps.value = apps
-        }
     }
 
     /** 刷新全部已添加应用的冻结状态（一次批量查询） */
