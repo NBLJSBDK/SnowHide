@@ -34,6 +34,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -120,6 +121,10 @@ fun HomeScreen(
 
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
+    // 文件夹重命名/删除弹窗状态
+    var renameFolder by remember { mutableStateOf<com.nbljsbdk.snowhide.data.model.Folder?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var deleteFolderTarget by remember { mutableStateOf<com.nbljsbdk.snowhide.data.model.Folder?>(null) }
 
     // 整理完成 → 关闭整理模式并刷新
     LaunchedEffect(organizeFinished) {
@@ -382,6 +387,50 @@ fun HomeScreen(
         AppManageScreen(onClose = { viewModel.closeAppManage() })
     }
 
+    // 文件夹重命名对话框
+    renameFolder?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { renameFolder = null },
+            title = { Text("重命名文件夹") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    if (renameText.isNotBlank()) {
+                        viewModel.gridRepository.renameFolder(folder.id, renameText.trim())
+                    }
+                    renameFolder = null
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { renameFolder = null }) { Text("取消") }
+            },
+        )
+    }
+
+    // 文件夹删除二次确认
+    deleteFolderTarget?.let { folder ->
+        AlertDialog(
+            onDismissRequest = { deleteFolderTarget = null },
+            title = { Text("删除文件夹") },
+            text = { Text("删除「${folder.name}」？其中应用将移回主屏幕。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    viewModel.gridRepository.deleteFolder(folder.id)
+                    deleteFolderTarget = null
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteFolderTarget = null }) { Text("取消") }
+            },
+        )
+    }
+
     // 长按上下文菜单
     longPressTarget?.let { target ->
         ContextMenu(
@@ -393,8 +442,19 @@ fun HomeScreen(
             onEnable = { pkg -> viewModel.enableApp(pkg); longPressTarget = null },
             onOpen = { pkg -> viewModel.openApp(pkg); longPressTarget = null },
             onRemove = { pkg -> viewModel.gridRepository.removeApp(pkg); longPressTarget = null },
-            onRenameFolder = { id -> longPressTarget = null },
-            onDeleteFolder = { id -> viewModel.gridRepository.deleteFolder(id); longPressTarget = null },
+            onRenameFolder = { id ->
+                val folder = folders.find { it.id == id }
+                if (folder != null) {
+                    renameFolder = folder
+                    renameText = folder.name
+                }
+                longPressTarget = null
+            },
+            onDeleteFolder = { id ->
+                val folder = folders.find { it.id == id }
+                if (folder != null) deleteFolderTarget = folder
+                longPressTarget = null
+            },
             onToggleFolderFreeze = { folder ->
                 viewModel.toggleFolderFreeze(folder); longPressTarget = null
             },
