@@ -180,14 +180,7 @@ fun HomeScreen(
                 },
                 actions = {
                     if (organizing) {
-                        // 整理操作即时生效（用户拍板）；取消/确认都只是退出整理
-                        Text(
-                            text = "取消",
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier
-                                .clickable { viewModel.setOrganizing(false) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
+                        // 整理操作即时生效（用户拍板）；取消按钮已删，仅确认退出
                         Text(
                             text = "确认",
                             color = MaterialTheme.colorScheme.primary,
