@@ -60,12 +60,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
+import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
@@ -478,13 +480,13 @@ private fun AppCell(
                 )
             }
             if (frozen) {
-                // 雪花角标（P0 用文字占位，后续换 FontAwesome VectorDrawable）
-                Text(
-                    text = "❄",
-                    style = MaterialTheme.typography.labelSmall,
+                // 雪花角标（FontAwesome snowflake）
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.ic_snowflake),
+                    contentDescription = "已冻结",
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .alpha(0.9f),
+                        .size(size * 0.38f)
+                        .align(Alignment.TopStart),
                 )
             }
         }
@@ -525,10 +527,9 @@ private fun FolderCell(
                 else androidx.compose.ui.graphics.Color.Transparent,
             ),
     ) {
-        Icon(
-            Icons.Default.Settings, // P0 占位图标，后续换 FontAwesome folder
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.ic_folder),
             contentDescription = name,
-            tint = IceBlue,
             modifier = Modifier.size(size),
         )
         Spacer(modifier = Modifier.height(2.dp))
@@ -583,10 +584,10 @@ private fun DockBar(
         Spacer(modifier = Modifier.width(6.dp))
         // 快速清理按钮（暖橙强调，P0 用扫帚图标占位）
         IconButton(onClick = onQuickClean) {
-            Icon(
-                Icons.Default.Add, // P0 占位，后续换 FontAwesome broom
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.ic_broom),
                 contentDescription = "快速清理",
-                tint = WarmOrange,
+                modifier = Modifier.size(iconSize * 0.9f),
             )
         }
     }

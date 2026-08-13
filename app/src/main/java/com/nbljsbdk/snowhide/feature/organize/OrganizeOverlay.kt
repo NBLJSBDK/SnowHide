@@ -22,9 +22,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.painterResource
+import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 
@@ -71,12 +74,12 @@ fun OrganizeOverlay(
             horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            OrganizeKey("↑", enabled = canUp, onClick = onMoveUp)
-            OrganizeKey("↓", enabled = canDown, onClick = onMoveDown)
-            OrganizeKey("←", enabled = canLeftRight, onClick = { onShift(-1) })
-            OrganizeKey("→", enabled = canLeftRight, onClick = { onShift(1) })
-            OrganizeKey("🗑", enabled = canDelete, onClick = onDelete)
-            OrganizeKey("＋", enabled = true, onClick = onCreate)
+            OrganizeKeyIcon(R.drawable.ic_arrow_up, enabled = canUp, onClick = onMoveUp)
+            OrganizeKeyIcon(R.drawable.ic_arrow_down, enabled = canDown, onClick = onMoveDown)
+            OrganizeKeyIcon(R.drawable.ic_arrow_left, enabled = canLeftRight, onClick = { onShift(-1) })
+            OrganizeKeyIcon(R.drawable.ic_arrow_right, enabled = canLeftRight, onClick = { onShift(1) })
+            OrganizeKeyIcon(R.drawable.ic_trash, enabled = canDelete, onClick = onDelete)
+            OrganizeKeyIcon(R.drawable.ic_folder_plus, enabled = true, onClick = onCreate)
         }
 
         // 文件夹名输入行（③ 时显示）
@@ -138,22 +141,25 @@ fun OrganizeOverlay(
     }
 }
 
-/** 单个键位（灰显/高亮按 enabled） */
+/** 单个键位图标（灰显/高亮按 enabled） */
 @Composable
-private fun OrganizeKey(
-    label: String,
+private fun OrganizeKeyIcon(
+    drawableRes: Int,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = if (enabled) MaterialTheme.colorScheme.onSurface
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    )
+    androidx.compose.foundation.layout.Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.alpha(if (enabled) 1f else 0.35f),
+    ) {
+        Image(
+            painter = painterResource(drawableRes),
+            contentDescription = null,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .size(24.dp),
+        )
+    }
 }
