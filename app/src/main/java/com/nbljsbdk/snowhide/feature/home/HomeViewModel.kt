@@ -40,9 +40,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // 状态
     // ═══════════════════════════════════════
 
-    /** 冻结状态映射（pkg → 是否冻结） */
-    private val _frozenStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
-    val frozenStates: StateFlow<Map<String, Boolean>> = _frozenStates.asStateFlow()
+    /** 冻结状态映射（pkg → 是否冻结，共享存储：磁贴/增删界面操作后同样刷新） */
+    val frozenStates: StateFlow<Map<String, Boolean>> =
+        com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states
 
     /** 图标缓存（pkg → 图标） */
     private val _icons = MutableStateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap())
@@ -177,19 +177,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         EngineManager.refresh()
     }
 
-    /** 刷新全部已添加应用的冻结状态（一次批量查询） */
+    /** 刷新全部已添加应用的冻结状态（一次批量查询，共享存储） */
     fun refreshFrozenStates() {
         viewModelScope.launch {
-            val pkgs = gridRepository.allAddedPackages()
-            if (pkgs.isEmpty()) {
-                _frozenStates.value = emptyMap()
-                return@launch
-            }
-            val frozen = engineManager.primaryEngine.value
-                ?.listFrozenPackages()?.getOrDefault(emptyList())
-                ?: emptyList()
-            android.util.Log.d("SnowHideDock", "refresh: pkgs=$pkgs frozen=$frozen engine=${engineManager.primaryEngine.value != null}")
-            _frozenStates.value = pkgs.associateWith { it in frozen }
+            com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
         }
     }
 
@@ -211,7 +202,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** 切换冻结状态（长按菜单 / 底部栏上划） */
     fun toggleFreeze(pkg: String) {
         viewModelScope.launch {
-            val frozen = _frozenStates.value[pkg] ?: false
+            val frozen = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value[pkg] ?: false
             val result = if (frozen) freezeUseCase.unfreezeApp(pkg)
             else freezeUseCase.freezeApp(pkg)
             result.onSuccess {
@@ -311,7 +302,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** 打开应用（已冻结则临时解冻并启动） */
     fun openApp(pkg: String) {
         viewModelScope.launch {
-            if (_frozenStates.value[pkg] == true) {
+            if (com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value[pkg] == true) {
                 freezeUseCase.unfreezeApp(pkg)
                     .onSuccess { refreshFrozenStates() }
                     .onFailure { showMessage("临时解冻失败：${it.message}"); return@launch }

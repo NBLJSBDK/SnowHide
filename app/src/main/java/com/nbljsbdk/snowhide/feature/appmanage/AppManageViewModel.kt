@@ -255,11 +255,14 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
     fun confirmChanges() {
         val cur = _pending.value
         cur.added.forEach { pkg -> GridRepository.addAppToHome(pkg) }
-        cur.removed.forEach { pkg ->
-            viewModelScope.launch { freezeUseCase.unfreezeApp(pkg) }
-            GridRepository.removeApp(pkg)
-        }
+        val removed = cur.removed.toList()
+        removed.forEach { pkg -> GridRepository.removeApp(pkg) }
         _pending.value = Pending()
+        // 解冻移出的应用，完成后刷新共享冻结状态（主屏霜化/dock 同步）
+        viewModelScope.launch {
+            removed.forEach { pkg -> freezeUseCase.unfreezeApp(pkg) }
+            com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
+        }
     }
 
     /** 取消：丢弃暂存改动 */
@@ -271,14 +274,15 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
     fun applyAndFreeze() {
         val cur = _pending.value
         val toAdd = cur.added.toList()
+        val removed = cur.removed.toList()
         toAdd.forEach { pkg -> GridRepository.addAppToHome(pkg) }
-        cur.removed.forEach { pkg ->
-            viewModelScope.launch { freezeUseCase.unfreezeApp(pkg) }
-            GridRepository.removeApp(pkg)
-        }
+        removed.forEach { pkg -> GridRepository.removeApp(pkg) }
         _pending.value = Pending()
-        toAdd.forEach { pkg ->
-            viewModelScope.launch { freezeUseCase.freezeApp(pkg) }
+        // 移出的解冻 + 新加入的冻结，完成后刷新共享冻结状态
+        viewModelScope.launch {
+            removed.forEach { pkg -> freezeUseCase.unfreezeApp(pkg) }
+            toAdd.forEach { pkg -> freezeUseCase.freezeApp(pkg) }
+            com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
         }
     }
 

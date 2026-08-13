@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.core.mode.FreezeMode
+import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 
 /**
@@ -46,6 +47,8 @@ class QuickToggleUseCase(
         }
         // 只记录解冻成功的（熄灭时冻回这批）
         saveList(KEY_OPENED, targets.filterNot { it in failedPkgs })
+        // 同步共享冻结状态（主屏霜化/dock 立即更新）
+        FrozenStateStore.refresh()
         return if (failedPkgs.isEmpty()) Result.success(success)
         else Result.failure(IllegalStateException("部分失败：${failedPkgs.joinToString("；")}"))
     }
@@ -66,6 +69,8 @@ class QuickToggleUseCase(
             }
         }
         saveList(KEY_OPENED, emptyList())
+        // 同步共享冻结状态（主屏霜化/dock 立即更新）
+        FrozenStateStore.refresh()
         return Result.success(TurnOffResult(frozen, lockedSkipped, failures))
     }
 
