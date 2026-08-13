@@ -106,6 +106,7 @@ fun HomeScreen(
     val frozenStates by viewModel.frozenStates.collectAsState()
     val icons by viewModel.icons.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
+    val shizukuRunning by viewModel.shizukuRunning.collectAsState()
     val columns by viewModel.settingsRepository.columns.collectAsState()
     val iconSize by viewModel.settingsRepository.iconSize.collectAsState()
     val dockIconSize by viewModel.settingsRepository.dockIconSize.collectAsState()
@@ -252,10 +253,12 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    // Shizuku 未授权引导卡
+                    // Shizuku 引导卡：未运行 → 打开 Shizuku；未授权 → 授权
                     if (!engineReady) {
                         ShizukuGuideCard(
+                            running = shizukuRunning,
                             onRequest = onRequestShizuku,
+                            onRefresh = { viewModel.refreshEngineStatus() },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
@@ -564,29 +567,45 @@ private fun dockPackages(
 /** 显示名占位（P0 用包名，后续接 AppInfo 映射） */
 private fun labelOf(pkg: String): String = pkg.substringAfterLast('.')
 
-/** Shizuku 未授权引导卡 */
+/** Shizuku 引导卡（区分「服务未运行」与「未授权」两种状态） */
 @Composable
-private fun ShizukuGuideCard(onRequest: () -> Unit, modifier: Modifier = Modifier) {
+private fun ShizukuGuideCard(
+    running: Boolean,
+    onRequest: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = FrostCard),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "需要 Shizuku 权限",
+                text = if (running) "需要 Shizuku 授权" else "Shizuku 服务未运行",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "冻结/解冻通过 Shizuku（shell 身份）执行。点击下方按钮授权。",
+                text = if (running) {
+                    "冻结/解冻通过 Shizuku（shell 身份）执行。点击下方按钮授权。"
+                } else {
+                    "请先打开 Shizuku 并启动服务，然后回到本应用刷新状态。"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            androidx.compose.material3.Button(onClick = onRequest) {
-                Text("授权 Shizuku")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (running) {
+                    androidx.compose.material3.Button(onClick = onRequest) {
+                        Text("授权 Shizuku")
+                    }
+                }
+                androidx.compose.material3.OutlinedButton(onClick = onRefresh) {
+                    Text("刷新状态")
+                }
             }
         }
     }

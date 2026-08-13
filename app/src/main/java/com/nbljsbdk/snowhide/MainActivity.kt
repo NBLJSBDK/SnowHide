@@ -33,6 +33,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Shizuku binder 到达时刷新引擎状态（服务连接是异步的） */
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        EngineManager.refresh()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         EngineRegistry.init(applicationContext)
@@ -43,7 +48,21 @@ class MainActivity : ComponentActivity() {
             SnowHideTheme {
                 HomeScreen(
                     modifier = Modifier.fillMaxSize(),
-                    onRequestShizuku = { Shizuku.requestPermission(REQUEST_SHIZUKU) },
+                    onRequestShizuku = {
+                        // 请求前检查 binder 是否已连接（未连接时 requestPermission 会抛
+                        // "binder haven't been received"）
+                        if (Shizuku.pingBinder()) {
+                            Shizuku.requestPermission(REQUEST_SHIZUKU)
+                        } else {
+                            // Shizuku 未运行：引导用户打开 Shizuku
+                            // 注意：Shizuku 应用包名是 moe.shizuku.privileged.api
+                            //（moe.shizuku.manager 只是权限命名空间，不是可启动包名）
+                            runCatching {
+                                val intent = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                if (intent != null) startActivity(intent)
+                            }
+                        }
+                    },
                 )
             }
         }
@@ -52,10 +71,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Shizuku.addRequestPermissionResultListener(permissionListener)
+        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
     }
 
     override fun onPause() {
         Shizuku.removeRequestPermissionResultListener(permissionListener)
+        Shizuku.removeBinderReceivedListener(binderReceivedListener)
         super.onPause()
     }
 

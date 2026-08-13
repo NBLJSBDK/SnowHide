@@ -161,7 +161,12 @@ bridge/                — 应用桥预留（BridgeCoordinator 接口，现在�
 
 ## 10. Platform gotchas (learned the hard way — keep these)
 
-- **Shizuku.newProcess 是私有 API**——13.1.5 中 `Shizuku.newProcess(...)` 为 private！不能用它执行命令。备选：`ShizukuRemoteProcess` / UserService（`Shizuku.bindUserService`），或 `ShizukuBinderWrapper` 直调 IPackageManager（黑白门 AppGate 同款）。**P0 编译错误待修，改用哪个方案要查 Shizuku 13.1.5 公开 API。**
+- **Shizuku 包名与权限命名空间（关键，容易写错）**：
+  - Shizuku **应用包名 = `moe.shizuku.privileged.api`**（进程名、启动入口都用它；`getLaunchIntentForPackage` 必须用它）
+  - `moe.shizuku.manager` **不是可启动包名**，只是权限/组件的命名空间前缀（如 `moe.shizuku.manager.permission.API_V23`）
+  - 打开 Shizuku 管理器、检查进程都要用 `privileged.api`
+- **Shizuku 授权与权限**：授权结果走 `OnRequestPermissionResultListener` 回调（listener 模式，**不是** onRequestPermissionsResult 转发——13.x 无此方法）。`requestPermission` 前必须 `pingBinder()` 检查，否则抛 `binder haven't been received`。**执行 pm 命令用 UserService 方案**：`Shizuku.bindUserService` 把 ShellCommandService 拉起到 shell 身份进程，手写 Binder 事务执行 `pm disable-user/enable`（13.1.5 的 `newProcess` 是 private 不可用）。
+- **卸载重装会清掉 Shizuku 授权**：API_V23 是 dangerous 权限，覆盖安装（`install -r`）保留、卸载重装清零且可能带「不再询问」标记 → 授权弹窗弹不出。真机调试需要时用 `adb shell pm grant <pkg> moe.shizuku.manager.permission.API_V23`。
 - **ColorOS 吞后台 Toast** → 通知兜底（本项目 P0 前台操作为主，受影响小）。
 - **OPPO 静态 shortcuts 崩** → 用动态 ShortcutManager（MediaSync 已验证方案）。
 - **图标包协议**：发现 `queryBroadcastReceivers(INSTALL_ICON_PACK)`；请求 `RESOLVE_ICON` 有序广播（`sendOrderedBroadcast` + result receiver 取 `icon` extra）；失败回退系统图标。
@@ -218,3 +223,24 @@ fa02251 feat: 初始化 SnowHide——P0 架构骨架   ← 已 push（唯一一
 ---
 
 ## 13. Repo / git
+
+---
+
+## 14. adb usage
+
+- adb 位置：`C:\Users\nbljsbdk\AppData\Local\Android\Sdk\platform-tools\adb.exe`（WSL 全路径调用）。
+- **纪律**：agent 只执行**安全操作**（`adb devices`、`logcat` 只读诊断）；**安装/卸载/清数据等危险操作必须先征得用户同意**。
+- 无线调试：配对端口 ≠ 连接端口（动态）；offline 用 `kill-server` 清除；多设备加 `-s <ip:port>`。
+- logcat：`-c` 清 → 复现 → `-d -s <TAG>`（崩溃看 `AndroidRuntime`）。
+- 安装：`adb -s <ip:port> install -r app/build/outputs/apk/debug/app-debug.apk`（versionCode 恒 1，覆盖装永远有效）。
+
+---
+
+## 15. Working agreement (for the agent)
+
+- 用**中文**沟通；代码注释中文 KDoc（MediaSync 风格）。
+- 铁律：§6 文件安全、§4 versionCode、§13 git 纪律。
+- 分层纪律：feature 间零 import、UI 无状态、注册表驱动、impl 隔离。
+- 改权限/版本/插件/架构时，同步更新本文件与 `~/opencode_dev/冻结工具设计.md`。
+- 每个可编译的小功能点 → commit 存档（§13 规范）。
+- **HARD RULE（用户强调）**：集成任何三方库前，**必须先看官方文档并核对 jar 内真实 API 签名**，绝不凭训练数据假设 API 存在（训练数据会过期）。Shizuku 教训：`newProcess` 已私有、`onRequestPermissionsResult` 转发已移除、`ShizukuProvider` 必须手动声明——三个坑全是凭训练数据写的。正确做法：① webfetch 官方 README/GitHub ② javap/jadx 反编译核对 jar 签名 ③ 再写代码。

@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.feature.appmanage
 
 import android.app.Application
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +66,9 @@ fun AppManageScreen(
     val notAdded = filtered.filter { !viewModel.isAdded(it.pkg) }
     val added = filtered.filter { viewModel.isAdded(it.pkg) }
         .sortedBy { viewModel.displayLabel(it) } // 右栏名称正序
+
+    // 返回键回到主界面（而非退出到桌面）
+    BackHandler(onBack = onClose)
 
     Scaffold(
         topBar = {

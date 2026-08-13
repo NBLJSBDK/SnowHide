@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.feature.settings
 
 import android.app.Application
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +68,9 @@ fun SettingsScreen(
     val transparent by settings.transparentBg.collectAsState()
     val iconPacks by viewModel.iconPacks.collectAsState()
     val pickerOpen by viewModel.pickerOpen.collectAsState()
+
+    // 返回键回到主界面（而非退出到桌面）
+    BackHandler(onBack = onClose)
 
     Scaffold(
         topBar = {

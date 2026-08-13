@@ -20,6 +20,9 @@ interface PowerEngine {
     /** 探测该引擎当前是否可用（已授权/已激活） */
     fun isAvailable(): Boolean
 
+    /** binder 是否已连接（与授权无关的纯连接状态，用于 UI 区分「未运行」与「未授权」） */
+    fun isBinderConnected(): Boolean = false
+
     /** 以特权身份执行 shell 命令，返回标准输出 */
     suspend fun exec(cmd: String): Result<String>
 

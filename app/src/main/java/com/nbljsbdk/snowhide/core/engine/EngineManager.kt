@@ -36,6 +36,10 @@ object EngineManager {
     /** 全部已注册引擎的可用性状态（设置页引擎区块的数据源） */
     val engineInfos: StateFlow<List<EngineInfo>> = _engineInfos.asStateFlow()
 
+    private val _shizukuBinderConnected = MutableStateFlow(false)
+    /** Shizuku binder 是否已连接（与授权无关，用于 UI 区分「未运行」/「未授权」） */
+    val shizukuBinderConnected: StateFlow<Boolean> = _shizukuBinderConnected.asStateFlow()
+
     /** 注册引擎（EngineRegistry 调用，P0 只注册 shizuku） */
     fun register(engine: PowerEngine, priority: Int) {
         registry.add(Entry(engine, priority))
@@ -47,6 +51,9 @@ object EngineManager {
     fun refresh() {
         _engineInfos.value = registry.map { entry ->
             EngineInfo(entry.engine.id, entry.engine.displayName, entry.engine.isAvailable())
+        }
+        _shizukuBinderConnected.value = registry.any { entry ->
+            entry.engine.id == "shizuku" && entry.engine.isBinderConnected()
         }
         _primaryEngine.value = registry.firstOrNull { it.engine.isAvailable() }?.engine
     }

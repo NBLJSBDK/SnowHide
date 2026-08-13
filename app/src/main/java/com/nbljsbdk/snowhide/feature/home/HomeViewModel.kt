@@ -109,6 +109,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _engineReady = MutableStateFlow(EngineManager.isEngineReady())
     val engineReady: StateFlow<Boolean> = _engineReady.asStateFlow()
 
+    /** Shizuku binder 连接状态（区分「未运行」与「未授权」） */
+    private val _shizukuRunning = MutableStateFlow(EngineManager.shizukuBinderConnected.value)
+    val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
+
     init {
         refreshInstalledApps()
         refreshIcons()
@@ -116,6 +120,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             EngineManager.primaryEngine.collect { _engineReady.value = it != null }
         }
+        viewModelScope.launch {
+            EngineManager.shizukuBinderConnected.collect { _shizukuRunning.value = it }
+        }
+    }
+
+    /** 手动刷新引擎状态（从 Shizuku 管理器返回后调用） */
+    fun refreshEngineStatus() {
+        EngineManager.refresh()
     }
 
     /** 刷新已安装应用列表（P0 不含系统应用，显示隐藏包名默认关） */
