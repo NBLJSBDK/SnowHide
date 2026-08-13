@@ -175,6 +175,9 @@ bridge/                — 应用桥预留（BridgeCoordinator 接口，现在�
 ## 11. Recent features (current state — 2026-08-13)
 
 ```
+c539de1 feat: 移除并卸载安全特例（长按菜单二级确认）
+3a05b0b feat: 搜索过滤 + 设置页（布局/简单设置/图标包选择器）
+010b599 feat: 目录级启停接线 + 底部栏上划冻结 + 文件夹 2×2 拼贴
 2227595 feat: 长按菜单文件夹重命名/删除接线
 ae86bfb feat: FontAwesome 图标转换 VectorDrawable 并替换全部占位
 5621b75 feat: 增加/移除应用左右分栏界面（§3.8）
@@ -196,15 +199,11 @@ fa02251 feat: 初始化 SnowHide——P0 架构骨架   ← 已 push（唯一一
 - 霜冻主题 + 霜化 Modifier + FontAwesome 19 图标转 VectorDrawable
 - Shizuku 授权（listener 模式）+ 引导卡
 
-**未完成（候选下一步）**：
+**未完成（候选下一步，只剩真机验证 + P1）**：
 1. 真机验证 Shizuku 冻结/解冻链路（pm disable-user 是否按预期，`pm list packages -d` 解析）
-2. 底部图标栏「上划冻结」手势（当前只有锁定/点击/快速清理）
-3. 文件夹 2×2 拼贴预览图标（当前单文件夹图标）
-4. 搜索（顶栏放大镜占位）
-5. 设置页（布局/壁纸/图标包选择器）、简单设置三项 UI
-6. 移除应用界面「移除并卸载」安全特例（卸载流程）
-7. 图标包协议真机验证（RESOLVE_ICON 有序广播）
-8. P1：休眠模式、锁屏自动清理、划卡停用（无障碍）、快速启停磁贴
+2. 图标包协议真机验证（RESOLVE_ICON 有序广播）
+3. 壁纸图片选择器（背景透明开关已做，图片选择 P1）
+4. P1：休眠模式、锁屏自动清理、划卡停用（无障碍）、快速启停磁贴
 
 ## 12. Known limitations / candidate next tasks
 
