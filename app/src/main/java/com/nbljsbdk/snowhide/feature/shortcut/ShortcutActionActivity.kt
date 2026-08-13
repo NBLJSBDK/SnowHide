@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.core.engine.EngineManager
@@ -38,6 +40,7 @@ class ShortcutActionActivity : Activity() {
         SettingsRepository.init(applicationContext)
 
         val action = intent.action
+        val appContext = applicationContext
         val freezeUseCase = FreezeUseCase(FreezeExecutor(EngineManager), GridRepository, EngineManager)
         val quickToggle = QuickToggleUseCase(
             FreezeExecutor(EngineManager),
@@ -46,47 +49,52 @@ class ShortcutActionActivity : Activity() {
             getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE),
         )
 
+        // 后台执行动作；toast/通知完成后反馈。
+        // ⚠️ NoDisplay 主题硬性要求：onResume 前必须 finish()（否则崩溃），
+        // 故不能在这里等线程——finish 后进程短时间内仍存活，
+        // 动作在 1-2 秒内完成，足够可靠。
         Thread {
-            // 执行结果：first=标题，second=成功文案（null=失败，third 为失败消息）
             val result = when (action) {
                 ACTION_SMART_CLEAN -> {
                     val r = runCatching { runBlocking { freezeUseCase.quickClean() } }
-                    Triple("智能清理",
+                    Triple(
+                        "智能清理",
                         r.fold({ it.fold({ "已停用 $it 个应用" }, { null }) }, { null }),
                         r.fold({ it.fold({ null }, { "失败：${it.message}" }) }, { "失败：${it.message}" }),
                     )
                 }
                 ACTION_FREEZE_ALL -> {
                     val r = runCatching { runBlocking { freezeUseCase.freezeAll(null, exceptLocked = false) } }
-                    Triple("全部停用",
+                    Triple(
+                        "全部停用",
                         r.fold({ it.fold({ "已停用 $it 个应用" }, { null }) }, { null }),
                         r.fold({ it.fold({ null }, { "失败：${it.message}" }) }, { "失败：${it.message}" }),
                     )
                 }
                 ACTION_TOGGLE_QUICK -> {
                     val r = runCatching { runBlocking { quickToggle.toggle() } }
-                    Triple("快速启停",
+                    Triple(
+                        "快速启停",
                         r.fold({ it.fold({ "已完成（$it 个应用）" }, { null }) }, { null }),
                         r.fold({ it.fold({ null }, { "失败：${it.message}" }) }, { "失败：${it.message}" }),
                     )
                 }
-                else -> {
-                    finish()
-                    return@Thread
-                }
+                else -> return@Thread
             }
             runCatching { runBlocking { FrozenStateStore.refresh() } }
-            // 成功 → toast（用户拍板）；失败 → 系统通知（确保可见）
+            // 成功 → toast（applicationContext，不依赖 Activity）；失败 → 系统通知
             val successMsg = result.second
-            runOnUiThread {
+            Handler(Looper.getMainLooper()).post {
                 if (successMsg != null) {
-                    Toast.makeText(this, successMsg, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(appContext, successMsg, Toast.LENGTH_SHORT).show()
                 } else {
-                    ShortcutNotifier.notify(this, result.first, result.third ?: "失败")
+                    ShortcutNotifier.notify(appContext, result.first, result.third ?: "失败")
                 }
-                finish()
             }
         }.start()
+
+        // NoDisplay：立即 finish（必须在 onResume 前）
+        finish()
     }
 
     companion object {
