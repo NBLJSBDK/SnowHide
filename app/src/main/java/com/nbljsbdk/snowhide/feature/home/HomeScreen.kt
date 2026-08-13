@@ -826,7 +826,7 @@ private fun AppCell(
                     modifier = Modifier
                         .size(size)
                         .clip(RoundedCornerShape(size.value * 0.22f))
-                        .background(androidx.compose.ui.graphics.Color(0xFF2A2F38)),
+                        .background(androidx.compose.ui.graphics.Color(0xFFC9D8E8)),
                 )
             }
             if (frozen) {

@@ -53,7 +53,7 @@ fun LazyAppIcon(
             modifier = modifier
                 .size(size)
                 .clip(RoundedCornerShape(size.value * 0.22f))
-                .background(Color(0xFF2A2F38)),
+                .background(Color(0xFFC9D8E8)),
         )
     }
 }
