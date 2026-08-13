@@ -53,10 +53,6 @@ class OrganizeViewModel : ViewModel() {
         _events.value = null
     }
 
-    /** 是否已保存退出（true=完成整理） */
-    private val _finished = MutableStateFlow(false)
-    val finished: StateFlow<Boolean> = _finished.asStateFlow()
-
     /** 当前选中文件夹的成员（按 sortOrder 排序） */
     val currentFolderApps: List<String>
         get() {
@@ -207,11 +203,6 @@ class OrganizeViewModel : ViewModel() {
     // ═══════════════════════════════════════
     // 退出
     // ═══════════════════════════════════════
-
-    /** 确认保存退出 */
-    fun finish() {
-        _finished.value = true
-    }
 
     private fun markDirty() {
         _dirty.value = true

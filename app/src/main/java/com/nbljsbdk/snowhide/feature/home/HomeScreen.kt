@@ -124,7 +124,6 @@ fun HomeScreen(
     // 整理目录状态机
     val organizeViewModel: OrganizeViewModel = viewModel()
     val organizeState by organizeViewModel.state.collectAsState()
-    val organizeFinished by organizeViewModel.finished.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -139,13 +138,6 @@ fun HomeScreen(
     // 移除应用二级菜单 / 卸载二次确认
     var removeAppTarget by remember { mutableStateOf<String?>(null) }
     var uninstallTarget by remember { mutableStateOf<String?>(null) }
-
-    // 整理完成 → 关闭整理模式并刷新
-    LaunchedEffect(organizeFinished) {
-        if (organizeFinished) {
-            viewModel.setOrganizing(false)
-        }
-    }
 
     // 整理目录提示事件 → Snackbar
     val organizeEvent by organizeViewModel.events.collectAsState()
@@ -178,7 +170,7 @@ fun HomeScreen(
                 },
                 actions = {
                     if (organizing) {
-                        // 整理模式：取消（二次确认丢弃）/ 确认（保存）
+                        // 整理操作即时生效（用户拍板）；取消/确认都只是退出整理
                         Text(
                             text = "取消",
                             color = MaterialTheme.colorScheme.onBackground,
@@ -193,7 +185,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .clickable {
                                     organizeViewModel.commitFolderName()
-                                    organizeViewModel.finish()
+                                    viewModel.setOrganizing(false)
                                 }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
