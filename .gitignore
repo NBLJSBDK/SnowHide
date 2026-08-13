@@ -13,3 +13,7 @@ local.properties
 *.p12
 /icon
 session-*.md
+.env
+*.env
+keystore.properties
+secrets.properties
