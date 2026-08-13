@@ -26,6 +26,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,6 +73,53 @@ fun SettingsScreen(
     // 三级菜单：创建快捷方式子屏
     var showShortcutCreate by remember { mutableStateOf(false) }
 
+    // 备份导出/导入提示
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            message = null
+        }
+    }
+
+    // 导出：SAF 创建文档（无需存储权限），默认文件名「雪藏备份.json」
+    val exportLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            val ok = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(com.nbljsbdk.snowhide.data.repo.BackupRepository.exportBackup(context).toByteArray())
+                } ?: error("无法打开输出流")
+            }
+            message = ok.fold(
+                { "导出成功：${uri.lastPathSegment}" },
+                { "导出失败：${it.message}" },
+            )
+        }
+    }
+
+    // 导入：SAF 打开文档
+    val importLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val ok = runCatching {
+                val json = context.contentResolver.openInputStream(uri)?.use {
+                    it.readBytes().toString(Charsets.UTF_8)
+                } ?: error("无法读取文件")
+                com.nbljsbdk.snowhide.data.repo.BackupRepository.importBackup(context, json)
+            }
+            message = ok.fold(
+                { "导入成功（$it 项），重启应用后生效" },
+                { "导入失败：${it.message}" },
+            )
+        }
+    }
+
     // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
 
@@ -77,6 +129,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("更多选项", fontWeight = FontWeight.Bold) },
@@ -116,6 +169,29 @@ fun SettingsScreen(
                         .clickable { showShortcutCreate = true },
                 ) {
                     Text("创建快捷方式", modifier = Modifier.weight(1f))
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // ── 备份（debug 导出 → release 导入，跨包迁移） ──
+            SettingCard("备份") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { exportLauncher.launch("雪藏备份.json") },
+                ) {
+                    Text("导出数据", modifier = Modifier.weight(1f))
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(vertical = 2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
+                ) {
+                    Text("导入数据", modifier = Modifier.weight(1f))
                     Text("▸", color = MaterialTheme.colorScheme.primary)
                 }
             }
