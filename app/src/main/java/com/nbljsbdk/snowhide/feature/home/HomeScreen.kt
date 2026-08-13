@@ -174,6 +174,9 @@ fun HomeScreen(
     // 美化浮框数据：当前图标包/透明开关 + 已装图标包列表
     val iconPack by viewModel.settingsRepository.iconPack.collectAsState()
     val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
+    val freezeStyleName by viewModel.settingsRepository.freezeStyle.collectAsState()
+    val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
+        .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
     var iconPacks by remember { mutableStateOf<List<com.nbljsbdk.snowhide.ui.util.AppIconLoader.IconPackInfo>>(emptyList()) }
     LaunchedEffect(beautyPanelOpen) {
         if (beautyPanelOpen && iconPacks.isEmpty()) {
@@ -401,6 +404,7 @@ fun HomeScreen(
                                                 .take(4),
                                             icons = icons,
                                             frozenStates = frozenStates,
+                                            freezeStyle = freezeStyle,
                                             selected = organizing &&
                                                 organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
                                                 (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
@@ -429,6 +433,7 @@ fun HomeScreen(
                                         frozen = frozenStates[item.pkg] == true,
                                         icon = icons[item.pkg],
                                         showName = showAppName,
+                                        freezeStyle = freezeStyle,
                                         selected = organizing && when (val s = organizeState) {
                                             is OrganizeViewModel.OrganizeState.HomeAppSelected -> s.app.id == item.id
                                             is OrganizeViewModel.OrganizeState.FolderSelected -> s.subHomeApp?.id == item.id
@@ -461,6 +466,7 @@ fun HomeScreen(
                     columns = columns,
                     iconSize = iconSize.dp,
                     verticalSpace = verticalSpace,
+                    freezeStyle = freezeStyle,
                     showAppName = showAppName,
                     onBackToHome = {
                         scope.launch { pagerState.animateHome(actualCount) }
@@ -699,9 +705,11 @@ fun HomeScreen(
         BeautyPanel(
             iconPack = iconPack,
             transparentBg = transparentBg,
+            freezeStyle = freezeStyle,
             iconPacks = iconPacks,
             onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
             onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
+            onFreezeStyleSelect = { style -> viewModel.settingsRepository.setFreezeStyle(style.name) },
             onDismiss = { beautyPanelOpen = false },
         )
     }
@@ -785,6 +793,7 @@ private fun AppCell(
     frozen: Boolean,
     icon: ImageBitmap?,
     showName: Boolean,
+    freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -809,7 +818,7 @@ private fun AppCell(
                     modifier = Modifier
                         .size(size)
                         .clip(RoundedCornerShape(size.value * 0.22f))
-                        .frosted(enabled = frozen),
+                        .frosted(enabled = frozen, style = freezeStyle),
                 )
             } else {
                 // 图标未加载：灰色占位块（不显示包名文字）
@@ -854,6 +863,7 @@ private fun FolderCell(
     previewPackages: List<String>,
     icons: Map<String, ImageBitmap>,
     frozenStates: Map<String, Boolean> = emptyMap(),
+    freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -905,7 +915,7 @@ private fun FolderCell(
                                                     modifier = Modifier
                                                         .size(size * 0.44f)
                                                         .clip(RoundedCornerShape(size.value * 0.1f))
-                                                        .frosted(enabled = frozen),
+                                                        .frosted(enabled = frozen, style = freezeStyle),
                                                 )
                                                 if (frozen) {
                                                     // 雪花角标（2×2 预览内冻结成员）

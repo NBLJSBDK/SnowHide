@@ -40,9 +40,11 @@ import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 fun BeautyPanel(
     iconPack: String,
     transparentBg: Boolean,
+    freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
     iconPacks: List<AppIconLoader.IconPackInfo>,
     onIconPackSelect: (String) -> Unit,
     onTransparentToggle: (Boolean) -> Unit,
+    onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
     onDismiss: () -> Unit,
 ) {
     // 浮框内两态：false=主视图，true=图标包列表
@@ -127,6 +129,34 @@ fun BeautyPanel(
                         checked = transparentBg,
                         onCheckedChange = onTransparentToggle,
                     )
+                }
+                // 冻结滤镜样式（4 选 1，默认变蓝）
+                Text(
+                    text = "冻结图标滤镜",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries.forEach { style ->
+                        val label = when (style) {
+                            com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE -> "原色"
+                            com.nbljsbdk.snowhide.ui.util.FreezeStyle.GRAY -> "变灰"
+                            com.nbljsbdk.snowhide.ui.util.FreezeStyle.INVERT -> "反色"
+                            com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE -> "变蓝"
+                        }
+                        TextButton(
+                            onClick = { onFreezeStyleSelect(style) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (freezeStyle == style) FontWeight.Bold else FontWeight.Normal,
+                                color = if (freezeStyle == style) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),

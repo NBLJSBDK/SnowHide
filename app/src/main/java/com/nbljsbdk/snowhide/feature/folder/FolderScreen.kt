@@ -52,6 +52,7 @@ fun FolderScreen(
     columns: Int,
     iconSize: Dp,
     verticalSpace: Int,
+    freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     showAppName: Boolean,
     onBackToHome: () -> Unit,
     onAppClick: (String) -> Unit,
@@ -124,7 +125,7 @@ fun FolderScreen(
                             modifier = Modifier
                                 .size(iconSize)
                                 .clip(RoundedCornerShape(iconSize.value * 0.22f))
-                                .frosted(enabled = frozenStates[pkg] == true),
+                                .frosted(enabled = frozenStates[pkg] == true, style = freezeStyle),
                         )
                     }
                     if (showAppName) {

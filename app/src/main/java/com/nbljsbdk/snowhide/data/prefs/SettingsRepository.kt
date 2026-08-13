@@ -19,6 +19,21 @@ object SettingsRepository {
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         prefs = context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
+        // 关键：prefs 就绪后重读全部设置。
+        // 对象初始化时 prefs 尚未就绪，属性拿到的是默认值——
+        // 之前版本重启后设置全部回默认（震动档位 bug 即此）。
+        _showToast.value = prefs.getBoolean(KEY_TOAST, true)
+        _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
+        _backToLastDir.value = prefs.getBoolean(KEY_BACK_DIR, true)
+        _hapticLevel.value = prefs.getInt(KEY_HAPTIC, 4)
+        _columns.value = prefs.getInt(KEY_COLUMNS, 4)
+        _iconSize.value = prefs.getInt(KEY_ICON_SIZE, 56)
+        _verticalSpace.value = prefs.getInt(KEY_V_SPACE, 12)
+        _dockIconSize.value = prefs.getInt(KEY_DOCK_SIZE, 40)
+        _iconPack.value = prefs.getString(KEY_ICON_PACK, "") ?: ""
+        _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE.name
+        _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
+        _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
 
     private fun getBool(key: String, def: Boolean): Boolean =
@@ -55,11 +70,26 @@ object SettingsRepository {
     // 震动反馈（dock 锁定/解锁，0-4 档，0=关闭）
     // ═══════════════════════════════════════
 
-    private val _hapticLevel = MutableStateFlow(getInt(KEY_HAPTIC, 2))
-    /** 震感档位 0-4 */
+    private val _hapticLevel = MutableStateFlow(getInt(KEY_HAPTIC, 4))
+    /** 震感档位 0-4（默认最高档，用户拍板） */
     val hapticLevel: StateFlow<Int> = _hapticLevel.asStateFlow()
 
     fun setHapticLevel(value: Int) = save(KEY_HAPTIC, value) { _hapticLevel.value = it }
+
+    // ═══════════════════════════════════════
+    // 冻结滤镜样式（美化设置，默认变蓝）
+    // ═══════════════════════════════════════
+
+    private val _freezeStyle = MutableStateFlow(
+        getStr(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE.name)
+    )
+    /** 冻结滤镜样式（FreezeStyle 枚举名） */
+    val freezeStyle: StateFlow<String> = _freezeStyle.asStateFlow()
+
+    fun setFreezeStyle(style: String) {
+        _freezeStyle.value = style
+        if (::prefs.isInitialized) prefs.edit().putString(KEY_FREEZE_STYLE, style).apply()
+    }
 
     fun setShowAppName(enabled: Boolean) {
         _showAppName.value = enabled
@@ -136,6 +166,7 @@ object SettingsRepository {
 
     private const val KEY_TOAST = "show_toast"
     private const val KEY_HAPTIC = "haptic_level"
+    private const val KEY_FREEZE_STYLE = "freeze_style"
     private const val KEY_APP_NAME = "show_app_name"
     private const val KEY_BACK_DIR = "back_to_last_dir"
     private const val KEY_COLUMNS = "columns"
