@@ -210,19 +210,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 目录级批量：启用/停用某文件夹内全部（文件夹长按菜单） */
-    fun toggleFolderFreeze(folder: Folder) {
+    /** 目录级批量：停用某文件夹内全部应用（文件夹长按菜单「停用目录」） */
+    fun freezeFolder(folder: Folder) {
+        viewModelScope.launch {
+            freezeUseCase.freezeAll(onlyFolderId = folder.id)
+                .onSuccess { n -> refreshFrozenStates(); showMessage("已停用目录「${folder.name}」（$n 个）") }
+                .onFailure { showMessage(it.message ?: "操作失败") }
+        }
+    }
+
+    /** 目录级批量：启用某文件夹内全部应用（文件夹长按菜单「启用目录」） */
+    fun unfreezeFolder(folder: Folder) {
         viewModelScope.launch {
             val members = gridRepository.folderApps.value
                 .filter { it.folderId == folder.id }
                 .map { it.pkg }
-            val anyFrozen = members.any { _frozenStates.value[it] == true }
-            val result = if (anyFrozen) freezeUseCase.unfreezeAll()
-            else freezeUseCase.freezeAll(onlyFolderId = folder.id)
-            result.onSuccess { n ->
-                refreshFrozenStates()
-                showMessage(if (anyFrozen) "已启用目录「${folder.name}」" else "已停用目录「${folder.name}」（$n 个）")
-            }.onFailure { showMessage(it.message ?: "操作失败") }
+            var success = 0
+            members.forEach { pkg ->
+                freezeUseCase.unfreezeApp(pkg).onSuccess { success++ }
+            }
+            refreshFrozenStates()
+            showMessage("已启用目录「${folder.name}」（$success 个）")
         }
     }
 

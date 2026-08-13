@@ -4,6 +4,7 @@ package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -350,6 +352,7 @@ fun HomeScreen(
                             onQuickClean = { viewModel.quickClean() },
                             onAppClick = { viewModel.openApp(it) },
                             onAppLongClick = { pkg -> viewModel.gridRepository.toggleLock(pkg) },
+                            onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
                         )
                     }
                 }
@@ -437,6 +440,7 @@ fun HomeScreen(
             item = target,
             frozen = target.pkg?.let { frozenStates[it] == true } ?: false,
             folderName = folders.find { it.id == target.folderId }?.name ?: "",
+            targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
             onToggleFreeze = { pkg -> viewModel.toggleFreeze(pkg); longPressTarget = null },
             onEnable = { pkg -> viewModel.enableApp(pkg); longPressTarget = null },
@@ -455,8 +459,11 @@ fun HomeScreen(
                 if (folder != null) deleteFolderTarget = folder
                 longPressTarget = null
             },
-            onToggleFolderFreeze = { folder ->
-                viewModel.toggleFolderFreeze(folder); longPressTarget = null
+            onFreezeFolder = { folder ->
+                viewModel.freezeFolder(folder); longPressTarget = null
+            },
+            onUnfreezeFolder = { folder ->
+                viewModel.unfreezeFolder(folder); longPressTarget = null
             },
         )
     }
@@ -587,11 +594,50 @@ private fun FolderCell(
                 else androidx.compose.ui.graphics.Color.Transparent,
             ),
     ) {
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.ic_folder),
-            contentDescription = name,
-            modifier = Modifier.size(size),
-        )
+        // 文件夹 2×2 拼贴预览（实时显示前 4 个成员，空文件夹显示基础图标）
+        if (previewPackages.isEmpty()) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.ic_folder),
+                contentDescription = name,
+                modifier = Modifier.size(size),
+            )
+        } else {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(size)
+                    .clip(RoundedCornerShape(size.value * 0.22f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            ) {
+                Column {
+                    for (row in 0..1) {
+                        Row {
+                            for (col in 0..1) {
+                                val idx = row * 2 + col
+                                val pkg = previewPackages.getOrNull(idx)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.size(size * 0.5f),
+                                ) {
+                                    if (pkg != null) {
+                                        icons[pkg]?.let { bmp ->
+                                            androidx.compose.foundation.Image(
+                                                bitmap = bmp,
+                                                contentDescription = pkg,
+                                                contentScale = ContentScale.Fit,
+                                                modifier = Modifier
+                                                    .size(size * 0.44f)
+                                                    .clip(RoundedCornerShape(size.value * 0.1f)),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = name,
@@ -612,6 +658,7 @@ private fun DockBar(
     onQuickClean: () -> Unit,
     onAppClick: (String) -> Unit,
     onAppLongClick: (String) -> Unit,
+    onAppSwipeUp: (String) -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -636,7 +683,21 @@ private fun DockBar(
                             .combinedClickable(
                                 onClick = { onAppClick(pkg) },
                                 onLongClick = { onAppLongClick(pkg) },
-                            ),
+                            )
+                            .pointerInput(pkg) {
+                                // 上划 = 冻结（设计文档 §3.6）
+                                var dragY = 0f
+                                detectVerticalDragGestures(
+                                    onDragStart = { dragY = 0f },
+                                    onVerticalDrag = { _, amount ->
+                                        dragY += amount
+                                        if (dragY < -64f) {
+                                            dragY = 0f
+                                            onAppSwipeUp(pkg)
+                                        }
+                                    },
+                                )
+                            },
                     )
                 }
             }
@@ -705,6 +766,7 @@ private fun ContextMenu(
     item: GridItem,
     frozen: Boolean,
     folderName: String,
+    targetFolder: com.nbljsbdk.snowhide.data.model.Folder?,
     onDismiss: () -> Unit,
     onToggleFreeze: (String) -> Unit,
     onEnable: (String) -> Unit,
@@ -712,7 +774,8 @@ private fun ContextMenu(
     onRemove: (String) -> Unit,
     onRenameFolder: (Long) -> Unit,
     onDeleteFolder: (Long) -> Unit,
-    onToggleFolderFreeze: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
+    onFreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
+    onUnfreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -722,8 +785,10 @@ private fun ContextMenu(
         text = {
             Column {
                 if (item.type == "folder") {
-                    DialogAction("启用目录") { }
-                    DialogAction("停用目录") { }
+                    targetFolder?.let { folder ->
+                        DialogAction("启用目录") { onUnfreezeFolder(folder) }
+                        DialogAction("停用目录") { onFreezeFolder(folder) }
+                    }
                     DialogAction("重命名") { item.folderId?.let(onRenameFolder) }
                     DialogAction("删除文件夹") { item.folderId?.let(onDeleteFolder) }
                 } else {
