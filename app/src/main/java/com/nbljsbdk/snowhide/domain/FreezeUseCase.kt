@@ -83,24 +83,22 @@ class FreezeUseCase(
     }
 
     /**
-     * 快速清理（底部图标栏最右按钮）：停用底部显示的所有已打开应用（除锁定）
+     * 快速清理（底部图标栏最右按钮）：停用全部未锁定且未冻结的应用
      * 设计文档 §3.6
+     *
+     * 性能：冻结状态直接取共享内存（FrozenStateStore），
+     * 冻结命令合并为**一次** `pm disable-user`（pm 支持多包名），
+     * 避免逐个查询/执行导致卡顿。
      */
     suspend fun quickClean(): Result<Int> {
-        var success = 0
-        val failures = mutableListOf<String>()
-        gridRepository.allAddedPackages().forEach { pkg ->
-            if (gridRepository.isLocked(pkg)) return@forEach
-            executor.isFrozen(FreezeMode.FREEZE, pkg).onSuccess { frozen ->
-                if (!frozen) {
-                    executor.freeze(FreezeMode.FREEZE, pkg)
-                        .onSuccess { success++ }
-                        .onFailure { failures.add("$pkg: ${it.message}") }
-                }
-            }
-        }
-        return if (failures.isEmpty()) Result.success(success)
-        else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
+        val engine = executorEngine()
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        val states = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value
+        val targets = gridRepository.allAddedPackages()
+            .filter { !gridRepository.isLocked(it) && states[it] != true }
+        if (targets.isEmpty()) return Result.success(0)
+        return engine.exec("pm disable-user --user 0 ${targets.joinToString(" ")}")
+            .map { targets.size }
     }
 
     /**
