@@ -45,10 +45,6 @@ class OrganizeViewModel : ViewModel() {
     private val _dirty = MutableStateFlow(false)
     val dirty: StateFlow<Boolean> = _dirty.asStateFlow()
 
-    /** 删除文件夹二次确认目标 */
-    private val _pendingDelete = MutableStateFlow<Folder?>(null)
-    val pendingDelete: StateFlow<Folder?> = _pendingDelete.asStateFlow()
-
     /** 一次性提示事件（UI Snackbar） */
     private val _events = MutableStateFlow<String?>(null)
     val events: StateFlow<String?> = _events.asStateFlow()
@@ -181,27 +177,16 @@ class OrganizeViewModel : ViewModel() {
         return "文件夹$n"
     }
 
-    /** 删除：只对选中文件夹，二次确认；未选中时给提示（避免无声灰显） */
+    /** 删除：只对选中文件夹，直接删除（用户拍板去掉二次确认）；未选中时给提示 */
     fun requestDeleteFolder() {
         val folder = currentFolder
         if (folder == null) {
             _events.value = "请先选择一个文件夹"
         } else {
-            _pendingDelete.value = folder
-        }
-    }
-
-    fun confirmDeleteFolder() {
-        _pendingDelete.value?.let { folder ->
             GridRepository.deleteFolder(folder.id)
             _state.value = OrganizeState.Empty
+            markDirty()
         }
-        _pendingDelete.value = null
-        markDirty()
-    }
-
-    fun cancelDeleteFolder() {
-        _pendingDelete.value = null
     }
 
     /** 文件夹名输入（③ 底部第一行） */

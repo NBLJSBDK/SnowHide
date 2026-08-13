@@ -280,7 +280,9 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) { page ->
-            val idx = ((page % actualCount) + actualCount) % actualCount
+            // 整理模式强制渲染主屏：创建/删除文件夹的瞬间 actualCount 已变而
+            // currentPage 还未对齐，取模结果会漂到文件夹页造成闪动。
+            val idx = if (organizing) 0 else ((page % actualCount) + actualCount) % actualCount
             if (idx == 0) {
                 // ── 主屏页 ──
                 Column(
@@ -395,24 +397,6 @@ fun HomeScreen(
                             onNameCommit = { organizeViewModel.commitFolderName() },
                             onAppLabel = { pkg -> labels[pkg] ?: pkg },
                         )
-                        // 删除文件夹二次确认
-                        organizeViewModel.pendingDelete.collectAsState().value?.let { folder ->
-                            AlertDialog(
-                                onDismissRequest = { organizeViewModel.cancelDeleteFolder() },
-                                title = { Text("删除文件夹") },
-                                text = { Text("删除「${folder.name}」？其中 ${organizeViewModel.currentFolderApps.size} 个应用将移回主屏幕。") },
-                                confirmButton = {
-                                    androidx.compose.material3.TextButton(onClick = { organizeViewModel.confirmDeleteFolder() }) {
-                                        Text("删除", color = MaterialTheme.colorScheme.error)
-                                    }
-                                },
-                                dismissButton = {
-                                    androidx.compose.material3.TextButton(onClick = { organizeViewModel.cancelDeleteFolder() }) {
-                                        Text("取消")
-                                    }
-                                },
-                            )
-                        }
                     } else {
                         DockBar(
                             packages = dockPackages(gridItems, folderApps, frozenStates),
