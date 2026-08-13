@@ -67,6 +67,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
@@ -174,6 +175,7 @@ fun HomeScreen(
                             onOrganize = { viewModel.setOrganizing(true) },
                             onUnfreezeAll = { viewModel.unfreezeAll() },
                             onFreezeAll = { viewModel.freezeAll() },
+                            onAppManage = { viewModel.openAppManage() },
                         )
                     }
                 },
@@ -370,6 +372,12 @@ fun HomeScreen(
                 )
             }
         }
+    }
+
+    // 增加/移除应用界面（全屏覆盖，设计文档 §3.8）
+    val appManageOpen by viewModel.appManageOpen.collectAsState()
+    if (appManageOpen) {
+        AppManageScreen(onClose = { viewModel.closeAppManage() })
     }
 
     // 长按上下文菜单
@@ -592,15 +600,16 @@ private fun GearMenu(
     onOrganize: () -> Unit,
     onUnfreezeAll: () -> Unit,
     onFreezeAll: () -> Unit,
+    onAppManage: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
             text = { Text("增加应用") },
-            onClick = onDismiss,
+            onClick = { onDismiss(); onAppManage() },
         )
         DropdownMenuItem(
             text = { Text("移除应用") },
-            onClick = onDismiss,
+            onClick = { onDismiss(); onAppManage() },
         )
         DropdownMenuItem(
             text = { Text("整理目录") },

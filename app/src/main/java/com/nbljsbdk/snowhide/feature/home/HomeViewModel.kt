@@ -67,6 +67,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _menuOpen = MutableStateFlow(false)
     val menuOpen: StateFlow<Boolean> = _menuOpen.asStateFlow()
 
+    /** 增加/移除应用界面开关 */
+    private val _appManageOpen = MutableStateFlow(false)
+    val appManageOpen: StateFlow<Boolean> = _appManageOpen.asStateFlow()
+
+    fun openAppManage() {
+        _menuOpen.value = false
+        _appManageOpen.value = true
+    }
+
+    fun closeAppManage() {
+        _appManageOpen.value = false
+    }
+
     // ═══════════════════════════════════════
     // 初始化 / 刷新
     // ═══════════════════════════════════════
