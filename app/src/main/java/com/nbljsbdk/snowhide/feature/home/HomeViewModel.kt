@@ -221,6 +221,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure { showMessage("解冻失败：${it.message}") }
             gridRepository.removeApp(pkg)
             refreshFrozenStates()
+            // 移除成功提示（含应用名）
+            val name = _labels.value[pkg] ?: pkg
+            showMessage("已移除并解冻：$name")
         }
     }
 

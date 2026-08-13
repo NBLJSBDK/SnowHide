@@ -68,6 +68,14 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
     /** 显示隐藏包名（按钮切换：应用名下方追加一行包名） */
     val showPackageName: StateFlow<Boolean> = _showPackageName.asStateFlow()
 
+    /** 一次性提示（移出成功等，UI Snackbar） */
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun consumeMessage() {
+        _message.value = null
+    }
+
     private val _filter = MutableStateFlow(
         Filter(
             query = "",
@@ -212,12 +220,15 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         GridRepository.addAppToHome(pkg)
     }
 
-    /** 左滑移出（即时解冻并移出，列表立即更新） */
+    /** 左滑移出（即时解冻并移出，列表立即更新，toast 提示） */
     fun removeApp(pkg: String) {
+        val name = AppListRepository.installedApps.value
+            .firstOrNull { it.pkg == pkg }?.label ?: pkg
         viewModelScope.launch {
             freezeUseCase.unfreezeApp(pkg)
             GridRepository.removeApp(pkg)
             com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
+            _message.value = "已移除并解冻：$name"
         }
     }
 
