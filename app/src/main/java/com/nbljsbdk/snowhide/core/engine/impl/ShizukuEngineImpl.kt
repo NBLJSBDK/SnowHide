@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.Parcel
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.suspendCancellableCoroutine
 import rikka.shizuku.Shizuku
 import kotlin.coroutines.resume
@@ -73,49 +74,76 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
 
     /**
      * 通过 Shizuku UserService 执行命令（shell 身份进程）
-     * 每次调用建立一次绑定，完成后解绑（保持轻量）。
+     *
+     * 连接策略：**常驻单连接**——首次 bind 后复用同一 IBinder。
+     * 不能在每次 exec 时 bind/unbind：Shizuku 库的连接集合在多线程
+     * 并发 add/remove 时会抛 ConcurrentModificationException
+     * （真机「启用全部」循环连续 exec 时崩溃实锤，13.1.5 库内部问题）。
      */
-    private suspend fun execViaUserService(cmd: String): String =
-        suspendCancellableCoroutine { cont ->
-            val args = Shizuku.UserServiceArgs(
-                ComponentName(context, ShellCommandService::class.java)
-            )
-                .daemon(false)
-                .version(1)
-                .processNameSuffix("shellcmd")
-                .tag("snowhide-shell")
+    private suspend fun execViaUserService(cmd: String): String {
+        var binder = awaitBinder()
+        return try {
+            transact(binder, cmd)
+        } catch (e: android.os.DeadObjectException) {
+            // binder 已死（server 重启等）：清缓存重建连接后重试一次
+            cachedBinder = null
+            binder = awaitBinder()
+            transact(binder, cmd)
+        }
+    }
 
-            val connection = object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                    if (service == null) {
-                        if (cont.isActive) cont.resumeWithException(IllegalStateException("Shizuku 服务绑定失败"))
-                        return
-                    }
-                    try {
-                        // 手写 Binder 事务：写入命令 → 读取输出
-                        val data = Parcel.obtain()
-                        val reply = Parcel.obtain()
-                        try {
-                            data.writeInterfaceToken(ShellCommandService.DESCRIPTOR)
-                            data.writeString(cmd)
-                            service.transact(ShellCommandService.TRANSACTION_EXEC, data, reply, 0)
-                            reply.readException()
-                            val result = reply.readString() ?: ""
-                            if (cont.isActive) cont.resume(result)
-                        } finally {
-                            data.recycle()
-                            reply.recycle()
-                        }
-                    } catch (e: Exception) {
-                        if (cont.isActive) cont.resumeWithException(e)
-                    } finally {
-                        runCatching { Shizuku.unbindUserService(args, this, false) }
-                    }
+    /** 常驻连接 binder（绑定失败/断开时清空） */
+    @Volatile private var cachedBinder: IBinder? = null
+    private var pendingBind: CompletableDeferred<IBinder>? = null
+
+    /** 获取（必要时建立）常驻连接 */
+    private suspend fun awaitBinder(): IBinder {
+        cachedBinder?.let { return it }
+        pendingBind?.let { return it.await() }
+        val deferred = CompletableDeferred<IBinder>()
+        pendingBind = deferred
+        val args = Shizuku.UserServiceArgs(
+            ComponentName(context, ShellCommandService::class.java)
+        )
+            .daemon(false)
+            .version(1)
+            .processNameSuffix("shellcmd")
+            .tag("snowhide-shell")
+        Shizuku.bindUserService(args, object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                if (service == null) {
+                    pendingBind = null
+                    deferred.completeExceptionally(IllegalStateException("Shizuku 服务绑定失败"))
+                    return
                 }
-
-                override fun onServiceDisconnected(name: ComponentName?) {}
+                cachedBinder = service
+                pendingBind = null
+                deferred.complete(service)
             }
 
-            Shizuku.bindUserService(args, connection)
+            override fun onServiceDisconnected(name: ComponentName?) {
+                cachedBinder = null
+            }
+        })
+        return deferred.await()
+    }
+
+    /** 手写 Binder 事务：写入命令 → 读取输出 */
+    private suspend fun transact(binder: IBinder, cmd: String): String =
+        suspendCancellableCoroutine { cont ->
+            val data = Parcel.obtain()
+            val reply = Parcel.obtain()
+            try {
+                data.writeInterfaceToken(ShellCommandService.DESCRIPTOR)
+                data.writeString(cmd)
+                binder.transact(ShellCommandService.TRANSACTION_EXEC, data, reply, 0)
+                reply.readException()
+                cont.resume(reply.readString() ?: "")
+            } catch (e: Exception) {
+                cont.resumeWithException(e)
+            } finally {
+                data.recycle()
+                reply.recycle()
+            }
         }
 }

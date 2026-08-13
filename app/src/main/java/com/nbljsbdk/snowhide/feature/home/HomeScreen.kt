@@ -4,6 +4,12 @@ package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateTo
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.clickable
@@ -16,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -814,31 +821,13 @@ private fun DockBar(
         ) {
             items(packages, key = { it }) { pkg ->
                 icons[pkg]?.let { bitmap ->
-                    androidx.compose.foundation.Image(
+                    DockIcon(
+                        pkg = pkg,
                         bitmap = bitmap,
-                        contentDescription = pkg,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .size(iconSize)
-                            .clip(RoundedCornerShape(iconSize.value * 0.22f))
-                            .combinedClickable(
-                                onClick = { onAppClick(pkg) },
-                                onLongClick = { onAppLongClick(pkg) },
-                            )
-                            .pointerInput(pkg) {
-                                // 上划 = 冻结（设计文档 §3.6）
-                                var dragY = 0f
-                                detectVerticalDragGestures(
-                                    onDragStart = { dragY = 0f },
-                                    onVerticalDrag = { _, amount ->
-                                        dragY += amount
-                                        if (dragY < -64f) {
-                                            dragY = 0f
-                                            onAppSwipeUp(pkg)
-                                        }
-                                    },
-                                )
-                            },
+                        iconSize = iconSize,
+                        onClick = { onAppClick(pkg) },
+                        onLongClick = { onAppLongClick(pkg) },
+                        onSwipeUp = { onAppSwipeUp(pkg) },
                     )
                 }
             }
@@ -853,6 +842,68 @@ private fun DockBar(
             )
         }
     }
+}
+
+/**
+ * 底部栏单个图标（设计文档 §3.6）
+ *
+ * 上划手势（用户拍板）：
+ * - 拖动中图标跟手上移、逐渐变淡
+ * - **松手才确认**：上划超过阈值 → 触发冻结；未到位或拉回原位 → 回弹，无行动
+ */
+@Composable
+private fun DockIcon(
+    pkg: String,
+    bitmap: ImageBitmap,
+    iconSize: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onSwipeUp: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    // 上划偏移（负=向上）。拖动时直接赋值（跟手），松手 animateTo 回弹
+    val offsetY = remember { Animatable(0f) }
+    val maxDrag = iconSize.value * 1.4f
+    val threshold = -iconSize.value * 0.9f
+
+    androidx.compose.foundation.Image(
+        bitmap = bitmap,
+        contentDescription = pkg,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .offset { IntOffset(0, offsetY.value.roundToInt()) }
+            .graphicsLayer {
+                alpha = 1f - (offsetY.value / -maxDrag).coerceIn(0f, 1f) * 0.55f
+            }
+            .size(iconSize)
+            .clip(RoundedCornerShape(iconSize.value * 0.22f))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .pointerInput(pkg) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, amount ->
+                        // Main.immediate：launch 同步执行，跟手无延迟
+                        scope.launch {
+                            offsetY.snapTo((offsetY.value + amount).coerceIn(-maxDrag, 0f))
+                        }
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        if (offsetY.value <= threshold) {
+                            // 上划到位并松手 → 确认冻结（成功后图标从栏中消失）
+                            onSwipeUp()
+                        }
+                        // 无论触发与否都回弹：失败时回到原位，成功时 item 即将移除
+                        scope.launch { offsetY.animateTo(0f) }
+                    },
+                    onDragCancel = {
+                        scope.launch { offsetY.animateTo(0f) }
+                    },
+                )
+            },
+    )
 }
 
 /** 齿轮二级菜单（设计文档 §3.7 八项，P0 接入核心四项） */

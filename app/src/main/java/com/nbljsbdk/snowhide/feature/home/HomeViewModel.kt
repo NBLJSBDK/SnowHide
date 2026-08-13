@@ -248,7 +248,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else freezeUseCase.freezeApp(pkg)
             result.onSuccess {
                 refreshFrozenStates()
-                showMessage(if (frozen) "已解冻" else "已冻结：$pkg")
+                // 用户拍板：底部栏图标消失即反馈，成功不弹提示
+                // （Snackbar 会挡住栏位阻止连续上划操作）
             }.onFailure { showMessage("操作失败：${it.message}") }
         }
     }
