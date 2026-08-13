@@ -85,7 +85,14 @@ object AppIconLoader {
         val intent = Intent(ACTION_RESOLVE_ICON).apply {
             setPackage(iconPackPkg)
             putExtra(EXTRA_PACKAGE, pkg)
-            putExtra(EXTRA_COMPONENT, "${pkg}/.")
+            // 标准协议：component 必须传 ComponentName（目标应用启动组件），
+            // 传字符串 "pkg/." 图标包不识别
+            val component = runCatching {
+                pm.getLaunchIntentForPackage(pkg)?.component
+            }.getOrNull()
+            if (component != null) {
+                putExtra(EXTRA_COMPONENT, component)
+            }
         }
         return runCatching {
             suspendCancellableCoroutine { cont ->
