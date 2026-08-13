@@ -36,13 +36,14 @@
             </intent-filter>
         </activity>
 
-        <!-- App Shortcuts 透明入口（设计文档 §3.12，独立 taskAffinity，执行即退） -->
+        <!-- App Shortcuts 透明入口（设计文档 §3.12，独立 taskAffinity，执行即退；
+             NoDisplay=无窗口闪现） -->
         <activity
             android:name=".feature.shortcut.ShortcutActionActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:taskAffinity="com.nbljsbdk.snowhide.shortcut"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@android:style/Theme.NoDisplay" />
 
         <!-- 快速启停下拉磁贴（§3.9） -->
         <service
