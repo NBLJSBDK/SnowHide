@@ -148,6 +148,22 @@ fun AboutScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(24.dp))
+            // ── 权限说明 ──
+            Text(
+                text = "权限说明",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "• Shizuku（API_V23）：以 shell 身份执行冻结/解冻命令\n" +
+                    "• 查询已装应用：增删应用界面显示应用列表\n" +
+                    "• 通知：快捷方式执行失败时提示（成功用 Toast）\n" +
+                    "• 震动：底部栏锁定/解锁反馈（受系统静音控制）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(24.dp))
             // ═══════════════════════════════════
             // 神之一手（临时调试：解冻全部已冻结应用，含系统/未列表应用）
             // 之后可能注释掉不用

@@ -68,6 +68,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -130,6 +132,12 @@ fun HomeScreen(
     val organizing by viewModel.organizing.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var searchOpen by remember { mutableStateOf(false) }
+
+    // 搜索框展开时自动聚焦弹键盘（用户拍板）
+    val searchFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(searchOpen) {
+        if (searchOpen) searchFocusRequester.requestFocus()
+    }
 
     // 整理目录状态机
     val organizeViewModel: OrganizeViewModel = viewModel()
@@ -228,7 +236,7 @@ fun HomeScreen(
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     } else if (searchOpen) {
-                        // 搜索框（过滤宫格）
+                        // 搜索框（过滤宫格；展开时自动聚焦弹键盘）
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
@@ -236,7 +244,8 @@ fun HomeScreen(
                             singleLine = true,
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 4.dp)
+                                .focusRequester(searchFocusRequester),
                         )
                         TextButton(onClick = {
                             searchOpen = false
