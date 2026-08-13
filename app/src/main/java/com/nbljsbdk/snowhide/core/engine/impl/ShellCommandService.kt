@@ -30,12 +30,18 @@ class ShellCommandService : Binder {
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         return when (code) {
             TRANSACTION_EXEC -> {
+                // 客户端 writeInterfaceToken 写入的 token 必须先读掉，
+                // 否则 readString 读到的是 token 而非命令（真实踩坑）
+                data.enforceInterface(DESCRIPTOR)
                 val cmd = data.readString() ?: ""
+                android.util.Log.d("ShellCmd", "exec: $cmd")
                 try {
                     val result = execSh(cmd)
+                    android.util.Log.d("ShellCmd", "ok: ${result.take(80)}")
                     reply?.writeNoException()
                     reply?.writeString(result)
                 } catch (e: Exception) {
+                    android.util.Log.d("ShellCmd", "err: $e")
                     reply?.writeException(e)
                 }
                 true
