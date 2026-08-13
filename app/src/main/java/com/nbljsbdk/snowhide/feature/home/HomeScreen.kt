@@ -253,10 +253,10 @@ fun HomeScreen(
             )
         },
         snackbarHost = {
-            // 上移避开底部 dock 栏（用户拍板：Snackbar 不挡栏位）
+            // 固定停在 dock 栏上方（用户拍板：toast 不挡栏位）
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = dockIconSize.dp + 12.dp),
+                modifier = Modifier.padding(bottom = dockIconSize.dp + 20.dp),
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
