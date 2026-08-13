@@ -362,11 +362,10 @@ fun HomeScreen(
                             .weight(1f)
                             .padding(horizontal = 12.dp)
                             // 空白处长按 → 布局设计/美化设置菜单（用户拍板）
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onLongPress = { blankMenuOpen = true },
-                                )
-                            },
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { blankMenuOpen = true },
+                            ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
                     ) {

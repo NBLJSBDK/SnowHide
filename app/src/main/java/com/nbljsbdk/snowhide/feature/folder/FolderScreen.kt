@@ -100,11 +100,10 @@ fun FolderScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
                 // 空白处长按 → 布局设计/美化设置菜单（与主屏一致）
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = { onBlankLongPress() },
-                    )
-                },
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { onBlankLongPress() },
+                ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
         ) {

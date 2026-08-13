@@ -31,7 +31,7 @@ object SettingsRepository {
         _verticalSpace.value = prefs.getInt(KEY_V_SPACE, 12)
         _dockIconSize.value = prefs.getInt(KEY_DOCK_SIZE, 40)
         _iconPack.value = prefs.getString(KEY_ICON_PACK, "") ?: ""
-        _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE.name
+        _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
@@ -81,7 +81,7 @@ object SettingsRepository {
     // ═══════════════════════════════════════
 
     private val _freezeStyle = MutableStateFlow(
-        getStr(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE.name)
+        getStr(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name)
     )
     /** 冻结滤镜样式（FreezeStyle 枚举名） */
     val freezeStyle: StateFlow<String> = _freezeStyle.asStateFlow()
