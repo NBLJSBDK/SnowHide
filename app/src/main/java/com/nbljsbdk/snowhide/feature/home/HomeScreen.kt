@@ -138,9 +138,21 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // dock 长按上锁震动（用户拍板：上锁成功给个震动）
+    // dock 长按锁定/解锁震动（受系统静音/勿扰控制）
     val vibrator = remember {
         runCatching { context.getSystemService(android.os.Vibrator::class.java) }.getOrNull()
+    }
+    val audioManager = remember {
+        context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+    }
+    val notificationManager = remember {
+        context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+    }
+    fun shouldVibrate(): Boolean {
+        val silent = audioManager.ringerMode == android.media.AudioManager.RINGER_MODE_SILENT
+        val dnd = notificationManager.currentInterruptionFilter ==
+            android.app.NotificationManager.INTERRUPTION_FILTER_NONE
+        return !silent && !dnd
     }
 
     // 长按菜单状态
@@ -438,10 +450,9 @@ fun HomeScreen(
                             onQuickClean = { viewModel.quickClean() },
                             onAppClick = { viewModel.openApp(it) },
                             onAppLongClick = { pkg ->
-                                val wasLocked = viewModel.gridRepository.isLocked(pkg)
                                 viewModel.gridRepository.toggleLock(pkg)
-                                if (!wasLocked) {
-                                    // 上锁成功 → 短震动
+                                // 锁定与解锁都短震；系统静音/勿扰时不震
+                                if (shouldVibrate()) {
                                     vibrator?.vibrate(
                                         android.os.VibrationEffect.createOneShot(
                                             40,
