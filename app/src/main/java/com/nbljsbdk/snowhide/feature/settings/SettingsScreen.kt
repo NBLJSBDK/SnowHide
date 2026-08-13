@@ -29,6 +29,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -62,8 +65,16 @@ fun SettingsScreen(
     val backToDir by settings.backToLastDir.collectAsState()
     val hapticLevel by settings.hapticLevel.collectAsState()
 
+    // 三级菜单：创建快捷方式子屏
+    var showShortcutCreate by remember { mutableStateOf(false) }
+
     // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
+
+    if (showShortcutCreate) {
+        ShortcutCreateScreen(onBack = { showShortcutCreate = false })
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -96,6 +107,19 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // ── 系统集成 ──
+            SettingCard("系统集成") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showShortcutCreate = true },
+                ) {
+                    Text("创建快捷方式", modifier = Modifier.weight(1f))
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
             // ── 简单设置 ──
             SettingCard("简单设置") {
                 SwitchSetting("清理应用后展示 Toast", showToast) { settings.setShowToast(it) }

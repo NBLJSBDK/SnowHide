@@ -74,6 +74,19 @@ class QuickToggleUseCase(
         return Result.success(TurnOffResult(frozen, lockedSkipped, failures))
     }
 
+    /**
+     * 反转（App Shortcut「快速启停」用）：
+     * opened 非空（点亮中）→ 熄灭冻回；空 → 点亮解冻。
+     * 磁贴 UI 由 TileService.onStartListening 按 opened 恢复，自动同步。
+     */
+    suspend fun toggle(): Result<Int> {
+        return if (loadList(KEY_OPENED).isNotEmpty()) {
+            turnOff().map { it.frozen }
+        } else {
+            lightUp()
+        }
+    }
+
     private fun loadList(key: String): List<String> {
         val json = prefs.getString(key, "[]") ?: "[]"
         return runCatching {

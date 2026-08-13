@@ -12,6 +12,9 @@
     <!-- dock 长按上锁震动反馈 -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- 快捷方式执行结果通知（Android 13+ 运行时申请） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -32,6 +35,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- App Shortcuts 透明入口（设计文档 §3.12，独立 taskAffinity，执行即退） -->
+        <activity
+            android:name=".feature.shortcut.ShortcutActionActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.nbljsbdk.snowhide.shortcut"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!-- 快速启停下拉磁贴（§3.9） -->
         <service
