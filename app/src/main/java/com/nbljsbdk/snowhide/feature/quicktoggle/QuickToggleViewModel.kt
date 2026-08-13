@@ -6,8 +6,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -38,23 +41,37 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     private val _showPackageName = MutableStateFlow(false)
     val showPackageName: StateFlow<Boolean> = _showPackageName.asStateFlow()
 
-    /** 刷新触发器：宫格数据变化时 +1，UI 订阅它触发重组 */
-    private val _refresh = MutableStateFlow(0)
-    val refresh: StateFlow<Int> = _refresh.asStateFlow()
+    /** 左栏：已添加但未加入快速启停（combine 派生，数据变化立即刷新） */
+    val leftApps: StateFlow<List<String>> = combine(
+        GridRepository.gridItems,
+        GridRepository.folderApps,
+        _members,
+        _searchQuery,
+    ) { items, folderApps, members, query ->
+        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
+        // 数据一致性：已添加里移出的成员自动剔除
+        added.filter { it !in members }
+            .filter { pkg -> query.isEmpty() || pkg.contains(query, ignoreCase = true) }
+            .sortedBy { it }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 右栏：快速启停成员（已添加里移出的自动剔除） */
+    val rightApps: StateFlow<List<String>> = combine(
+        GridRepository.gridItems,
+        GridRepository.folderApps,
+        _members,
+    ) { items, folderApps, members ->
+        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
+        members.filter { it in added }.sortedBy { it }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
-        // 数据一致性：订阅宫格数据，成员中已移出的应用自动剔除
+        // 数据一致性：宫格数据变化时同步剔除已移出成员并持久化
         viewModelScope.launch {
-            GridRepository.gridItems.collect { _ ->
-                syncMembers()
-                _refresh.value++
-            }
+            GridRepository.gridItems.collect { _ -> syncMembers() }
         }
         viewModelScope.launch {
-            GridRepository.folderApps.collect { _ ->
-                syncMembers()
-                _refresh.value++
-            }
+            GridRepository.folderApps.collect { _ -> syncMembers() }
         }
     }
 
@@ -67,22 +84,6 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
             persist()
         }
     }
-
-    /** 全部已添加应用（数据源，含系统/用户过滤同增删界面？快速启停只针对已添加，不过滤） */
-    fun allAddedPackages(): List<String> = GridRepository.allAddedPackages()
-
-    /** 左栏：已添加但未加入快速启停 */
-    fun notMemberPackages(): List<String> {
-        val query = _searchQuery.value.trim()
-        return allAddedPackages()
-            .filter { it !in _members.value }
-            .filter { pkg -> query.isEmpty() || pkg.contains(query, ignoreCase = true) }
-            .sortedBy { it }
-    }
-
-    /** 右栏：快速启停成员 */
-    fun memberPackages(): List<String> =
-        _members.value.sortedBy { it }
 
     fun setSearchQuery(q: String) {
         _searchQuery.value = q

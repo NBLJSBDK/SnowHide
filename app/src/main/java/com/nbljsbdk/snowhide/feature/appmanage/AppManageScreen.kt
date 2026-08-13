@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nbljsbdk.snowhide.data.repo.AppListRepository
 
 /**
  * 增删应用界面（设计文档 §3.8 用户拍板终版，左右分栏）
@@ -63,8 +64,10 @@ fun AppManageScreen(
     val showSystemOnly by viewModel.showSystemOnly.collectAsState()
     val leftSort by viewModel.leftSort.collectAsState()
     val rightSort by viewModel.rightSort.collectAsState()
-    // 订阅刷新触发器：宫格数据变化时立即重组（增删操作后列表实时刷新）
-    val refreshTrigger by viewModel.refresh.collectAsState()
+    // 左右栏列表：combine 派生 StateFlow，数据变化立即刷新
+    val leftApps by viewModel.leftApps.collectAsState()
+    val rightApps by viewModel.rightApps.collectAsState()
+    val loaded by AppListRepository.loaded.collectAsState()
 
     // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
@@ -129,10 +132,14 @@ fun AppManageScreen(
                         .fillMaxHeight()
                         .padding(end = 4.dp),
                 ) {
-                    val notAdded = viewModel.notAddedApps()
-                    ColumnLabel("未添加应用（右滑加入）", notAdded.size)
+                    ColumnLabel("未添加应用（右滑加入）", leftApps.size)
+                    if (!loaded && leftApps.isEmpty()) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.padding(24.dp),
+                        )
+                    }
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(notAdded, key = { it.pkg }) { app ->
+                        items(leftApps, key = { it.pkg }) { app ->
                             SwipeableAppRow(
                                 label = app.label,
                                 pkg = app.pkg,
@@ -153,10 +160,9 @@ fun AppManageScreen(
                         .fillMaxHeight()
                         .padding(start = 4.dp),
                 ) {
-                    val added = viewModel.addedApps()
-                    ColumnLabel("已添加应用（左滑移出）", added.size)
+                    ColumnLabel("已添加应用（左滑移出）", rightApps.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(added, key = { it.pkg }) { app ->
+                        items(rightApps, key = { it.pkg }) { app ->
                             SwipeableAppRow(
                                 label = app.label,
                                 pkg = app.pkg,

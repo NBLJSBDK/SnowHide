@@ -60,8 +60,9 @@ fun QuickToggleScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showPackageName by viewModel.showPackageName.collectAsState()
     val members by viewModel.members.collectAsState()
-    // 订阅刷新触发器：宫格/成员变化时立即重组
-    val refreshTrigger by viewModel.refresh.collectAsState()
+    // 左右栏列表：combine 派生 StateFlow，数据变化立即刷新
+    val leftApps by viewModel.leftApps.collectAsState()
+    val rightApps by viewModel.rightApps.collectAsState()
 
     BackHandler(onBack = onClose)
 
@@ -117,10 +118,9 @@ fun QuickToggleScreen(
                         .fillMaxHeight()
                         .padding(end = 4.dp),
                 ) {
-                    val notMembers = viewModel.notMemberPackages()
-                    ColumnLabel("可加入（右滑加入）", notMembers.size)
+                    ColumnLabel("可加入（右滑加入）", leftApps.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(notMembers, key = { it }) { pkg ->
+                        items(leftApps, key = { it }) { pkg ->
                             SwipeRow(
                                 label = viewModel.displayLabel(pkg),
                                 pkg = pkg,
@@ -139,10 +139,9 @@ fun QuickToggleScreen(
                         .fillMaxHeight()
                         .padding(start = 4.dp),
                 ) {
-                    val memberList = members
-                    ColumnLabel("快速启停成员（左滑移出）", memberList.size)
+                    ColumnLabel("快速启停成员（左滑移出）", rightApps.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(memberList, key = { it }) { pkg ->
+                        items(rightApps, key = { it }) { pkg ->
                             SwipeRow(
                                 label = viewModel.displayLabel(pkg),
                                 pkg = pkg,

@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.feature.home.HomeScreen
 import com.nbljsbdk.snowhide.ui.theme.SnowHideTheme
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
         EngineRegistry.init(applicationContext)
         GridRepository.init(applicationContext)
         SettingsRepository.init(applicationContext)
+        AppListRepository.init(applicationContext) // 预加载应用列表（避免首次打开增删界面空白）
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {
