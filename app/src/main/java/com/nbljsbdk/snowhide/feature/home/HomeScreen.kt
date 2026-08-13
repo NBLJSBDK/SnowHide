@@ -934,11 +934,12 @@ private fun DockIcon(
                     )
                 },
         )
-        // 锁定角标（长按锁定，豁免快速清理/磁贴熄灭冻回）
+        // 锁定角标（长按锁定，豁免快速清理/磁贴熄灭冻回；红色警示）
         if (locked) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_lock),
                 contentDescription = "已锁定",
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.error),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .size(iconSize * 0.42f),
