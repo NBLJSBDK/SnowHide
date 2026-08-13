@@ -138,7 +138,8 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // dock 长按锁定/解锁震动（受系统静音/勿扰控制）
+    // dock 长按锁定/解锁震动（档位 0-4，0=关；受系统静音/勿扰控制）
+    val hapticLevel by viewModel.settingsRepository.hapticLevel.collectAsState()
     val vibrator = remember {
         runCatching { context.getSystemService(android.os.Vibrator::class.java) }.getOrNull()
     }
@@ -152,7 +153,7 @@ fun HomeScreen(
         val silent = audioManager.ringerMode == android.media.AudioManager.RINGER_MODE_SILENT
         val dnd = notificationManager.currentInterruptionFilter ==
             android.app.NotificationManager.INTERRUPTION_FILTER_NONE
-        return !silent && !dnd
+        return hapticLevel > 0 && !silent && !dnd
     }
 
     // 长按菜单状态
@@ -451,12 +452,18 @@ fun HomeScreen(
                             onAppClick = { viewModel.openApp(it) },
                             onAppLongClick = { pkg ->
                                 viewModel.gridRepository.toggleLock(pkg)
-                                // 锁定与解锁都短震；系统静音/勿扰时不震
+                                // 锁定与解锁都短震；档位 0 不震，系统静音/勿扰不震
                                 if (shouldVibrate()) {
+                                    val (duration, amplitude) = when (hapticLevel) {
+                                        1 -> 30 to 96
+                                        2 -> 50 to 160
+                                        3 -> 70 to 224
+                                        else -> 90 to 255
+                                    }
                                     vibrator?.vibrate(
                                         android.os.VibrationEffect.createOneShot(
-                                            80,
-                                            255,
+                                            duration.toLong(),
+                                            amplitude,
                                         )
                                     )
                                 }

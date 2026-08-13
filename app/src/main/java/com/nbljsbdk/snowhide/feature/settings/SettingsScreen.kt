@@ -60,6 +60,7 @@ fun SettingsScreen(
     val showToast by settings.showToast.collectAsState()
     val showAppName by settings.showAppName.collectAsState()
     val backToDir by settings.backToLastDir.collectAsState()
+    val hapticLevel by settings.hapticLevel.collectAsState()
     val iconPack by settings.iconPack.collectAsState()
     val transparent by settings.transparentBg.collectAsState()
     val iconPacks by viewModel.iconPacks.collectAsState()
@@ -96,6 +97,17 @@ fun SettingsScreen(
                 SwitchSetting("清理应用后展示 Toast", showToast) { settings.setShowToast(it) }
                 SwitchSetting("显示应用名", showAppName) { settings.setShowAppName(it) }
                 SwitchSetting("退出后回到当前目录", backToDir) { settings.setBackToLastDir(it) }
+            }
+
+            // ── 震动反馈（临时放这里，位置后续再定） ──
+            SettingCard("震动反馈") {
+                SliderSetting(
+                    label = "震感档位：$hapticLevel（0=关闭）",
+                    value = hapticLevel.toFloat(),
+                    range = 0f..4f,
+                    steps = 3,
+                    onValue = { settings.setHapticLevel(it.toInt()) },
+                )
             }
 
             // ── 美化 ──
@@ -162,6 +174,26 @@ private fun SettingCard(title: String, content: @Composable androidx.compose.fou
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(vertical = 4.dp))
             content()
         }
+    }
+}
+
+/** 滑条设置行（5 档内整数档位） */
+@Composable
+private fun SliderSetting(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
+    onValue: (Float) -> Unit,
+) {
+    Column {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        Slider(
+            value = value,
+            onValueChange = onValue,
+            valueRange = range,
+            steps = steps,
+        )
     }
 }
 
