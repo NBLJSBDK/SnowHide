@@ -131,6 +131,9 @@ fun HomeScreen(
     var renameFolder by remember { mutableStateOf<com.nbljsbdk.snowhide.data.model.Folder?>(null) }
     var renameText by remember { mutableStateOf("") }
     var deleteFolderTarget by remember { mutableStateOf<com.nbljsbdk.snowhide.data.model.Folder?>(null) }
+    // 移除应用二级菜单 / 卸载二次确认
+    var removeAppTarget by remember { mutableStateOf<String?>(null) }
+    var uninstallTarget by remember { mutableStateOf<String?>(null) }
 
     // 整理完成 → 关闭整理模式并刷新
     LaunchedEffect(organizeFinished) {
@@ -469,6 +472,47 @@ fun HomeScreen(
         )
     }
 
+    // 移除应用二级菜单（设计文档 §3.4）
+    removeAppTarget?.let { pkg ->
+        AlertDialog(
+            onDismissRequest = { removeAppTarget = null },
+            title = { Text("移除应用") },
+            text = {
+                Column {
+                    DialogAction("是否移除该应用（解冻并移出）") {
+                        viewModel.gridRepository.removeApp(pkg)
+                        removeAppTarget = null
+                        viewModel.refreshFrozenStates()
+                    }
+                    DialogAction("移除并卸载（⚠️ 会删除应用数据）") {
+                        removeAppTarget = null
+                        uninstallTarget = pkg
+                    }
+                    DialogAction("取消") { removeAppTarget = null }
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    // 卸载二次确认（安全特例）
+    uninstallTarget?.let { pkg ->
+        AlertDialog(
+            onDismissRequest = { uninstallTarget = null },
+            title = { Text("确认卸载") },
+            text = { Text("确定要卸载 ${labelOf(pkg)} 吗？\n\n⚠️ 这会删除该应用及其全部数据，且不可恢复。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    viewModel.uninstallApp(pkg)
+                    uninstallTarget = null
+                }) { Text("卸载", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { uninstallTarget = null }) { Text("取消") }
+            },
+        )
+    }
+
     // 长按上下文菜单
     longPressTarget?.let { target ->
         ContextMenu(
@@ -480,7 +524,10 @@ fun HomeScreen(
             onToggleFreeze = { pkg -> viewModel.toggleFreeze(pkg); longPressTarget = null },
             onEnable = { pkg -> viewModel.enableApp(pkg); longPressTarget = null },
             onOpen = { pkg -> viewModel.openApp(pkg); longPressTarget = null },
-            onRemove = { pkg -> viewModel.gridRepository.removeApp(pkg); longPressTarget = null },
+            onRemove = { pkg ->
+                removeAppTarget = pkg
+                longPressTarget = null
+            },
             onRenameFolder = { id ->
                 val folder = folders.find { it.id == id }
                 if (folder != null) {

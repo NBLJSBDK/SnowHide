@@ -33,7 +33,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val engineManager = EngineManager
     val gridRepository = GridRepository
     val settingsRepository = SettingsRepository
-    private val freezeUseCase = FreezeUseCase(FreezeExecutor(engineManager), gridRepository)
+    private val freezeUseCase = FreezeUseCase(FreezeExecutor(engineManager), gridRepository, engineManager)
     private val iconLoader = AppIconLoader(context)
 
     /** 应用显示名（宫格/列表展示） */
@@ -189,6 +189,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 refreshFrozenStates()
                 showMessage(if (frozen) "已解冻" else "已冻结：$pkg")
             }.onFailure { showMessage("操作失败：${it.message}") }
+        }
+    }
+
+    /** ⚠️ 安全特例：移除并卸载（用户明确选择+二次确认后调用） */
+    fun uninstallApp(pkg: String) {
+        viewModelScope.launch {
+            freezeUseCase.uninstallApp(pkg)
+                .onSuccess {
+                    gridRepository.removeApp(pkg)
+                    refreshFrozenStates()
+                    showMessage("已卸载并移除：$pkg")
+                }
+                .onFailure { showMessage("卸载失败：${it.message}") }
         }
     }
 

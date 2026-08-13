@@ -1,5 +1,6 @@
 package com.nbljsbdk.snowhide.domain
 
+import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.core.mode.FreezeMode
 import com.nbljsbdk.snowhide.data.repo.GridRepository
@@ -10,7 +11,23 @@ import com.nbljsbdk.snowhide.data.repo.GridRepository
 class FreezeUseCase(
     private val executor: FreezeExecutor,
     private val gridRepository: GridRepository,
+    private val engineManager: EngineManager,
 ) {
+
+    /**
+     * ⚠️ 安全特例（用户拍板，设计文档 §1 唯一例外）：
+     * 「移除并卸载」——真正卸载应用（删除应用+其数据）。
+     * 仅允许用户在长按菜单明确选择「移除并卸载」并二次确认后调用；
+     * 其余一切操作仍遵守「不删任何应用数据」。
+     * 实现：shell 身份执行 `pm uninstall --user 0 <pkg>`（经 PowerEngine）。
+     */
+    suspend fun uninstallApp(pkg: String): Result<Unit> {
+        val engine = executorEngine() ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        return engine.exec("pm uninstall --user 0 $pkg").map { }
+    }
+
+    private fun executorEngine() =
+        engineManager.primaryEngine.value
 
     /** 冻结单个应用（P0 单模式 FREEZE） */
     suspend fun freezeApp(pkg: String, mode: FreezeMode = FreezeMode.FREEZE): Result<Unit> =
