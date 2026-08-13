@@ -1,5 +1,6 @@
 package com.nbljsbdk.snowhide.feature.organize
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -7,30 +8,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
@@ -38,8 +33,13 @@ import com.nbljsbdk.snowhide.data.model.GridItem
 /**
  * 整理目录底部操作区（无状态 Composable，设计文档 §3.10 状态机）
  *
- * 结构：[上][下][左][右][垃圾桶][文件夹加号] / 文件夹名输入行 / 文件夹内应用横排。
- * 键位灰显规则完全按状态机推导（OrganizeViewModel.OrganizeState）。
+ * 布局自上而下（用户拍板）：
+ *   ① 文件夹名称输入行（选中文件夹时显示，不自动弹输入法）
+ *   ② 文件夹内应用图标横排（选中文件夹时显示）
+ *   ③ 键位行（固定最底）：[上][下][左][右][垃圾桶][+]
+ *
+ * 键位灰显规则按状态机推导（OrganizeViewModel.OrganizeState）：
+ * 垃圾桶仅在选中文件夹时可点，其余按选中目标启用。
  */
 @Composable
 fun OrganizeOverlay(
@@ -65,6 +65,7 @@ fun OrganizeOverlay(
     val canLeftRight = homeAppSelected || folderSelected != null
     val canUp = folderSelected?.subFolderAppPkg != null
     val canDown = folderSelected?.subHomeApp != null
+    val canDelete = folderSelected != null
 
     Column(
         modifier = Modifier
@@ -72,38 +73,20 @@ fun OrganizeOverlay(
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             .padding(8.dp),
     ) {
-        // 键位行
-        Row(
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            OrganizeKeyIcon(R.drawable.ic_arrow_up, enabled = canUp, onClick = onMoveUp)
-            OrganizeKeyIcon(R.drawable.ic_arrow_down, enabled = canDown, onClick = onMoveDown)
-            OrganizeKeyIcon(R.drawable.ic_arrow_left, enabled = canLeftRight, onClick = { onShift(-1) })
-            OrganizeKeyIcon(R.drawable.ic_arrow_right, enabled = canLeftRight, onClick = { onShift(1) })
-            OrganizeKeyIcon(R.drawable.ic_trash, enabled = true, onClick = onDelete)
-            OrganizeKeyIcon(R.drawable.ic_folder_plus, enabled = true, onClick = onCreate)
-        }
-
-        // 文件夹名输入行（③ 时显示，自动聚焦弹键盘）
+        // ① 文件夹名称输入行（最上；不自动聚焦，用户点输入框才弹键盘）
         if (folderSelected != null) {
-            val focusRequester = remember { FocusRequester() }
-            LaunchedEffect(folderSelected.folderId) {
-                focusRequester.requestFocus()
-            }
             OutlinedTextField(
                 value = folderSelected.folderNameInput,
                 onValueChange = onNameChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(focusRequester)
                     .padding(vertical = 4.dp),
                 placeholder = { Text("文件夹名字") },
                 singleLine = true,
             )
         }
 
-        // 文件夹内应用横排（③ 时显示）
+        // ② 文件夹内应用图标横排（中间）
         if (folderSelected != null) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -143,6 +126,19 @@ fun OrganizeOverlay(
                     }
                 }
             }
+        }
+
+        // ③ 键位行（固定最底）：[上][下][左][右][垃圾桶][+]
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OrganizeKeyIcon(R.drawable.ic_arrow_up, enabled = canUp, onClick = onMoveUp)
+            OrganizeKeyIcon(R.drawable.ic_arrow_down, enabled = canDown, onClick = onMoveDown)
+            OrganizeKeyIcon(R.drawable.ic_arrow_left, enabled = canLeftRight, onClick = { onShift(-1) })
+            OrganizeKeyIcon(R.drawable.ic_arrow_right, enabled = canLeftRight, onClick = { onShift(1) })
+            OrganizeKeyIcon(R.drawable.ic_trash, enabled = canDelete, onClick = onDelete)
+            OrganizeKeyIcon(R.drawable.ic_folder_plus, enabled = true, onClick = onCreate)
         }
     }
 }

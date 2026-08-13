@@ -29,17 +29,34 @@ object GridRepository {
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         prefs = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
+        // 数据加载必须放在 prefs 就绪之后（对象初始化时 prefs 尚未就绪，
+        // 之前版本在这里读取导致重启后数据全部加载为空）
+        _gridItems.value = loadGridItems()
+        _folders.value = loadFolders()
+        _folderApps.value = loadFolderApps()
+        // 关键：把 id 种子推进到已有数据最大 id 之上。
+        // 种子默认=当前毫秒，但进程被系统杀掉重启后时间可能回拨
+        // （手动调时间/网络校时），新 id 撞上旧数据 id 会导致
+        // 选中高亮、文件夹成员显示到错误文件夹上。
+        val maxExisting = maxOf(
+            _gridItems.value.maxOfOrNull { it.id } ?: 0L,
+            _folders.value.maxOfOrNull { it.id } ?: 0L,
+            _folderApps.value.maxOfOrNull { it.folderId } ?: 0L,
+        )
+        idCounter.accumulateAndGet(maxExisting) { prev, max ->
+            if (prev > max) prev else max
+        }
     }
 
-    private val _gridItems = MutableStateFlow(loadGridItems())
+    private val _gridItems = MutableStateFlow<List<GridItem>>(emptyList())
     /** 主屏混排项（按 sortOrder 升序） */
     val gridItems: StateFlow<List<GridItem>> = _gridItems.asStateFlow()
 
-    private val _folders = MutableStateFlow(loadFolders())
+    private val _folders = MutableStateFlow<List<Folder>>(emptyList())
     /** 文件夹列表（按 sortOrder 升序，即循环滑动顺序） */
     val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
 
-    private val _folderApps = MutableStateFlow(loadFolderApps())
+    private val _folderApps = MutableStateFlow<List<FolderApp>>(emptyList())
     /** 全部文件夹成员关系（按 sortOrder 升序） */
     val folderApps: StateFlow<List<FolderApp>> = _folderApps.asStateFlow()
 

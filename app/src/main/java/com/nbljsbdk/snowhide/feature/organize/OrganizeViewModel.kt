@@ -155,15 +155,30 @@ class OrganizeViewModel : ViewModel() {
         markDirty()
     }
 
-    /** 创建：新建文件夹并自动聚焦（丢弃 app 选择） */
+    /** 创建：新建文件夹并自动选中（不自动聚焦输入法） */
     fun createFolder() {
-        val name = "文件夹${GridRepository.folders.value.size + 1}"
+        val name = nextFolderName()
         val folder = GridRepository.createFolder(name)
         _state.value = OrganizeState.FolderSelected(
             folderId = folder.id,
             folderNameInput = name,
         )
         markDirty()
+    }
+
+    /**
+     * 新文件夹名：已有名字里「文件夹N」最大编号 +1；
+     * 若该名字已被占用（用户改过名/删过文件夹），继续 +1 直到不重名。
+     */
+    private fun nextFolderName(): String {
+        val regex = Regex("^文件夹(\\d+)$")
+        val maxN = GridRepository.folders.value
+            .mapNotNull { regex.matchEntire(it.name)?.groupValues?.get(1)?.toIntOrNull() }
+            .maxOrNull() ?: 0
+        var n = maxN + 1
+        val names = GridRepository.folders.value.map { it.name }.toSet()
+        while ("文件夹$n" in names) n++
+        return "文件夹$n"
     }
 
     /** 删除：只对选中文件夹，二次确认；未选中时给提示（避免无声灰显） */
