@@ -138,6 +138,11 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // dock 长按上锁震动（用户拍板：上锁成功给个震动）
+    val vibrator = remember {
+        runCatching { context.getSystemService(android.os.Vibrator::class.java) }.getOrNull()
+    }
+
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
     // 文件夹重命名/删除弹窗状态
@@ -432,7 +437,19 @@ fun HomeScreen(
                             iconSize = dockIconSize.dp,
                             onQuickClean = { viewModel.quickClean() },
                             onAppClick = { viewModel.openApp(it) },
-                            onAppLongClick = { pkg -> viewModel.gridRepository.toggleLock(pkg) },
+                            onAppLongClick = { pkg ->
+                                val wasLocked = viewModel.gridRepository.isLocked(pkg)
+                                viewModel.gridRepository.toggleLock(pkg)
+                                if (!wasLocked) {
+                                    // 上锁成功 → 短震动
+                                    vibrator?.vibrate(
+                                        android.os.VibrationEffect.createOneShot(
+                                            40,
+                                            android.os.VibrationEffect.DEFAULT_AMPLITUDE
+                                        )
+                                    )
+                                }
+                            },
                             onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
                         )
                     }
