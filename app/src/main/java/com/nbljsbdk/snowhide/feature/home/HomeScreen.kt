@@ -231,6 +231,23 @@ fun HomeScreen(
         if (engineReady) viewModel.refreshFrozenStates()
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 透明背景：铺桌面壁纸 + 半透明白遮罩（保证图标/文字可读，用户拍板方案）
+        val wallpaper by viewModel.wallpaper.collectAsState()
+        val wp = wallpaper
+        if (transparentBg && wp != null) {
+            androidx.compose.foundation.Image(
+                bitmap = wp,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.82f)),
+            )
+        }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -291,7 +308,8 @@ fun HomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+                    else MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground,
                 ),
             )
@@ -303,7 +321,8 @@ fun HomeScreen(
                 modifier = Modifier.padding(bottom = dockIconSize.dp + 20.dp),
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+        else MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         // ═══════════════════════════════════════
         // 循环滑动（设计文档 §3.2）：
@@ -586,6 +605,7 @@ fun HomeScreen(
             )
         }
         }
+    }
     }
 
     // 增加/移除应用界面（全屏覆盖，设计文档 §3.8）

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
@@ -48,6 +49,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** 图标缓存（pkg → 图标） */
     private val _icons = MutableStateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap())
     val icons: StateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>> = _icons.asStateFlow()
+
+    /** Bitmap → Compose ImageBitmap（全限定名，与文件风格一致） */
+    private fun android.graphics.Bitmap.asImageBitmapCompat(): androidx.compose.ui.graphics.ImageBitmap =
+        asImageBitmap()
 
     /**
      * 图标加载完成队列（性能：100+ 应用逐个更新 _icons 会触发
@@ -146,11 +151,42 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _shizukuRunning = MutableStateFlow(EngineManager.shizukuBinderConnected.value)
     val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
 
+    /** 系统壁纸（透明背景用，缩放屏幕尺寸） */
+    private val _wallpaper = MutableStateFlow<androidx.compose.ui.graphics.ImageBitmap?>(null)
+    val wallpaper: StateFlow<androidx.compose.ui.graphics.ImageBitmap?> = _wallpaper.asStateFlow()
+
     init {
         startIconFlusher()
         AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
-        // 启动预热图标包 appfilter 解析（否则首图标触发时阻塞 2 秒）
-        viewModelScope.launch { AppIconLoader.prewarm() }
+        // 后台加载系统壁纸（透明背景显示用）
+        viewModelScope.launch {
+            _wallpaper.value = runCatching {
+                val dm = context.resources.displayMetrics
+                val drawable = android.app.WallpaperManager.getInstance(context).drawable
+                    ?: return@runCatching null
+                val w = dm.widthPixels
+                val h = dm.heightPixels
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888,
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                drawable.setBounds(0, 0, bitmap.width, bitmap.height)
+                drawable.draw(canvas)
+                // 缩放到屏幕尺寸（ColorOS 壁纸可能超大）
+                val scaled = if (bitmap.width > w || bitmap.height > h) {
+                    val ratio = maxOf(w.toFloat() / bitmap.width, h.toFloat() / bitmap.height)
+                    android.graphics.Bitmap.createScaledBitmap(
+                        bitmap,
+                        (bitmap.width * ratio).toInt(),
+                        (bitmap.height * ratio).toInt(),
+                        true,
+                    )
+                } else bitmap
+                scaled.asImageBitmapCompat()
+            }.getOrNull()
+        }
         // 订阅宫格数据变化：新加入的应用自动加载图标 + 刷新中文名
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(

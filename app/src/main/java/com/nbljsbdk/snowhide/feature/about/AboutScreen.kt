@@ -3,6 +3,7 @@ package com.nbljsbdk.snowhide.feature.about
 import android.app.Application
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -71,6 +72,24 @@ fun AboutScreen(
     // 彩蛋点击计数 + 警告弹窗
     var tapCount by remember { mutableIntStateOf(0) }
     var showWarning by remember { mutableStateOf(false) }
+
+    // 一键申请权限：依次弹出未授予的运行时权限（用户拍板）
+    val permissionLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { }
+    fun requestMissingPermissions() {
+        val permissions = arrayOf(
+            android.Manifest.permission.POST_NOTIFICATIONS,
+        )
+        val missing = permissions.filter {
+            context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) {
+            permissionLauncher.launch(missing.toTypedArray())
+        } else {
+            Toast.makeText(context, "权限都已授予", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // 神之一手（临时调试）：解冻设备上全部已冻结应用
     val godHandScope = rememberCoroutineScope()
@@ -175,6 +194,13 @@ fun AboutScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // 一键申请权限：依次弹出未授予的运行时权限（用户拍板）
+            TextButton(
+                onClick = { requestMissingPermissions() },
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text("一键申请权限", style = MaterialTheme.typography.labelLarge)
+            }
             Spacer(modifier = Modifier.height(24.dp))
             // ═══════════════════════════════════
             // 神之一手（正式功能：解冻全部已冻结应用，含系统/未列表应用）

@@ -15,6 +15,9 @@
     <!-- 快捷方式执行结果通知（Android 13+ 运行时申请） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 开机自启动（锁屏自动清理：开机后注册息屏广播） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -46,12 +49,15 @@
             android:taskAffinity="com.nbljsbdk.snowhide.shortcut"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- 锁屏自动清理：闹钟触发接收器（静态注册，进程被杀后闹钟仍能唤醒执行） -->
+        <!-- 锁屏自动清理：闹钟触发 + 开机自启动接收器（静态注册，进程被杀后闹钟仍能唤醒执行） -->
         <receiver
             android:name=".service.LockCleanReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.nbljsbdk.snowhide.action.LOCK_CLEAN" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

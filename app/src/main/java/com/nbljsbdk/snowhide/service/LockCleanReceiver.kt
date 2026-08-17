@@ -39,6 +39,10 @@ class LockCleanReceiver : BroadcastReceiver() {
             Intent.ACTION_SCREEN_OFF -> onScreenOff(context)
             Intent.ACTION_USER_PRESENT -> cancelAlarm(context)
             ACTION_LOCK_CLEAN -> onAlarm(context)
+            Intent.ACTION_BOOT_COMPLETED -> {
+                // 开机自启动：注册息屏/解锁广播（进程存活期间锁屏清理生效）
+                register(context)
+            }
         }
     }
 
