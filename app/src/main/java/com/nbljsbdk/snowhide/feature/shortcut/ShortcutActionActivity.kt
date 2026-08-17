@@ -99,7 +99,7 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
                     Spacer(modifier = Modifier.height(10.dp))
                     if (progress != null) {
                         Text(
-                            text = label?.let { "正在$it…" } ?: "执行中…",
+                            text = label?.let { "正在$it" } ?: "执行中…",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

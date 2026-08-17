@@ -23,14 +23,19 @@ object BatchProgress {
     /** 批量是否进行中（防重复点击） */
     val active: Boolean get() = _progress.value != null
 
+    /** 当前操作动词（update 组装文案用） */
+    private var currentVerb: String = ""
+
     /** 开始批量：总目标数 + 动作动词（如「停用」） */
     fun begin(total: Int, verb: String) {
-        _label.value = verb
+        currentVerb = verb
+        _label.value = "$verb: 0/$total"
         _progress.value = 0f
     }
 
-    /** 更新已完成数量（完成 n/total，进度条平滑 +1） */
+    /** 更新已完成数量（完成 n/total，进度条平滑 +1，文案「停用: 45/130」） */
     fun update(done: Int, total: Int) {
+        _label.value = "$currentVerb: $done/$total"
         _progress.value = if (total <= 0) 1f else (done.toFloat() / total).coerceIn(0f, 1f)
     }
 
