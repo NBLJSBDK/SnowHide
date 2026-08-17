@@ -109,7 +109,8 @@ fun FolderScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
         ) {
-            items(memberPackages, key = { it }) { pkg ->
+            // distinct 兜底：历史数据可能同文件夹重复 pkg（LazyGrid key 崩溃防御）
+            items(memberPackages.distinct(), key = { it }) { pkg ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier

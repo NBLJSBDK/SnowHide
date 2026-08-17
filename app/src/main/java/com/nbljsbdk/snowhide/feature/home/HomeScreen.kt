@@ -401,9 +401,10 @@ fun HomeScreen(
                             gridItems.sortedBy { it.sortOrder }
                         } else {
                             // 搜索范围 = 主屏项 + 文件夹内应用（文件夹成员也能搜到，结果点击直接打开）
-                            val memberItems = folderApps.map { fa ->
+                            // 成员 id 用负数索引绝对唯一（hash 32 位会碰撞导致 LazyGrid key 重复崩溃）
+                            val memberItems = folderApps.mapIndexed { index, fa ->
                                 GridItem(
-                                    id = (fa.folderId shl 32) xor fa.pkg.hashCode().toLong(),
+                                    id = Long.MIN_VALUE + index,
                                     type = "app",
                                     pkg = fa.pkg,
                                     sortOrder = Int.MAX_VALUE,

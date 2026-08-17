@@ -34,6 +34,17 @@ object GridRepository {
         _gridItems.value = loadGridItems()
         _folders.value = loadFolders()
         _folderApps.value = loadFolderApps()
+        // 清理历史重复的文件夹成员（同文件夹同 pkg 只保留 sortOrder 最小的——
+        // 重复会导致 FolderScreen LazyGrid key 崩溃，真机实锤）
+        val cleanedApps = _folderApps.value
+            .groupBy { it.folderId to it.pkg }
+            .mapValues { (_, list) -> list.minByOrNull { it.sortOrder }!! }
+            .values
+            .toList()
+        if (cleanedApps.size != _folderApps.value.size) {
+            _folderApps.value = cleanedApps
+            persistFolderApps()
+        }
         // 锁定集：独立存储（覆盖文件夹内应用）；旧版 GridItem.locked=true 迁移进来
         val migratedLocked = _gridItems.value.filter { it.locked }.mapNotNull { it.pkg }
         _lockedPackages.value = loadLockedPackages() + migratedLocked
@@ -194,6 +205,12 @@ object GridRepository {
     /** 上/下跨区转移：主屏 app 加入文件夹最后（下键） */
     fun moveAppToFolder(pkg: String, folderId: Long) {
         _gridItems.value = _gridItems.value.filterNot { it.pkg == pkg }
+        // 防重：目标文件夹已存在该成员则跳过（重复 pkg 会导致
+        // FolderScreen 的 LazyGrid key 重复崩溃，真机实锤）
+        if (_folderApps.value.any { it.folderId == folderId && it.pkg == pkg }) {
+            persist()
+            return
+        }
         val members = _folderApps.value.filter { it.folderId == folderId }
         _folderApps.value = _folderApps.value + FolderApp(
             folderId = folderId,
@@ -292,6 +309,16 @@ object GridRepository {
             .putString(KEY_FOLDERS, toJson(_folders.value) { obj, folder ->
                 obj.put("id", folder.id).put("name", folder.name).put("sortOrder", folder.sortOrder)
             })
+            .putString(KEY_FOLDER_APPS, toJson(_folderApps.value) { obj, fa ->
+                obj.put("folderId", fa.folderId).put("pkg", fa.pkg).put("sortOrder", fa.sortOrder)
+            })
+            .apply()
+    }
+
+    /** 仅持久化文件夹成员（init 清理重复后调用） */
+    private fun persistFolderApps() {
+        if (!::prefs.isInitialized) return
+        prefs.edit()
             .putString(KEY_FOLDER_APPS, toJson(_folderApps.value) { obj, fa ->
                 obj.put("folderId", fa.folderId).put("pkg", fa.pkg).put("sortOrder", fa.sortOrder)
             })

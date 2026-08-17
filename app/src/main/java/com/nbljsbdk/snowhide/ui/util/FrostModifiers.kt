@@ -34,37 +34,42 @@ enum class FreezeStyle {
  *
  * [frosted]：已冻结内容按 [style] 蒙滤镜 + 半透明 + 300ms 渐变过渡。
  * NONE = 真正原色（连透明度都不动，完全原样）。
+ * 性能：解冻或原色时**直接返回不进入 composed**——
+ * 避免大列表滑动时每个 item 创建 Animatable（真机 38% jank 实锤）。
  * 实现：drawWithCache 里给内容层套 ColorMatrix 滤镜
  * （graphicsLayer 不支持 colorFilter），alpha 用 graphicsLayer。
  */
 fun Modifier.frosted(
     enabled: Boolean,
     style: FreezeStyle = FreezeStyle.BLUE,
-): Modifier = composed {
-    val progress by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0f,
-        label = "frost",
-    )
-    if (progress <= 0f || style == FreezeStyle.NONE) {
-        // NONE：真正原色，完全无遮罩
-        this
-    } else {
-        val alphaLayer = graphicsLayer {
-            alpha = 1f - 0.4f * progress // 透明度降至 60%
-        }
-        val matrix = matrixFor(style)
-        if (matrix == null) {
-            alphaLayer
+): Modifier {
+    // 解冻或原色：完全无视觉变化，零开销直接返回
+    if (!enabled || style == FreezeStyle.NONE) return this
+    return composed {
+        val progress by animateFloatAsState(
+            targetValue = if (enabled) 1f else 0f,
+            label = "frost",
+        )
+        if (progress <= 0f) {
+            this
         } else {
-            alphaLayer.drawWithCache {
-                val paint = Paint().apply {
-                    colorFilter = ColorFilter.colorMatrix(matrix)
-                }
-                onDrawWithContent {
-                    drawIntoCanvas { canvas ->
-                        canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
-                        drawContent()
-                        canvas.restore()
+            val alphaLayer = graphicsLayer {
+                alpha = 1f - 0.4f * progress // 透明度降至 60%
+            }
+            val matrix = matrixFor(style)
+            if (matrix == null) {
+                alphaLayer
+            } else {
+                alphaLayer.drawWithCache {
+                    val paint = Paint().apply {
+                        colorFilter = ColorFilter.colorMatrix(matrix)
+                    }
+                    onDrawWithContent {
+                        drawIntoCanvas { canvas ->
+                            canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
+                            drawContent()
+                            canvas.restore()
+                        }
                     }
                 }
             }
