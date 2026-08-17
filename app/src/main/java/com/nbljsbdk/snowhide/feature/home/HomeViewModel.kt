@@ -270,6 +270,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 智能清理：停用底部栏所有打开应用（除锁定） */
     fun quickClean() {
+        if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.quickClean()
                 .onSuccess { n ->
@@ -282,6 +283,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 启用全部 */
     fun unfreezeAll() {
+        if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.unfreezeAll()
                 .onSuccess { n -> refreshFrozenStates(); showMessage("已启用 $n 个应用") }
@@ -291,6 +293,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 停用全部（用户拍板：连锁定的也冻结——与智能清理豁免锁定区分开） */
     fun freezeAll() {
+        if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = false)
                 .onSuccess { n -> refreshFrozenStates(); showMessage("已停用 $n 个应用") }

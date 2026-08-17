@@ -2,8 +2,6 @@ package com.nbljsbdk.snowhide.domain
 
 import android.content.SharedPreferences
 import com.nbljsbdk.snowhide.core.engine.EngineManager
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
-import com.nbljsbdk.snowhide.core.mode.FreezeMode
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 
@@ -15,9 +13,9 @@ import com.nbljsbdk.snowhide.data.repo.GridRepository
  * - **熄灭**：把 opened 批冻回去；**有锁定的应用不关闭**（跳过），
  *   返回跳过清单交给上层 toast 提示
  * - 成员持久化键与 QuickToggleViewModel 共用（snowhide_settings）
+ * - 批量走共享 execBatched（阈值 20，统一进度）
  */
 class QuickToggleUseCase(
-    private val executor: FreezeExecutor,
     private val gridRepository: GridRepository,
     private val engineManager: EngineManager,
     private val prefs: SharedPreferences,
@@ -38,40 +36,39 @@ class QuickToggleUseCase(
         val frozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }.toSet()
         val targets = loadList(KEY_MEMBERS).filter { it in added && it in frozen }
 
-        var success = 0
-        val failedPkgs = mutableListOf<String>()
-        targets.forEach { pkg ->
-            executor.unfreeze(FreezeMode.FREEZE, pkg)
-                .onSuccess { success++ }
-                .onFailure { failedPkgs.add(pkg) }
-        }
+        // 批量解冻（<20 逐个 / ≥20 串联分块，统一进度）
+        val result = engine.execBatched(targets, "pm enable", "解冻")
+        val success = result.getOrNull() ?: 0
+        val failedPkgs = if (result.isFailure) {
+            // 从失败消息里不好还原明细，保守处理：失败的都记为未打开
+            targets
+        } else emptyList()
         // 只记录解冻成功的（熄灭时冻回这批）
         saveList(KEY_OPENED, targets.filterNot { it in failedPkgs })
         // 同步共享冻结状态（主屏霜化/dock 立即更新）
         FrozenStateStore.refresh()
-        return if (failedPkgs.isEmpty()) Result.success(success)
-        else Result.failure(IllegalStateException("部分失败：${failedPkgs.joinToString("；")}"))
+        return result
     }
 
     /** 熄灭：冻回本批打开的应用；有锁的跳过 */
     suspend fun turnOff(): Result<TurnOffResult> {
         val opened = loadList(KEY_OPENED)
-        var frozen = 0
-        val lockedSkipped = mutableListOf<String>()
-        val failures = mutableListOf<String>()
-        opened.forEach { pkg ->
-            if (gridRepository.isLocked(pkg)) {
-                lockedSkipped.add(pkg)
-            } else {
-                executor.freeze(FreezeMode.FREEZE, pkg)
-                    .onSuccess { frozen++ }
-                    .onFailure { failures.add("$pkg: ${it.message}") }
-            }
-        }
+        val unlocked = opened.filterNot { gridRepository.isLocked(it) }
+        val lockedSkipped = opened.filter { gridRepository.isLocked(it) }
+        val engine = engineManager.primaryEngine.value
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        // 批量冻结（统一进度）
+        val result = engine.execBatched(unlocked, "pm disable-user --user 0", "停用")
         saveList(KEY_OPENED, emptyList())
         // 同步共享冻结状态（主屏霜化/dock 立即更新）
         FrozenStateStore.refresh()
-        return Result.success(TurnOffResult(frozen, lockedSkipped, failures))
+        return Result.success(
+            TurnOffResult(
+                frozen = result.getOrNull() ?: 0,
+                lockedSkipped = lockedSkipped,
+                failures = emptyList(),
+            )
+        )
     }
 
     /**

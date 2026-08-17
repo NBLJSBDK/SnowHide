@@ -9,7 +9,6 @@ import android.service.quicksettings.TileService
 import android.widget.Toast
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.core.engine.EngineManager
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
 import kotlinx.coroutines.runBlocking
@@ -26,7 +25,6 @@ class QuickToggleTileService : TileService() {
 
     private val useCase by lazy {
         QuickToggleUseCase(
-            FreezeExecutor(EngineManager),
             GridRepository,
             EngineManager,
             applicationContext.getSharedPreferences("snowhide_settings", android.content.Context.MODE_PRIVATE),

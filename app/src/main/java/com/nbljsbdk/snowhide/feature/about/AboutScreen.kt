@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -167,10 +170,34 @@ fun AboutScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
             // ═══════════════════════════════════
-            // 神之一手（临时调试：解冻全部已冻结应用，含系统/未列表应用）
-            // 之后可能注释掉不用
+            // 神之一手（正式功能：解冻全部已冻结应用，含系统/未列表应用）
             // ═══════════════════════════════════
+            // 批量进度条（神之一手应用最多最卡，进度保护）
+            val batchProgress by com.nbljsbdk.snowhide.data.repo.BatchProgress.progress.collectAsState()
+            val batchLabel by com.nbljsbdk.snowhide.data.repo.BatchProgress.label.collectAsState()
+            if (batchProgress != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = "批量$batchLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { batchProgress ?: 0f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                    )
+                }
+            }
             TextButton(
+                // 批量进行中防重复点击
+                enabled = !com.nbljsbdk.snowhide.data.repo.BatchProgress.active,
                 onClick = {
                     godHandScope.launch {
                         godHandMessage = godHandUseCase.unfreezeEverything().fold(

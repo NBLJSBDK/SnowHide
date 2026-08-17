@@ -36,6 +36,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -488,6 +489,31 @@ fun HomeScreen(
                     onAppLongClick = { item -> longPressTarget = item },
                     onAppLabel = { pkg -> labels[pkg] ?: "" },
                     onBlankLongPress = { blankMenuOpen = true },
+                )
+            }
+        }
+
+        // 批量操作进度条（停用/启用全部、智能清理、神之一手、快速启停）
+        val batchProgress by com.nbljsbdk.snowhide.data.repo.BatchProgress.progress.collectAsState()
+        val batchLabel by com.nbljsbdk.snowhide.data.repo.BatchProgress.label.collectAsState()
+        if (batchProgress != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    text = "批量$batchLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LinearProgressIndicator(
+                    progress = { batchProgress ?: 0f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp)),
                 )
             }
         }

@@ -43,7 +43,6 @@ class ShortcutActionActivity : Activity() {
         val appContext = applicationContext
         val freezeUseCase = FreezeUseCase(FreezeExecutor(EngineManager), GridRepository, EngineManager)
         val quickToggle = QuickToggleUseCase(
-            FreezeExecutor(EngineManager),
             GridRepository,
             EngineManager,
             getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE),

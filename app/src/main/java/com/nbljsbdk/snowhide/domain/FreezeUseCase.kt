@@ -47,8 +47,8 @@ class FreezeUseCase(
      * @param exceptLocked 是否豁免锁定应用
      * @return 成功冻结数量
      *
-     * 性能：命令 `;` 串联分块（每批 40 个）一次 exec——避免逐个起
-     * sh 进程，100+ 应用批量操作不再卡死/ANR（pm 不支持多包名参数）。
+     * 性能：≥20 个走 `;` 串联分块（每批 40）一次 exec——避免逐个起
+     * sh 进程，100+ 应用批量操作不再卡死/ANR。
      */
     suspend fun freezeAll(
         onlyFolderId: Long? = null,
@@ -66,7 +66,7 @@ class FreezeUseCase(
             targets.filterNot { gridRepository.isLocked(it) }
         } else targets
         if (filtered.isEmpty()) return Result.success(0)
-        return execBatched(engine, filtered, "pm disable-user --user 0") { "冻结" }
+        return engine.execBatched(filtered, "pm disable-user --user 0", "停用")
     }
 
     /** 一键解冻全部已添加应用（齿轮菜单「启用全部」，全部解冻兜底） */
@@ -75,42 +75,12 @@ class FreezeUseCase(
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         val targets = gridRepository.allAddedPackages()
         if (targets.isEmpty()) return Result.success(0)
-        return execBatched(engine, targets, "pm enable") { "启用" }
-    }
-
-    /**
-     * 批量执行同一 pm 命令（`;` 串联分块，单次 exec）。
-     * 分块上限 40：单条命令过长可能被 shell/系统截断。
-     */
-    private suspend fun execBatched(
-        engine: com.nbljsbdk.snowhide.core.engine.PowerEngine,
-        pkgs: List<String>,
-        pmPrefix: String,
-        actionName: (Int) -> String,
-    ): Result<Int> {
-        var success = 0
-        val failures = mutableListOf<String>()
-        pkgs.chunked(40).forEach { chunk ->
-            val cmd = chunk.joinToString("; ") { "$pmPrefix $it" }
-            engine.exec(cmd).onFailure { e ->
-                // 整块失败：逐个重试定位失败项（保留粒度）
-                chunk.forEach { pkg ->
-                    engine.exec("$pmPrefix $pkg")
-                        .onSuccess { success++ }
-                        .onFailure { failures.add("$pkg: ${it.message}") }
-                }
-            }.onSuccess { success += chunk.size }
-        }
-        return if (failures.isEmpty()) Result.success(success)
-        else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
+        return engine.execBatched(targets, "pm enable", "启用")
     }
 
     /**
      * 智能清理（底部图标栏最右按钮）：停用全部未锁定且未冻结的应用
-     * 设计文档 §3.6
-     *
-     * 性能：冻结状态一次批量查询；冻结命令用 `;` 串联成**一次** exec
-     * （pm 不接受多包名参数，但 sh 串联可行），避免逐个执行卡顿。
+     * 设计文档 §3.6；走统一批量入口（分块+进度）。
      */
     suspend fun quickClean(): Result<Int> {
         val engine = executorEngine()
@@ -119,28 +89,19 @@ class FreezeUseCase(
         val targets = gridRepository.allAddedPackages()
             .filter { !gridRepository.isLocked(it) && it !in frozenSet }
         if (targets.isEmpty()) return Result.success(0)
-        val cmd = targets.joinToString("; ") { "pm disable-user --user 0 $it" }
-        return engine.exec(cmd).map { targets.size }
+        return engine.execBatched(targets, "pm disable-user --user 0", "停用")
     }
 
     /**
-     * ⚠️ 神之一手（关于页临时调试按钮，之后可能注释掉不用）
-     *
+     * ⚠️ 神之一手（关于页，正式功能，用户拍板优先级最高）：
      * 解冻设备上**全部**已冻结应用——包括未加入列表的应用与系统应用。
-     * 数据源 `pm list packages -d`，逐个 `pm enable`。
+     * 数据源 `pm list packages -d`，走统一批量入口（分块+进度，最卡场景优先保护）。
      */
     suspend fun unfreezeEverything(): Result<Int> {
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         val frozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }
-        var success = 0
-        val failures = mutableListOf<String>()
-        frozen.forEach { pkg ->
-            executor.unfreeze(FreezeMode.FREEZE, pkg)
-                .onSuccess { success++ }
-                .onFailure { failures.add("$pkg: ${it.message}") }
-        }
-        return if (failures.isEmpty()) Result.success(success)
-        else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
+        if (frozen.isEmpty()) return Result.success(0)
+        return engine.execBatched(frozen, "pm enable", "解冻")
     }
 }
