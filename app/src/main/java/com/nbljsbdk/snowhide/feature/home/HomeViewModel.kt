@@ -149,6 +149,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         startIconFlusher()
         AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
+        // 启动预热图标包 appfilter 解析（否则首图标触发时阻塞 2 秒）
+        viewModelScope.launch { AppIconLoader.prewarm() }
         // 订阅宫格数据变化：新加入的应用自动加载图标 + 刷新中文名
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(

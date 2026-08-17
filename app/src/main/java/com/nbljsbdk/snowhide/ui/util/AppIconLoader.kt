@@ -48,6 +48,9 @@ object AppIconLoader {
     /** 已解析的 appfilter 映射缓存（图标包 → component→drawable 名） */
     private val appFilterCache = mutableMapOf<String, Map<String, String>>()
 
+    /** drawable 名 → 资源 ID 缓存（getIdentifier 是 IPC，113 次很慢） */
+    private val resIdCache = mutableMapOf<String, Int>()
+
     /** appfilter 扫描结果缓存（避免每次全量遍历已装包） */
     private var scannedPacks: List<IconPackInfo>? = null
 
@@ -71,7 +74,22 @@ object AppIconLoader {
     fun clearCache() {
         cache.clear()
         appFilterCache.clear()
+        resIdCache.clear()
         scannedPacks = null
+    }
+
+    /**
+     * 启动预热（HomeViewModel init 调用）：后台解析当前图标包的
+     * appfilter——否则首图标触发时 synchronized 阻塞 2 秒，图标逐个
+     * 慢慢出现 + 期间滑动卡顿。
+     */
+    suspend fun prewarm() = withContext(Dispatchers.IO) {
+        if (iconPackPkg.isEmpty()) return@withContext
+        runCatching {
+            val packContext = context.createPackageContext(iconPackPkg, restrictedFlags())
+            appFilterMap(packContext)
+            android.util.Log.d("SnowHideIcon", "prewarm done (${appFilterCache[iconPackPkg]?.size} entries)")
+        }
     }
 
     /** 只清除图标包扫描缓存（手动刷新列表用，不清图标缓存） */
@@ -221,7 +239,9 @@ object AppIconLoader {
             android.util.Log.d("SnowHideIcon", "no match ${pkg} (map=${map.size})")
             return@runCatching null
         }
-        val id = packContext.resources.getIdentifier(drawableName, "drawable", iconPackPkg)
+        val id = resIdCache.getOrPut(drawableName) {
+            packContext.resources.getIdentifier(drawableName, "drawable", iconPackPkg)
+        }
         if (id == 0) {
             android.util.Log.d("SnowHideIcon", "no res ${pkg} -> $drawableName")
             return@runCatching null
@@ -239,8 +259,21 @@ object AppIconLoader {
             }
         }.getOrNull()
         android.util.Log.d("SnowHideIcon", "icon ok ${pkg} -> $drawableName")
-        bitmap?.asImageBitmap()
+        bitmap?.let { scaleIcon(it) }?.asImageBitmap()
     }.getOrNull()
+
+    /** 统一缩放图标（图标包资源是 xxxhdpi 大图，113 个原始纹理滑动卡顿——缩到 256px 内） */
+    private fun scaleIcon(bitmap: Bitmap): Bitmap {
+        val target = 256
+        if (bitmap.width <= target && bitmap.height <= target) return bitmap
+        val ratio = target.toFloat() / maxOf(bitmap.width, bitmap.height)
+        return Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * ratio).toInt(),
+            (bitmap.height * ratio).toInt(),
+            true,
+        )
+    }
 
     /**
      * appfilter 映射（单例同步解析——113 个并发 loadIcon 同时
@@ -287,7 +320,7 @@ object AppIconLoader {
         return map
     }
 
-    /** 系统默认图标（回退） */
+    /** 系统默认图标（回退，统一缩放防滑动卡顿） */
     private fun loadSystemIcon(pkg: String): ImageBitmap {
         val drawable = runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
         val bitmap = (drawable as? BitmapDrawable)?.bitmap ?: runCatching {
@@ -303,7 +336,7 @@ object AppIconLoader {
                 }
             }
         }.getOrNull()
-        return bitmap?.asImageBitmap() ?: fallbackIcon()
+        return bitmap?.let { scaleIcon(it) }?.asImageBitmap() ?: fallbackIcon()
     }
 
     /** 兜底占位图标（浅色圆块） */
