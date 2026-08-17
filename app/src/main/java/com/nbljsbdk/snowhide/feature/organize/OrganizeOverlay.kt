@@ -168,7 +168,7 @@ fun OrganizeOverlay(
                                     .background(
                                         if (folderSelected.subFolderAppPkg == pkg)
                                             MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                                        else MaterialTheme.colorScheme.surface,
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                     ),
                             ) {
                                 icons[pkg]?.let { bmp ->

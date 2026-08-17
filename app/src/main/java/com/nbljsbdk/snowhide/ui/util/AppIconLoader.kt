@@ -140,7 +140,7 @@ object AppIconLoader {
     /** 兜底占位图标（灰色圆块） */
     private fun fallbackIcon(): ImageBitmap {
         val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(0xFFC9D8E8.toInt())
+        bitmap.eraseColor(0xFFD8E4F1.toInt())
         return bitmap.asImageBitmap()
     }
 

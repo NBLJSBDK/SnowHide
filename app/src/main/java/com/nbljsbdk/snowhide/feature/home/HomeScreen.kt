@@ -77,6 +77,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -220,7 +221,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (organizing) "整理目录" else "雪藏",
+                        text = if (organizing) "整理目录" else stringResource(com.nbljsbdk.snowhide.R.string.app_name),
                         fontWeight = FontWeight.Bold,
                     )
                 },
@@ -854,7 +855,7 @@ private fun AppCell(
                     modifier = Modifier
                         .size(size)
                         .clip(RoundedCornerShape(size.value * 0.22f))
-                        .background(androidx.compose.ui.graphics.Color(0xFFC9D8E8)),
+                        .background(androidx.compose.ui.graphics.Color(0xFFD8E4F1)),
                 )
             }
             if (frozen) {
