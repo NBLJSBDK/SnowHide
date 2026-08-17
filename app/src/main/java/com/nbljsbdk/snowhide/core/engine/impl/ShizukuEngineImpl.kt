@@ -9,6 +9,7 @@ import android.os.Parcel
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -79,18 +80,23 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
      * 不能在每次 exec 时 bind/unbind：Shizuku 库的连接集合在多线程
      * 并发 add/remove 时会抛 ConcurrentModificationException
      * （真机「启用全部」循环连续 exec 时崩溃实锤，13.1.5 库内部问题）。
+     *
+     * ⚠️ 线程：`binder.transact` 是**同步** Binder 调用（sh 进程跑完
+     * 才返回，批量 40 个 pm 命令需数秒）——必须在 IO 线程执行，
+     * 否则主线程阻塞 5s+ 触发 ANR（真机实锤：批量操作卡死）。
      */
-    private suspend fun execViaUserService(cmd: String): String {
-        var binder = awaitBinder()
-        return try {
-            transact(binder, cmd)
-        } catch (e: android.os.DeadObjectException) {
-            // binder 已死（server 重启等）：清缓存重建连接后重试一次
-            cachedBinder = null
-            binder = awaitBinder()
-            transact(binder, cmd)
+    private suspend fun execViaUserService(cmd: String): String =
+        withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var binder = awaitBinder()
+            try {
+                transact(binder, cmd)
+            } catch (e: android.os.DeadObjectException) {
+                // binder 已死（server 重启等）：清缓存重建连接后重试一次
+                cachedBinder = null
+                binder = awaitBinder()
+                transact(binder, cmd)
+            }
         }
-    }
 
     /** 常驻连接 binder（绑定失败/断开时清空） */
     @Volatile private var cachedBinder: IBinder? = null
