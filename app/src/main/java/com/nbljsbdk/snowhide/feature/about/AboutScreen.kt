@@ -159,7 +159,8 @@ fun AboutScreen(
                 text = "• Shizuku（API_V23）：以 shell 身份执行冻结/解冻命令\n" +
                     "• 查询已装应用：增删应用界面显示应用列表\n" +
                     "• 通知：快捷方式执行失败时提示（成功用 Toast）\n" +
-                    "• 震动：底部栏锁定/解锁反馈（受系统静音控制）",
+                    "• 震动：底部栏锁定/解锁反馈（受系统静音控制）\n" +
+                    "• 自启动/后台运行：请在系统设置中允许（锁屏清理等后台功能需要）",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

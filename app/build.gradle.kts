@@ -8,8 +8,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// 对外版本号使用构建日期（YYMMDD，如 260813），每次构建自动生成
-val buildDate: String = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
+// 对外版本号使用构建日期时间（YYMMDDHHmm，如 2608132319），每次构建自动生成
+val buildDate: String = SimpleDateFormat("yyMMddHHmm", Locale.US).format(Date())
 
 // 从 local.properties 加载签名信息（此文件在 .gitignore 中，不上传仓库）
 val localProps = Properties()

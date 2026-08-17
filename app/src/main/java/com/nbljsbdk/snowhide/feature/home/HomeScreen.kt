@@ -70,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -126,6 +127,7 @@ fun HomeScreen(
     val iconSize by viewModel.settingsRepository.iconSize.collectAsState()
     val verticalSpace by viewModel.settingsRepository.verticalSpace.collectAsState()
     val dockIconSize by viewModel.settingsRepository.dockIconSize.collectAsState()
+    val folderPreview by viewModel.settingsRepository.folderPreview.collectAsState()
     val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
     val message by viewModel.message.collectAsState()
     val menuOpen by viewModel.menuOpen.collectAsState()
@@ -409,10 +411,11 @@ fun HomeScreen(
                                                 .filter { it.folderId == folder.id }
                                                 .sortedBy { it.sortOrder }
                                                 .map { it.pkg }
-                                                .take(4),
+                                                .take(if (folderPreview >= 3) 9 else 4),
                                             icons = icons,
                                             frozenStates = frozenStates,
                                             freezeStyle = freezeStyle,
+                                            previewSize = folderPreview,
                                             selected = organizing &&
                                                 organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
                                                 (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
@@ -563,16 +566,29 @@ fun HomeScreen(
         AboutScreen(onClose = { viewModel.closeAbout() })
     }
 
-    // 文件夹重命名对话框
+    // 文件夹重命名对话框（自动聚焦+全选原名，用户拍板）
     renameFolder?.let { folder ->
+        val renameFocusRequester = remember { FocusRequester() }
+        var renameSelectAll by remember(folder.id) { mutableStateOf(true) }
+        LaunchedEffect(folder.id) { renameFocusRequester.requestFocus() }
         AlertDialog(
             onDismissRequest = { renameFolder = null },
             title = { Text("重命名文件夹") },
             text = {
                 OutlinedTextField(
-                    value = renameText,
-                    onValueChange = { renameText = it },
+                    value = androidx.compose.ui.text.input.TextFieldValue(
+                        renameText,
+                        selection = if (renameSelectAll) androidx.compose.ui.text.TextRange(0, renameText.length)
+                        else androidx.compose.ui.text.TextRange(renameText.length),
+                    ),
+                    onValueChange = {
+                        renameSelectAll = false
+                        renameText = it.text
+                    },
                     singleLine = true,
+                    modifier = Modifier
+                        .focusRequester(renameFocusRequester)
+                        .onFocusChanged { renameSelectAll = true },
                 )
             },
             confirmButton = {
@@ -730,10 +746,12 @@ fun HomeScreen(
             iconSize = iconSize,
             verticalSpace = verticalSpace,
             dockIconSize = dockIconSize,
+            folderPreview = folderPreview,
             onColumnsChange = { viewModel.settingsRepository.setColumns(it) },
             onIconSizeChange = { viewModel.settingsRepository.setIconSize(it) },
             onVerticalSpaceChange = { viewModel.settingsRepository.setVerticalSpace(it) },
             onDockIconSizeChange = { viewModel.settingsRepository.setDockIconSize(it) },
+            onFolderPreviewChange = { viewModel.settingsRepository.setFolderPreview(it) },
             onDismiss = { layoutPanelOpen = false },
         )
     }
@@ -863,7 +881,7 @@ private fun AppCell(
     }
 }
 
-/** 文件夹宫格单元（2×2 拼贴，冻结成员霜化+雪花角标） */
+/** 文件夹宫格单元（2×2 / 3×3 拼贴，冻结成员霜化+雪花角标） */
 @Composable
 private fun FolderCell(
     folderId: Long,
@@ -873,6 +891,7 @@ private fun FolderCell(
     icons: Map<String, ImageBitmap>,
     frozenStates: Map<String, Boolean> = emptyMap(),
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
+    previewSize: Int = 2,
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -888,7 +907,7 @@ private fun FolderCell(
                 else androidx.compose.ui.graphics.Color.Transparent,
             ),
     ) {
-        // 文件夹 2×2 拼贴预览（实时显示前 4 个成员，空文件夹显示基础图标）
+        // 文件夹 2×2 / 3×3 拼贴预览（前 4/9 个成员，空文件夹显示基础图标）
         if (previewPackages.isEmpty()) {
             androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_folder),
@@ -896,6 +915,7 @@ private fun FolderCell(
                 modifier = Modifier.size(size),
             )
         } else {
+            val grid = previewSize.coerceIn(2, 3)
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -904,14 +924,14 @@ private fun FolderCell(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
             ) {
                 Column {
-                    for (row in 0..1) {
+                    for (row in 0 until grid) {
                         Row {
-                            for (col in 0..1) {
-                                val idx = row * 2 + col
+                            for (col in 0 until grid) {
+                                val idx = row * grid + col
                                 val pkg = previewPackages.getOrNull(idx)
                                 Box(
                                     contentAlignment = Alignment.Center,
-                                    modifier = Modifier.size(size * 0.5f),
+                                    modifier = Modifier.size(size / grid),
                                 ) {
                                     if (pkg != null) {
                                         val frozen = frozenStates[pkg] == true
@@ -922,16 +942,16 @@ private fun FolderCell(
                                                     contentDescription = pkg,
                                                     contentScale = ContentScale.Fit,
                                                     modifier = Modifier
-                                                        .size(size * 0.44f)
-                                                        .clip(RoundedCornerShape(size.value * 0.1f))
+                                                        .size(size / grid * 0.88f)
+                                                        .clip(RoundedCornerShape(size.value * 0.08f))
                                                         .frosted(enabled = frozen, style = freezeStyle),
                                                 )
                                                 if (frozen) {
-                                                    // 雪花角标（2×2 预览内冻结成员）
+                                                    // 雪花角标（预览内冻结成员）
                                                     androidx.compose.foundation.Image(
                                                         painter = painterResource(R.drawable.ic_snowflake),
                                                         contentDescription = "已冻结",
-                                                        modifier = Modifier.size(size * 0.16f),
+                                                        modifier = Modifier.size(size / grid * 0.32f),
                                                     )
                                                 }
                                             }
@@ -1103,13 +1123,14 @@ private fun GearMenu(
     onAbout: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text("增删应用") },
-            onClick = { onDismiss(); onAppManage() },
-        )
+        // 用户拍板：整理目录第一、增删应用第二
         DropdownMenuItem(
             text = { Text("整理目录") },
             onClick = { onDismiss(); onOrganize() },
+        )
+        DropdownMenuItem(
+            text = { Text("增删应用") },
+            onClick = { onDismiss(); onAppManage() },
         )
         DropdownMenuItem(
             text = { Text("启用全部") },

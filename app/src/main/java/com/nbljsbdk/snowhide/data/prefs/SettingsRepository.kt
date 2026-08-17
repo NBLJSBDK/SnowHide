@@ -30,6 +30,7 @@ object SettingsRepository {
         _iconSize.value = prefs.getInt(KEY_ICON_SIZE, 56)
         _verticalSpace.value = prefs.getInt(KEY_V_SPACE, 12)
         _dockIconSize.value = prefs.getInt(KEY_DOCK_SIZE, 40)
+        _folderPreview.value = prefs.getInt(KEY_FOLDER_PREVIEW, 2)
         _iconPack.value = prefs.getString(KEY_ICON_PACK, "") ?: ""
         _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
@@ -127,6 +128,16 @@ object SettingsRepository {
     fun setDockIconSize(value: Int) = save(KEY_DOCK_SIZE, value) { _dockIconSize.value = it }
 
     // ═══════════════════════════════════════
+    // 文件夹拼贴（2×2 / 3×3，布局设计里选）
+    // ═══════════════════════════════════════
+
+    private val _folderPreview = MutableStateFlow(getInt(KEY_FOLDER_PREVIEW, 2))
+    /** 文件夹拼贴行列数（2=2×2 四个预览，3=3×3 九个预览） */
+    val folderPreview: StateFlow<Int> = _folderPreview.asStateFlow()
+
+    fun setFolderPreview(value: Int) = save(KEY_FOLDER_PREVIEW, value) { _folderPreview.value = it }
+
+    // ═══════════════════════════════════════
     // 图标包 / 壁纸（美化菜单）
     // ═══════════════════════════════════════
 
@@ -173,6 +184,7 @@ object SettingsRepository {
     private const val KEY_ICON_SIZE = "icon_size"
     private const val KEY_V_SPACE = "vertical_space"
     private const val KEY_DOCK_SIZE = "dock_icon_size"
+    private const val KEY_FOLDER_PREVIEW = "folder_preview"
     private const val KEY_ICON_PACK = "icon_pack"
     private const val KEY_TRANSPARENT = "transparent_bg"
     private const val KEY_BG_IMAGE = "bg_image_path"

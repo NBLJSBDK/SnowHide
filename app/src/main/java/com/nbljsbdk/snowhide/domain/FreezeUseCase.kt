@@ -46,6 +46,9 @@ class FreezeUseCase(
      * @param onlyFolderId 非 null 时只冻结该文件夹内应用（目录级批量）
      * @param exceptLocked 是否豁免锁定应用
      * @return 成功冻结数量
+     *
+     * 性能：命令 `;` 串联分块（每批 40 个）一次 exec——避免逐个起
+     * sh 进程，100+ 应用批量操作不再卡死/ANR（pm 不支持多包名参数）。
      */
     suspend fun freezeAll(
         onlyFolderId: Long? = null,
@@ -57,26 +60,46 @@ class FreezeUseCase(
                 .filter { it.folderId == onlyFolderId }
                 .map { it.pkg }
         }
-        var success = 0
-        val failures = mutableListOf<String>()
-        targets.forEach { pkg ->
-            if (exceptLocked && gridRepository.isLocked(pkg)) return@forEach
-            executor.freeze(FreezeMode.FREEZE, pkg)
-                .onSuccess { success++ }
-                .onFailure { failures.add("$pkg: ${it.message}") }
-        }
-        return if (failures.isEmpty()) Result.success(success)
-        else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
+        val engine = executorEngine()
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        val filtered = if (exceptLocked) {
+            targets.filterNot { gridRepository.isLocked(it) }
+        } else targets
+        if (filtered.isEmpty()) return Result.success(0)
+        return execBatched(engine, filtered, "pm disable-user --user 0") { "冻结" }
     }
 
     /** 一键解冻全部已添加应用（齿轮菜单「启用全部」，全部解冻兜底） */
     suspend fun unfreezeAll(): Result<Int> {
+        val engine = executorEngine()
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        val targets = gridRepository.allAddedPackages()
+        if (targets.isEmpty()) return Result.success(0)
+        return execBatched(engine, targets, "pm enable") { "启用" }
+    }
+
+    /**
+     * 批量执行同一 pm 命令（`;` 串联分块，单次 exec）。
+     * 分块上限 40：单条命令过长可能被 shell/系统截断。
+     */
+    private suspend fun execBatched(
+        engine: com.nbljsbdk.snowhide.core.engine.PowerEngine,
+        pkgs: List<String>,
+        pmPrefix: String,
+        actionName: (Int) -> String,
+    ): Result<Int> {
         var success = 0
         val failures = mutableListOf<String>()
-        gridRepository.allAddedPackages().forEach { pkg ->
-            executor.unfreeze(FreezeMode.FREEZE, pkg)
-                .onSuccess { success++ }
-                .onFailure { failures.add("$pkg: ${it.message}") }
+        pkgs.chunked(40).forEach { chunk ->
+            val cmd = chunk.joinToString("; ") { "$pmPrefix $it" }
+            engine.exec(cmd).onFailure { e ->
+                // 整块失败：逐个重试定位失败项（保留粒度）
+                chunk.forEach { pkg ->
+                    engine.exec("$pmPrefix $pkg")
+                        .onSuccess { success++ }
+                        .onFailure { failures.add("$pkg: ${it.message}") }
+                }
+            }.onSuccess { success += chunk.size }
         }
         return if (failures.isEmpty()) Result.success(success)
         else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))

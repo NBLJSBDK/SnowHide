@@ -37,10 +37,12 @@ fun LayoutPanel(
     iconSize: Int,
     verticalSpace: Int,
     dockIconSize: Int,
+    folderPreview: Int,
     onColumnsChange: (Int) -> Unit,
     onIconSizeChange: (Int) -> Unit,
     onVerticalSpaceChange: (Int) -> Unit,
     onDockIconSizeChange: (Int) -> Unit,
+    onFolderPreviewChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(
@@ -82,6 +84,36 @@ fun LayoutPanel(
             SliderRow("图标大小", iconSize, 36f..96f, onIconSizeChange)
             SliderRow("上下间距", verticalSpace, 0f..40f, onVerticalSpaceChange)
             SliderRow("底部图标", dockIconSize, 28f..72f, onDockIconSizeChange)
+
+            // 文件夹拼贴 2×2 / 3×3（用户拍板）
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "文件夹拼贴",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = { onFolderPreviewChange(2) },
+                ) {
+                    Text(
+                        text = "2×2",
+                        fontWeight = if (folderPreview == 2) FontWeight.Bold else FontWeight.Normal,
+                        color = if (folderPreview == 2) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = { onFolderPreviewChange(3) },
+                ) {
+                    Text(
+                        text = "3×3",
+                        fontWeight = if (folderPreview == 3) FontWeight.Bold else FontWeight.Normal,
+                        color = if (folderPreview == 3) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

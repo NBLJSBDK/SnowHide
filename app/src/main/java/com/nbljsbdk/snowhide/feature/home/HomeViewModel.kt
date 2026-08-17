@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 主屏幕 ViewModel（P0）
@@ -137,6 +138,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
 
     init {
+        startIconFlusher()
         AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
         // 订阅宫格数据变化：新加入的应用自动加载图标 + 刷新中文名
         viewModelScope.launch {
@@ -168,7 +170,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         runCatching {
             AppIconLoader.loadIcon(pkg)
         }.onSuccess { icon ->
-            _icons.value = _icons.value + (pkg to icon)
+            iconQueue.send(pkg to icon)
+        }
+    }
+
+    /**
+     * 图标加载完成队列（性能：100+ 应用逐个更新 _icons 会触发
+     * 100 次全屏重组导致卡死/ANR——合并成批提交，每批至多隔 100ms）
+     */
+    private val iconQueue = kotlinx.coroutines.channels.Channel<Pair<String, androidx.compose.ui.graphics.ImageBitmap>>(
+        kotlinx.coroutines.channels.Channel.UNLIMITED
+    )
+
+    /** 批量提交协程（在 init 里启动） */
+    private fun startIconFlusher() {
+        viewModelScope.launch {
+            while (true) {
+                val first = iconQueue.receive()
+                val batch = mutableListOf(first)
+                // 100ms 内到达的图标合并成一批，避免逐个重组
+                withTimeoutOrNull(100) {
+                    while (true) batch.add(iconQueue.receive())
+                }
+                if (batch.isNotEmpty()) {
+                    _icons.value = _icons.value + batch
+                }
+            }
         }
     }
 

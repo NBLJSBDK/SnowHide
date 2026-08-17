@@ -17,8 +17,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -28,6 +36,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
@@ -96,16 +110,40 @@ fun OrganizeOverlay(
                 .height(136.dp),
         ) {
             if (folderSelected != null) {
+                // 新建/切换文件夹：自动聚焦并全选名称（删除键快速清除原名，用户拍板）
+                val focusRequester = remember { FocusRequester() }
+                val keyboard = LocalSoftwareKeyboardController.current
+                var selectAll by remember(folderSelected.folderId) { mutableStateOf(true) }
+                LaunchedEffect(folderSelected.folderId) {
+                    focusRequester.requestFocus()
+                    keyboard?.show()
+                }
                 Column {
-                    // 文件夹名称输入行（不自动聚焦，点输入框才弹键盘）
+                    // 文件夹名称输入行（IME Done 提交改名，用户拍板）
                     OutlinedTextField(
-                        value = folderSelected.folderNameInput,
-                        onValueChange = onNameChange,
+                        value = TextFieldValue(
+                            folderSelected.folderNameInput,
+                            selection = if (selectAll) TextRange(0, folderSelected.folderNameInput.length)
+                            else TextRange(folderSelected.folderNameInput.length),
+                        ),
+                        onValueChange = {
+                            selectAll = false
+                            onNameChange(it.text)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                            .padding(vertical = 4.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { selectAll = true },
                         placeholder = { Text("文件夹名字") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                onNameCommit()
+                                keyboard?.hide()
+                            },
+                        ),
                     )
                     // 文件夹内应用图标横排
                     Row(
