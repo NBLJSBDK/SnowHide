@@ -54,7 +54,7 @@ gradlew.bat assembleDebug / assembleRelease
 ## 4. Versioning (do NOT change casually)
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
-- `versionName` = 构建日期 `YYMMDD`（gradle 里 SimpleDateFormat 自动生成）。
+- `versionName` = 构建日期时间 `YYMMDDHHmm`（gradle 里 SimpleDateFormat 自动生成，精确到分钟，用户拍板）。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
 
@@ -83,7 +83,9 @@ gradlew.bat assembleDebug / assembleRelease
 | 权限 | 用途 |
 |------|------|
 | `moe.shizuku.manager.permission.API_V23` | Shizuku API（shell 身份执行 pm 命令） |
-| `android.permission.QUERY_ALL_PACKAGES` | Android 11+ 查询全部已装应用（增加应用界面） |
+| `android.permission.QUERY_ALL_PACKAGES` | Android 11+ 查询全部已装应用（增加应用界面/图标包扫描） |
+| `android.permission.POST_NOTIFICATIONS` | 快捷方式执行失败通知（Android 13+ 首次启动申请） |
+| `android.permission.VIBRATE` | dock 锁定/解锁震动反馈（受系统静音/勿扰控制） |
 
 - Shizuku 授权流程：UI 引导卡 → `Shizuku.requestPermission(code)`（必须从 Activity 发起）→ `MainActivity.onRequestPermissionsResult` 转发给 `Shizuku.onRequestPermissionsResult` → `EngineManager.refresh()`。
 - 后续阶段权限：P1 通知（POST_NOTIFICATIONS）、P2 Device Owner、P3 root——到时按设计文档补。
@@ -171,55 +173,56 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 - **ColorOS 吞后台 Toast** → 通知兜底（本项目 P0 前台操作为主，受影响小）。
 - **OPPO 静态 shortcuts 崩** → 用动态 ShortcutManager（MediaSync 已验证方案）。
 - **图标包协议**：发现 `queryBroadcastReceivers(INSTALL_ICON_PACK)`；请求 `RESOLVE_ICON` 有序广播（`sendOrderedBroadcast` + result receiver 取 `icon` extra）；失败回退系统图标。
-- **`pm list packages -d`**：输出 `package:com.xxx` 逐行解析；Android 版本差异待真机验证。
+- **`pm list packages -d`**：输出 `package:com.xxx` 逐行解析（`-d -s` 只列系统禁用项，神之一手目标过滤用）。
+- **binder.transact 是同步调用**（sh 进程跑完才返回）——必须在 IO 线程执行（`withContext(Dispatchers.IO)`），主线程执行批量命令会 ANR（真机实锤）。
+- **图标包 appfilter 协议**：轻语/轻风等无 INSTALL_ICON_PACK 广播的包，直接解析 `assets/appfilter.xml`（`createPackageContext(pkg, CONTEXT_RESTRICTED)` 读 assets/资源；`CONTEXT_INCLUDE_CODE` 从 Android 11 起被禁——SecurityException 实锤）。匹配用**包名优先**（冻结应用 `getLaunchIntentForPackage` 返回 null，组件匹配失效）。并发解析要 synchronized（113 并发卡死实锤）；getIdentifier 缓存（IPC 慢）。
+- **LazyGrid key 重复崩溃**：同文件夹重复成员（历史数据 moveAppToFolder 缺防重）→ FolderScreen `key={it}` 崩。init 自动清理 + moveAppToFolder 防重 + 渲染 distinct 兜底。搜索成员 item 的 id 必须绝对唯一（负数 hash 会碰撞，用 `Long.MIN_VALUE+index`）。
+- **ColorOS/realme 激进杀后台**：NoDisplay Activity 立即 finish 会被秒杀进程（快捷方式动作丢失+无反馈）——Translucent 保活窗口直到执行完成。后台 Toast 被吞（Android 12+ 后台 toast 限制）——Toast 在窗口存活期间发，失败兜底通知。
+- **日志门控**：调试日志一律用 `if (BuildConfig.DEBUG) Log.d(...)`——debug 有、release 自动无（一键开关约定）。
 - **Compose BOM 2024.09.00**：`TextOverflow.MiddleEllipsis` 不可用（用 Ellipsis）；`animateFloatAsState` 需要 `androidx.compose.animation.core.animateFloatAsState`（注意 import 路径，旧 BOM 下 animation 包结构）。
 - **debug/release 包名**：`com.nbljsbdk.snowhide` / `...snowhide.debug`——logcat 过滤、数据目录、Shizuku 授权均按包名独立。
 - **SP+JSON 存储键**：`snowhide_grid`（grid_items/folders/folder_apps）、`snowhide_settings`。
 
 ---
 
-## 11. Recent features (current state — 2026-08-13)
+## 11. Recent features (current state — 2026-08-17)
 
 ```
-c539de1 feat: 移除并卸载安全特例（长按菜单二级确认）
-3a05b0b feat: 搜索过滤 + 设置页（布局/简单设置/图标包选择器）
-010b599 feat: 目录级启停接线 + 底部栏上划冻结 + 文件夹 2×2 拼贴
-2227595 feat: 长按菜单文件夹重命名/删除接线
-ae86bfb feat: FontAwesome 图标转换 VectorDrawable 并替换全部占位
-5621b75 feat: 增加/移除应用左右分栏界面（§3.8）
-d4b64d2 feat: 文件夹全屏页 + 主屏⇄文件夹循环滑动
-493bb9d feat: 整理目录状态机完整实现（§3.10 终版）
-64d8ce2 fix: 修复 8 个编译错误，P0 骨架可编译
-6e61030 chore: gitignore 补充密钥配置文件忽略规则
-d8ddd73 docs: 重写 AGENTS.md——仿 MediaSync 结构 15 节详尽版
-fa02251 feat: 初始化 SnowHide——P0 架构骨架   ← 已 push（唯一一次）
+54d48cf fix: 文件夹页 LazyGrid key 重复崩溃（成员重复数据清理+防重+distinct）
+b98771c perf: 图标加载提速（启动预热 appfilter + getIdentifier 缓存 + 图标缩放 256px）
+b660a46 feat: 美化设置加图标形状（圆角方形/圆形，未收录图标包也裁圆）
+3c368a9 fix: 图标包冻结应用不生效（包名匹配优先，冻结应用组件匹配失效）
+6012b7f feat: 图标包支持 appfilter.xml 协议（Pure 轻语/轻风无广播包可用）
+32f27ad feat: 冻结滤镜语义重排（原色=真正原色无遮罩/变蓝改淡化）+ 神之一手恢复解冻全部
+93c73bb feat: 神之一手目标过滤 + 结果弹窗滚动可复制
+5701cae fix: 快捷方式 ColorOS 杀进程（Translucent 保活窗口 + 进度弹窗）
+54bee25 feat: 批量执行统一（execBatched 阈值20分块40）+ 进度条 + 防重复
+195dc9b fix: ANR 根因（binder.transact 切 IO 线程）
+d996a27 feat: 进度条文案计数（正在停用: 45/130）
+f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 ```
 
-已完成：P0 全部核心界面可编译——
-- core 引擎层（PowerEngine 接口/注册表/Shizuku UserService 实现/root+DO 空壳）
-- data（GridRepository/SettingsRepository 单例，SP+JSON）
-- 主屏混排宫格 + 底部图标栏（锁定/上划冻结预留/快速清理）+ 齿轮菜单
-- 整理目录完整状态机（①→②→③ 键位规则，§3.10）
-- 文件夹全屏页 + HorizontalPager 循环滑动
-- 增加/移除应用左右分栏（右滑加入/左滑移出/搜索/显示包名）
-- 霜冻主题 + 霜化 Modifier + FontAwesome 19 图标转 VectorDrawable
-- Shizuku 授权（listener 模式）+ 引导卡
+已完成（08-13 之后）：
+- 图标包 appfilter 协议（轻语/轻风）+ 图标形状 + 图标加载提速 + 冻结应用图标支持
+- 批量执行统一（停用/启用全部、智能清理、神之一手、快速启停）逐个+进度条+防重复
+- 神之一手转正式（About 页，解冻全部含系统应用，结果滚动+复制）
+- 快捷方式 4 个（含启用全部）Pure 圆形图标 + 冒泡进度弹窗 + Toast
+- ANR 修复（transact 切 IO）、横滑 key 重复闪退修复
+- 冻结滤镜语义重排、浅色主题、设置持久化修复、版本号精确到分钟
+- 备份导入导出（SAF + 立即重启确认）、搜索自动聚焦、权限说明
 
-**未完成（候选下一步，只剩真机验证 + P1）**：
-1. 真机验证 Shizuku 冻结/解冻链路（pm disable-user 是否按预期，`pm list packages -d` 解析）
-2. 图标包协议真机验证（RESOLVE_ICON 有序广播）
-3. 壁纸图片选择器（背景透明开关已做，图片选择 P1）
-4. P1：休眠模式、锁屏自动清理、划卡停用（无障碍）、快速启停磁贴
+**未完成（候选下一步）**：
+1. 应用分身（pm --user 分用户冻结）
+2. P1：休眠模式、锁屏自动清理、划卡停用（无障碍）、壁纸图片选择器
+3. P2/P3：固定快捷方式（接口已留）、DO 引擎、root 引擎、禁用/隐藏模式
 
 ## 12. Known limitations / candidate next tasks
 
-1. **Shizuku 链路未真机验证**：UserService 方案（bindUserService → shell 身份进程执行 pm 命令）已编译通过，但 `pm disable-user` / `pm list packages -d` 在 ColorOS 真机上的实际行为待验证（设备差异风险）。
-2. **占位遗留**：底部图标栏「上划冻结」手势未实现；文件夹 2×2 拼贴未做；顶栏搜索按钮无功能。
-3. **设置页缺失**：布局设置/壁纸/图标包选择器 UI 未建（数据层已就绪）。
-4. **卸载特例未做**：移除应用界面的「移除并卸载」（安全特例，需用户二次确认）未实现。
-5. **图标包协议未验证**：AppIconLoader 的 RESOLVE_ICON 有序广播在真机上的兼容性待测。
-6. **无自动化测试**：验证 = WSL 编译 + 用户真机测试。
-7. **应用桥**：功能已研究清楚（黑白门 3.3.3 反编译实证：冻结应用被外部打开/分享时桥接唤醒），优先级最后；快速启停一定程度替代它。
+1. **debug 包比 release 卡**：debug 无 R8 优化 + debuggable，大列表渲染差异明显——日常使用 release（正常）。
+2. **图标包覆盖不全**：未收录的应用回退系统图标（可配合「图标形状=圆形」统一视觉）。
+3. **无自动化测试**：验证 = WSL 编译 + 用户真机测试。
+4. **应用桥**：功能已研究清楚（黑白门 3.3.3 反编译实证），优先级最后；快速启停一定程度替代它。
+5. **调试日志已清空**：以后加日志用 `BuildConfig.DEBUG` 门控。
 
 ---
 
