@@ -245,7 +245,7 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.82f)),
+                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f)),
             )
         }
     Scaffold(
