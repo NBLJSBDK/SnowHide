@@ -144,6 +144,7 @@ fun HomeScreen(
     // 整理目录状态机
     val organizeViewModel: OrganizeViewModel = viewModel()
     val organizeState by organizeViewModel.state.collectAsState()
+    val organizeFolderApps by organizeViewModel.currentFolderApps.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -496,7 +497,7 @@ fun HomeScreen(
             OrganizeOverlay(
                 state = organizeState,
                 folders = folders,
-                folderApps = organizeViewModel.currentFolderApps,
+                folderApps = organizeFolderApps,
                 icons = icons,
                 onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
                 onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },

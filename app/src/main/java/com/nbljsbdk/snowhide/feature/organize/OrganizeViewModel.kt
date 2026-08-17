@@ -1,5 +1,9 @@
 package com.nbljsbdk.snowhide.feature.organize
 
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import androidx.lifecycle.ViewModel
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
@@ -35,6 +39,8 @@ class OrganizeViewModel : ViewModel() {
             val folderNameInput: String,
             val subHomeApp: GridItem? = null,
             val subFolderAppPkg: String? = null,
+            /** 刚创建（true=自动聚焦全选名称，点选文件夹时为 false） */
+            val justCreated: Boolean = false,
         ) : OrganizeState
     }
 
@@ -53,15 +59,19 @@ class OrganizeViewModel : ViewModel() {
         _events.value = null
     }
 
-    /** 当前选中文件夹的成员（按 sortOrder 排序） */
-    val currentFolderApps: List<String>
-        get() {
-            val s = _state.value as? OrganizeState.FolderSelected ?: return emptyList()
-            return GridRepository.folderApps.value
-                .filter { it.folderId == s.folderId }
-                .sortedBy { it.sortOrder }
-                .map { it.pkg }
-        }
+    /**
+     * 当前选中文件夹的成员（响应式 StateFlow：移动/增删后自动刷新，
+     * 普通 getter 无法驱动 Compose 重组——移动后横排顺序不更新的根因）
+     */
+    val currentFolderApps: StateFlow<List<String>> = combine(
+        _state,
+        GridRepository.folderApps,
+    ) { s, folderApps ->
+        val sel = s as? OrganizeState.FolderSelected ?: return@combine emptyList()
+        folderApps.filter { it.folderId == sel.folderId }
+            .sortedBy { it.sortOrder }
+            .map { it.pkg }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 当前选中文件夹 */
     val currentFolder: Folder?
@@ -91,6 +101,7 @@ class OrganizeViewModel : ViewModel() {
         _state.value = OrganizeState.FolderSelected(
             folderId = folder.id,
             folderNameInput = folder.name,
+            justCreated = false, // 点选文件夹：不自动聚焦（用户拍板）
         )
     }
 
@@ -147,13 +158,14 @@ class OrganizeViewModel : ViewModel() {
         markDirty()
     }
 
-    /** 创建：新建文件夹并自动选中（不自动聚焦输入法） */
+    /** 创建：新建文件夹并自动选中（自动聚焦全选名称，用户拍板） */
     fun createFolder() {
         val name = nextFolderName()
         val folder = GridRepository.createFolder(name)
         _state.value = OrganizeState.FolderSelected(
             folderId = folder.id,
             folderNameInput = name,
+            justCreated = true,
         )
         markDirty()
     }

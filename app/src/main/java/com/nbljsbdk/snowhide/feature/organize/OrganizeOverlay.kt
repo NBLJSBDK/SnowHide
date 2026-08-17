@@ -110,13 +110,18 @@ fun OrganizeOverlay(
                 .height(136.dp),
         ) {
             if (folderSelected != null) {
-                // 新建/切换文件夹：自动聚焦并全选名称（删除键快速清除原名，用户拍板）
+                // 新建文件夹时自动聚焦并全选名称（删除键快速清除原名）；
+                // 点选文件夹不自动聚焦，点名称栏才聚焦（用户拍板）
                 val focusRequester = remember { FocusRequester() }
                 val keyboard = LocalSoftwareKeyboardController.current
-                var selectAll by remember(folderSelected.folderId) { mutableStateOf(true) }
-                LaunchedEffect(folderSelected.folderId) {
-                    focusRequester.requestFocus()
-                    keyboard?.show()
+                var selectAll by remember(folderSelected.folderId) {
+                    mutableStateOf(folderSelected.justCreated)
+                }
+                LaunchedEffect(folderSelected.folderId, folderSelected.justCreated) {
+                    if (folderSelected.justCreated) {
+                        focusRequester.requestFocus()
+                        keyboard?.show()
+                    }
                 }
                 Column {
                     // 文件夹名称输入行（IME Done 提交改名，用户拍板）
