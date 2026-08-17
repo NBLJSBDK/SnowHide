@@ -275,9 +275,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             freezeUseCase.quickClean()
                 .onSuccess { n ->
                     refreshFrozenStates()
-                    if (settingsRepository.showToast.value) showMessage("快速清理完成，停用 $n 个应用")
+                    // 批量结果用系统 Toast（Snackbar 在底部易被忽略）
+                    toast("智能清理：已停用 $n 个应用")
                 }
-                .onFailure { showMessage("快速清理失败：${it.message}") }
+                .onFailure { toast("智能清理失败：${it.message}") }
         }
     }
 
@@ -286,8 +287,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.unfreezeAll()
-                .onSuccess { n -> refreshFrozenStates(); showMessage("已启用 $n 个应用") }
-                .onFailure { showMessage(it.message ?: "操作失败") }
+                .onSuccess { n -> refreshFrozenStates(); toast("已启用 $n 个应用") }
+                .onFailure { toast(it.message ?: "操作失败") }
         }
     }
 
@@ -296,9 +297,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = false)
-                .onSuccess { n -> refreshFrozenStates(); showMessage("已停用 $n 个应用") }
-                .onFailure { showMessage(it.message ?: "操作失败") }
+                .onSuccess { n -> refreshFrozenStates(); toast("已停用 $n 个应用") }
+                .onFailure { toast(it.message ?: "操作失败") }
         }
+    }
+
+    /** 系统 Toast（批量结果提示，用户拍板用 Toast 弹窗） */
+    private fun toast(text: String) {
+        android.widget.Toast.makeText(getApplication(), text, android.widget.Toast.LENGTH_SHORT).show()
     }
 
     /** 目录级批量：停用某文件夹内全部应用（文件夹长按菜单「停用目录」） */

@@ -48,11 +48,15 @@ class ShortcutActionActivity : Activity() {
             getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE),
         )
 
-        // 后台执行动作；toast/通知完成后反馈。
-        // ⚠️ NoDisplay 主题硬性要求：onResume 前必须 finish()（否则崩溃），
-        // 故不能在这里等线程——finish 后进程短时间内仍存活，
-        // 动作在 1-2 秒内完成，足够可靠。
-        Thread {
+        // ═══════════════════════════════════════
+        // 执行动作（worker 线程）+ 进度通知轮询（并行）
+        // ═══════════════════════════════════════
+        // 主题为 Translucent：**保活窗口直到执行完成**——
+        // ColorOS 后台管理激进，NoDisplay 立即 finish 会秒杀进程
+        // （动作丢失+无反馈，真机实锤）；窗口在前台期间 Toast 可见。
+        ShortcutNotifier.showProgress(this, "正在执行…")
+
+        val worker = Thread {
             val result = when (action) {
                 ACTION_SMART_CLEAN -> {
                     val r = runCatching { runBlocking { freezeUseCase.quickClean() } }
@@ -89,19 +93,32 @@ class ShortcutActionActivity : Activity() {
                 else -> return@Thread
             }
             runCatching { runBlocking { FrozenStateStore.refresh() } }
-            // 成功 → toast（applicationContext，不依赖 Activity）；失败 → 系统通知
+            // Toast（窗口前台期间可见）+ 通知兜底（结果）
             val successMsg = result.second
             Handler(Looper.getMainLooper()).post {
                 if (successMsg != null) {
                     Toast.makeText(appContext, successMsg, Toast.LENGTH_SHORT).show()
+                    ShortcutNotifier.showResult(appContext, result.first, successMsg)
                 } else {
-                    ShortcutNotifier.notify(appContext, result.first, result.third ?: "失败")
+                    val fail = result.third ?: "失败"
+                    Toast.makeText(appContext, "$result.first$fail", Toast.LENGTH_LONG).show()
+                    ShortcutNotifier.showResult(appContext, result.first, fail)
                 }
+                finish()
+            }
+        }
+        worker.start()
+
+        // 进度通知轮询：BatchProgress 变化 → 更新通知进度条
+        Thread {
+            while (worker.isAlive) {
+                val p = com.nbljsbdk.snowhide.data.repo.BatchProgress.progress.value
+                if (p != null) {
+                    ShortcutNotifier.updateProgress(this, p)
+                }
+                Thread.sleep(200)
             }
         }.start()
-
-        // NoDisplay：立即 finish（必须在 onResume 前）
-        finish()
     }
 
     companion object {
@@ -113,24 +130,61 @@ class ShortcutActionActivity : Activity() {
     }
 }
 
-/** 快捷方式执行结果通知（ColorOS 吞后台 Toast，通知兜底——AGENTS 平台经验） */
+/** 快捷方式执行通知（Toast 尽力 + 通知兜底带进度条，ColorOS 吞后台 Toast 的可靠方案） */
 object ShortcutNotifier {
 
     private const val CHANNEL_ID = "shortcut_result"
+    private const val NOTIF_ID = 1001
 
-    fun notify(context: Context, title: String, message: String) {
+    private fun nm(context: Context): NotificationManager {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "快捷方式执行", NotificationManager.IMPORTANCE_LOW)
+        )
+        return manager
+    }
+
+    /** 执行中：进度通知（indeterminate 转圈） */
+    fun showProgress(context: Context, text: String) {
         runCatching {
-            val nm = context.getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "快捷方式执行结果", NotificationManager.IMPORTANCE_DEFAULT)
-            )
+            val notification = android.app.Notification.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_snowflake)
+                .setContentTitle("雪藏")
+                .setContentText(text)
+                .setProgress(0, 0, true) // 不确定进度
+                .setOnlyAlertOnce(true)
+                .setOngoing(true)
+                .build()
+            nm(context).notify(NOTIF_ID, notification)
+        }
+    }
+
+    /** 批量进度更新（0f..1f → 通知进度条） */
+    fun updateProgress(context: Context, progress: Float) {
+        runCatching {
+            val percent = (progress.coerceIn(0f, 1f) * 100).toInt()
+            val notification = android.app.Notification.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_snowflake)
+                .setContentTitle("雪藏")
+                .setContentText("批量执行中 $percent%")
+                .setProgress(100, percent, false)
+                .setOnlyAlertOnce(true)
+                .setOngoing(true)
+                .build()
+            nm(context).notify(NOTIF_ID, notification)
+        }
+    }
+
+    /** 完成：结果通知（自动消失） */
+    fun showResult(context: Context, title: String, message: String) {
+        runCatching {
             val notification = android.app.Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_snowflake)
                 .setContentTitle(title)
                 .setContentText(message)
                 .setAutoCancel(true)
                 .build()
-            nm.notify(title.hashCode(), notification)
+            nm(context).notify(NOTIF_ID, notification)
         }
     }
 }
