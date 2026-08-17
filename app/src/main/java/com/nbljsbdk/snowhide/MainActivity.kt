@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         // 锁屏自动清理：动态注册息屏/解锁广播（进程存活期间生效）
         com.nbljsbdk.snowhide.service.LockCleanReceiver.register(applicationContext)
+        applyTransparentWallpaper()
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {
@@ -81,6 +82,24 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        applyTransparentWallpaper()
+    }
+
+    /**
+     * 透明到桌面（用户拍板：主屏/文件夹背景 = 桌面壁纸）：
+     * FLAG_SHOW_WALLPAPER 让系统把壁纸绘制在窗口后（launcher 同款，
+     * 无需读取壁纸权限——ColorOS 上 WallpaperManager.getDrawable 要
+     * READ_EXTERNAL_STORAGE，API 33+ 用户无法 UI 授权，实锤死路）。
+     */
+    private fun applyTransparentWallpaper() {
+        val transparent = SettingsRepository.transparentBg.value
+        if (transparent) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0xFFE9F1F9.toInt()))
+        }
     }
 
     override fun onPause() {

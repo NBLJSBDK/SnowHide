@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
+import kotlin.math.roundToInt
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +42,7 @@ import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 fun BeautyPanel(
     iconPack: String,
     transparentBg: Boolean,
+    wallpaperOverlay: Float = 0.25f,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
     iconShape: String = "round",
     iconPacks: List<AppIconLoader.IconPackInfo>,
@@ -47,6 +50,7 @@ fun BeautyPanel(
     onRefreshIconPacks: () -> Unit = {},
     onIconPackSelect: (String) -> Unit,
     onTransparentToggle: (Boolean) -> Unit,
+    onWallpaperOverlayChange: (Float) -> Unit = {},
     onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
     onIconShapeSelect: (String) -> Unit = {},
     onDismiss: () -> Unit,
@@ -144,6 +148,18 @@ fun BeautyPanel(
                         onCheckedChange = onTransparentToggle,
                     )
                 }
+                // 壁纸遮罩浓度拉杆（0=不遮 1=全遮，0.05 步进，默认 0.25）
+                Text(
+                    text = "遮罩浓度：${(wallpaperOverlay * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = wallpaperOverlay,
+                    onValueChange = { onWallpaperOverlayChange((it / 0.05f).roundToInt() * 0.05f) },
+                    valueRange = 0f..1f,
+                    steps = 19, // 0.05 步进
+                )
                 // 图标形状（用户拍板：未收录图标包的应用也裁成圆形）
                 Text(
                     text = "图标形状",

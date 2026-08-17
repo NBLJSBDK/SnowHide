@@ -18,6 +18,12 @@
     <!-- 开机自启动（锁屏自动清理：开机后注册息屏广播） -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- 壁纸读取（透明背景）：ColorOS 的 WallpaperManager 固定检查
+         READ_EXTERNAL_STORAGE（API 33+ 声明后系统自动视为已授予，
+         兼容行为）；READ_MEDIA_IMAGES 给用户弹窗用 -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

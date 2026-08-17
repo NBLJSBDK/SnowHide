@@ -187,6 +187,7 @@ fun HomeScreen(
     // 美化浮框数据：当前图标包/透明开关 + 已装图标包列表
     val iconPack by viewModel.settingsRepository.iconPack.collectAsState()
     val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
+    val wallpaperOverlay by viewModel.settingsRepository.wallpaperOverlay.collectAsState()
     val iconShape by viewModel.settingsRepository.iconShape.collectAsState()
     val freezeStyleName by viewModel.settingsRepository.freezeStyle.collectAsState()
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
@@ -232,20 +233,13 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 透明背景：铺桌面壁纸 + 半透明白遮罩（保证图标/文字可读，用户拍板方案）
-        val wallpaper by viewModel.wallpaper.collectAsState()
-        val wp = wallpaper
-        if (transparentBg && wp != null) {
-            androidx.compose.foundation.Image(
-                bitmap = wp,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
+        // 透明背景：系统壁纸已由窗口层透出（FLAG_SHOW_WALLPAPER），
+        // 这里只盖遮罩层控制可读性（用户拍板：遮罩浓度拉杆）
+        if (transparentBg) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f)),
+                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = wallpaperOverlay)),
             )
         }
     Scaffold(
@@ -537,7 +531,10 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .background(
+                        if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
                     .padding(horizontal = 12.dp, vertical = 2.dp),
             ) {
                 Text(
@@ -563,6 +560,7 @@ fun HomeScreen(
                 folders = folders,
                 folderApps = organizeFolderApps,
                 icons = icons,
+                transparentBg = transparentBg,
                 onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
                 onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
                 onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
@@ -581,6 +579,7 @@ fun HomeScreen(
                 lockedPackages = lockedPackages,
                 icons = icons,
                 iconSize = dockIconSize.dp,
+                transparentBg = transparentBg,
                 onQuickClean = { viewModel.quickClean() },
                 onAppClick = { viewModel.openApp(it) },
                 onAppLongClick = { pkg ->
@@ -796,6 +795,7 @@ fun HomeScreen(
         BeautyPanel(
             iconPack = iconPack,
             transparentBg = transparentBg,
+            wallpaperOverlay = wallpaperOverlay,
             freezeStyle = freezeStyle,
             iconPacks = iconPacks,
             iconPacksLoading = iconPacksLoading,
@@ -803,6 +803,7 @@ fun HomeScreen(
             iconShape = iconShape,
             onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
             onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
+            onWallpaperOverlayChange = { alpha -> viewModel.settingsRepository.setWallpaperOverlay(alpha) },
             onFreezeStyleSelect = { style -> viewModel.settingsRepository.setFreezeStyle(style.name) },
             onIconShapeSelect = { shape -> viewModel.settingsRepository.setIconShape(shape) },
             onDismiss = { beautyPanelOpen = false },
@@ -1056,6 +1057,7 @@ private fun DockBar(
     lockedPackages: Set<String>,
     icons: Map<String, ImageBitmap>,
     iconSize: androidx.compose.ui.unit.Dp,
+    transparentBg: Boolean = false,
     onQuickClean: () -> Unit,
     onAppClick: (String) -> Unit,
     onAppLongClick: (String) -> Unit,
@@ -1065,7 +1067,11 @@ private fun DockBar(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            // 透明背景（透出壁纸）时 dock 同步透明
+            .background(
+                if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         LazyRow(

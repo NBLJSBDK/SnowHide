@@ -63,6 +63,7 @@ fun OrganizeOverlay(
     folders: List<Folder>,
     folderApps: List<String>,
     icons: Map<String, ImageBitmap>,
+    transparentBg: Boolean = false,
     onTapHomeApp: (GridItem) -> Unit,
     onTapFolder: (Folder) -> Unit,
     onTapFolderApp: (String) -> Unit,
@@ -86,7 +87,11 @@ fun OrganizeOverlay(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            // 透明背景（透出壁纸）时操作区同步透明
+            .background(
+                if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            )
             .padding(8.dp),
     ) {
         // ① 键位行（固定最上，用户拍板）：[上][下][左][右][垃圾桶][+]

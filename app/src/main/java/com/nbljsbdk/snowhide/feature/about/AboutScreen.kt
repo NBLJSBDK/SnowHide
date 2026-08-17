@@ -78,9 +78,15 @@ fun AboutScreen(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
     ) { }
     fun requestMissingPermissions() {
-        val permissions = arrayOf(
-            android.Manifest.permission.POST_NOTIFICATIONS,
-        )
+        val permissions = buildList {
+            add(android.Manifest.permission.POST_NOTIFICATIONS)
+            // 壁纸读取（透明背景）：Android 13+ 媒体图片权限，旧版外部存储
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                add(android.Manifest.permission.READ_MEDIA_IMAGES)
+            } else {
+                add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+        }
         val missing = permissions.filter {
             context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }

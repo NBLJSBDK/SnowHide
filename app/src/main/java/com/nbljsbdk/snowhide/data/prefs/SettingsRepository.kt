@@ -37,6 +37,7 @@ object SettingsRepository {
         _lockCleanEnabled.value = prefs.getBoolean(KEY_LOCK_CLEAN, false)
         _lockCleanDelay.value = prefs.getInt(KEY_LOCK_CLEAN_DELAY, 30)
         _lockCleanNotify.value = prefs.getBoolean(KEY_LOCK_CLEAN_NOTIFY, true)
+        _wallpaperOverlay.value = prefs.getFloat(KEY_WALLPAPER_OVERLAY, 0.25f)
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
@@ -46,6 +47,9 @@ object SettingsRepository {
 
     private fun getInt(key: String, def: Int): Int =
         if (::prefs.isInitialized) prefs.getInt(key, def) else def
+
+    private fun getFloat(key: String, def: Float): Float =
+        if (::prefs.isInitialized) prefs.getFloat(key, def) else def
 
     private fun getStr(key: String, def: String): String =
         if (::prefs.isInitialized) prefs.getString(key, def) ?: def else def
@@ -135,6 +139,19 @@ object SettingsRepository {
     fun setLockCleanNotify(enabled: Boolean) {
         _lockCleanNotify.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_LOCK_CLEAN_NOTIFY, enabled).apply()
+    }
+
+    // ═══════════════════════════════════════
+    // 壁纸遮罩浓度（透明背景：0=不遮 1=全遮，0.05 步进，默认 0.25）
+    // ═══════════════════════════════════════
+
+    private val _wallpaperOverlay = MutableStateFlow(getFloat(KEY_WALLPAPER_OVERLAY, 0.25f))
+    /** 壁纸遮罩透明度（0f..1f） */
+    val wallpaperOverlay: StateFlow<Float> = _wallpaperOverlay.asStateFlow()
+
+    fun setWallpaperOverlay(alpha: Float) {
+        _wallpaperOverlay.value = alpha
+        if (::prefs.isInitialized) prefs.edit().putFloat(KEY_WALLPAPER_OVERLAY, alpha).apply()
     }
 
     fun setShowAppName(enabled: Boolean) {
@@ -227,6 +244,7 @@ object SettingsRepository {
     private const val KEY_LOCK_CLEAN = "lock_clean_enabled"
     private const val KEY_LOCK_CLEAN_DELAY = "lock_clean_delay"
     private const val KEY_LOCK_CLEAN_NOTIFY = "lock_clean_notify"
+    private const val KEY_WALLPAPER_OVERLAY = "wallpaper_overlay"
     private const val KEY_APP_NAME = "show_app_name"
     private const val KEY_BACK_DIR = "back_to_last_dir"
     private const val KEY_COLUMNS = "columns"
