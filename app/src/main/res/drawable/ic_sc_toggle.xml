@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Pure 风格：圆形渐变底 + 白色符号 -->
+    <path android:pathData="M54,54 m-54,0 a54,54 0 1,0 108,0 a54,54 0 1,0 -108,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FFB48EE0" />
+                <item android:offset="1" android:color="#FF8A5FC9" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <group
+        android:scaleX="0.11"
+        android:scaleY="0.11"
+        android:translateX="22.3"
+        android:translateY="25.8">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M384 64H192C86 64 0 150 0 256s86 192 192 192h192c106 0 192-86 192-192S490 64 384 64zm0 320c-70.8 0-128-57.3-128-128 0-70.8 57.3-128 128-128 70.8 0 128 57.3 128 128 0 70.8-57.3 128-128 128z"/>
+    </group>
+</vector>

@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
             val shortcuts = listOf(
                 android.content.pm.ShortcutInfo.Builder(this, "smart_clean")
                     .setShortLabel("智能清理")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_broom))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_smart_clean))
                     .setIntent(
                         android.content.Intent(
                             this,
@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
                     .build(),
                 android.content.pm.ShortcutInfo.Builder(this, "freeze_all")
                     .setShortLabel("全部停用")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_freeze_all))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_freeze_all))
                     .setIntent(
                         android.content.Intent(
                             this,
@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
                     .build(),
                 android.content.pm.ShortcutInfo.Builder(this, "toggle_quick")
                     .setShortLabel("快速启停")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_toggle))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_toggle))
                     .setIntent(
                         android.content.Intent(
                             this,
@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                 // 第 4 位：临时「启用全部」（用户测试用，后续可替换）
                 android.content.pm.ShortcutInfo.Builder(this, "enable_all")
                     .setShortLabel("启用全部")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_shortcut_enable_all))
+                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_enable_all))
                     .setIntent(
                         android.content.Intent(
                             this,
