@@ -59,7 +59,7 @@
         <service
             android:name=".service.LockCleanAccessibilityService"
             android:exported="false"
-            android:label="锁屏自动清理保活"
+            android:label="@string/accessibility_lock_clean_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
