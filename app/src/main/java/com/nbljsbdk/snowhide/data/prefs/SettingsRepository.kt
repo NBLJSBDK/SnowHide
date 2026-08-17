@@ -33,6 +33,7 @@ object SettingsRepository {
         _folderPreview.value = prefs.getInt(KEY_FOLDER_PREVIEW, 2)
         _iconPack.value = prefs.getString(KEY_ICON_PACK, "") ?: ""
         _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
+        _iconShape.value = prefs.getString(KEY_ICON_SHAPE, "round") ?: "round"
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
@@ -90,6 +91,19 @@ object SettingsRepository {
     fun setFreezeStyle(style: String) {
         _freezeStyle.value = style
         if (::prefs.isInitialized) prefs.edit().putString(KEY_FREEZE_STYLE, style).apply()
+    }
+
+    // ═══════════════════════════════════════
+    // 图标形状（美化设置：未收录图标包的应用也裁成圆形）
+    // ═══════════════════════════════════════
+
+    private val _iconShape = MutableStateFlow(getStr(KEY_ICON_SHAPE, "round"))
+    /** 图标形状："round"=圆角方形（默认）/"circle"=圆形 */
+    val iconShape: StateFlow<String> = _iconShape.asStateFlow()
+
+    fun setIconShape(shape: String) {
+        _iconShape.value = shape
+        if (::prefs.isInitialized) prefs.edit().putString(KEY_ICON_SHAPE, shape).apply()
     }
 
     fun setShowAppName(enabled: Boolean) {
@@ -178,6 +192,7 @@ object SettingsRepository {
     private const val KEY_TOAST = "show_toast"
     private const val KEY_HAPTIC = "haptic_level"
     private const val KEY_FREEZE_STYLE = "freeze_style"
+    private const val KEY_ICON_SHAPE = "icon_shape"
     private const val KEY_APP_NAME = "show_app_name"
     private const val KEY_BACK_DIR = "back_to_last_dir"
     private const val KEY_COLUMNS = "columns"

@@ -41,12 +41,14 @@ fun BeautyPanel(
     iconPack: String,
     transparentBg: Boolean,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
+    iconShape: String = "round",
     iconPacks: List<AppIconLoader.IconPackInfo>,
     iconPacksLoading: Boolean = false,
     onRefreshIconPacks: () -> Unit = {},
     onIconPackSelect: (String) -> Unit,
     onTransparentToggle: (Boolean) -> Unit,
     onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
+    onIconShapeSelect: (String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     // 浮框内两态：false=主视图，true=图标包列表
@@ -142,6 +144,20 @@ fun BeautyPanel(
                         onCheckedChange = onTransparentToggle,
                     )
                 }
+                // 图标形状（用户拍板：未收录图标包的应用也裁成圆形）
+                Text(
+                    text = "图标形状",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    ShapeButton("圆角方形", selected = iconShape == "round", modifier = Modifier.weight(1f)) {
+                        onIconShapeSelect("round")
+                    }
+                    ShapeButton("圆形", selected = iconShape == "circle", modifier = Modifier.weight(1f)) {
+                        onIconShapeSelect("circle")
+                    }
+                }
                 // 冻结滤镜样式（4 选 1，默认变蓝）
                 Text(
                     text = "冻结图标滤镜",
@@ -199,5 +215,22 @@ private fun PackRow(label: String, selected: Boolean, onClick: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         if (selected) Text("✓", color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/** 图标形状选项按钮 */
+@Composable
+private fun ShapeButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        modifier = modifier,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

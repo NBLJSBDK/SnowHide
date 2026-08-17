@@ -187,6 +187,7 @@ fun HomeScreen(
     // 美化浮框数据：当前图标包/透明开关 + 已装图标包列表
     val iconPack by viewModel.settingsRepository.iconPack.collectAsState()
     val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
+    val iconShape by viewModel.settingsRepository.iconShape.collectAsState()
     val freezeStyleName by viewModel.settingsRepository.freezeStyle.collectAsState()
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
         .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
@@ -432,6 +433,7 @@ fun HomeScreen(
                                             frozenStates = frozenStates,
                                             freezeStyle = freezeStyle,
                                             previewSize = folderPreview,
+                                            iconShape = iconShape,
                                             selected = organizing &&
                                                 organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
                                                 (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
@@ -461,6 +463,7 @@ fun HomeScreen(
                                         icon = icons[item.pkg],
                                         showName = showAppName,
                                         freezeStyle = freezeStyle,
+                                        iconShape = iconShape,
                                         selected = organizing && when (val s = organizeState) {
                                             is OrganizeViewModel.OrganizeState.HomeAppSelected -> s.app.id == item.id
                                             is OrganizeViewModel.OrganizeState.FolderSelected -> s.subHomeApp?.id == item.id
@@ -494,6 +497,7 @@ fun HomeScreen(
                     iconSize = iconSize.dp,
                     verticalSpace = verticalSpace,
                     freezeStyle = freezeStyle,
+                    iconShape = iconShape,
                     showAppName = showAppName,
                     onBackToHome = {
                         scope.launch { pagerState.animateHome(actualCount) }
@@ -775,9 +779,11 @@ fun HomeScreen(
             iconPacks = iconPacks,
             iconPacksLoading = iconPacksLoading,
             onRefreshIconPacks = { refreshIconPacks() },
+            iconShape = iconShape,
             onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
             onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
             onFreezeStyleSelect = { style -> viewModel.settingsRepository.setFreezeStyle(style.name) },
+            onIconShapeSelect = { shape -> viewModel.settingsRepository.setIconShape(shape) },
             onDismiss = { beautyPanelOpen = false },
         )
     }
@@ -864,6 +870,7 @@ private fun AppCell(
     icon: ImageBitmap?,
     showName: Boolean,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
+    iconShape: String = "round",
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -887,7 +894,8 @@ private fun AppCell(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .size(size)
-                        .clip(RoundedCornerShape(size.value * 0.22f))
+                        .clip(if (iconShape == "circle") androidx.compose.foundation.shape.CircleShape
+                        else RoundedCornerShape(size.value * 0.22f))
                         .frosted(enabled = frozen, style = freezeStyle),
                 )
             } else {
@@ -935,6 +943,7 @@ private fun FolderCell(
     frozenStates: Map<String, Boolean> = emptyMap(),
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     previewSize: Int = 2,
+    iconShape: String = "round",
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -986,7 +995,8 @@ private fun FolderCell(
                                                     contentScale = ContentScale.Fit,
                                                     modifier = Modifier
                                                         .size(size / grid * 0.88f)
-                                                        .clip(RoundedCornerShape(size.value * 0.08f))
+                                                        .clip(if (iconShape == "circle") androidx.compose.foundation.shape.CircleShape
+                                                        else RoundedCornerShape(size.value * 0.08f))
                                                         .frosted(enabled = frozen, style = freezeStyle),
                                                 )
                                                 if (frozen) {

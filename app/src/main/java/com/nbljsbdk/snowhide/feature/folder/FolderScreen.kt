@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -57,6 +58,7 @@ fun FolderScreen(
     iconSize: Dp,
     verticalSpace: Int,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
+    iconShape: String = "round",
     showAppName: Boolean,
     onBackToHome: () -> Unit,
     onAppClick: (String) -> Unit,
@@ -135,7 +137,8 @@ fun FolderScreen(
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .size(iconSize)
-                                    .clip(RoundedCornerShape(iconSize.value * 0.22f))
+                                    .clip(if (iconShape == "circle") CircleShape
+                                    else RoundedCornerShape(iconSize.value * 0.22f))
                                     .frosted(enabled = frozenStates[pkg] == true, style = freezeStyle),
                             )
                         }
