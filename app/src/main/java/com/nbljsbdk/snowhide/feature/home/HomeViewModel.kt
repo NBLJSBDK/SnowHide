@@ -49,6 +49,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _icons = MutableStateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap())
     val icons: StateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>> = _icons.asStateFlow()
 
+    /**
+     * 图标加载完成队列（性能：100+ 应用逐个更新 _icons 会触发
+     * 100 次全屏重组导致卡死/ANR——合并成批提交，每批至多隔 100ms）。
+     * 必须声明在 init 之前（init 里 startIconFlusher 引用它）。
+     */
+    private val iconQueue = kotlinx.coroutines.channels.Channel<Pair<String, androidx.compose.ui.graphics.ImageBitmap>>(
+        kotlinx.coroutines.channels.Channel.UNLIMITED
+    )
+
     /** 应用显示名映射（pkg → 中文名，来自全局预加载列表） */
     private val _labels = MutableStateFlow<Map<String, String>>(emptyMap())
     val labels: StateFlow<Map<String, String>> = _labels.asStateFlow()
@@ -173,14 +182,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             iconQueue.send(pkg to icon)
         }
     }
-
-    /**
-     * 图标加载完成队列（性能：100+ 应用逐个更新 _icons 会触发
-     * 100 次全屏重组导致卡死/ANR——合并成批提交，每批至多隔 100ms）
-     */
-    private val iconQueue = kotlinx.coroutines.channels.Channel<Pair<String, androidx.compose.ui.graphics.ImageBitmap>>(
-        kotlinx.coroutines.channels.Channel.UNLIMITED
-    )
 
     /** 批量提交协程（在 init 里启动） */
     private fun startIconFlusher() {
