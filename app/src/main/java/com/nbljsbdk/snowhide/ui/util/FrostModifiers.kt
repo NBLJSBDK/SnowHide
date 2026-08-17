@@ -13,19 +13,19 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 
 /**
- * 冻结图标滤镜样式（用户拍板，美化设置可选，默认变蓝）
+ * 冻结图标滤镜样式（用户拍板终版）
  */
 enum class FreezeStyle {
-    /** 保持原色：只降透明度，无色彩滤镜 */
+    /** 真正原色：完全无任何遮罩（冻结靠雪花角标区分） */
     NONE,
 
-    /** 变灰：去饱和 85%（老版霜化） */
+    /** 变灰：去饱和 85% */
     GRAY,
 
     /** 反色：色彩反转 */
     INVERT,
 
-    /** 变蓝：轻微去饱和 + 冷蓝偏移（结冰效果，默认） */
+    /** 淡化：纯 60% 透明遮罩（无颜色矩阵，原「变蓝」效果） */
     BLUE,
 }
 
@@ -33,6 +33,7 @@ enum class FreezeStyle {
  * 霜化视觉（设计文档 §3.1：冻结 = 结霜）
  *
  * [frosted]：已冻结内容按 [style] 蒙滤镜 + 半透明 + 300ms 渐变过渡。
+ * NONE = 真正原色（连透明度都不动，完全原样）。
  * 实现：drawWithCache 里给内容层套 ColorMatrix 滤镜
  * （graphicsLayer 不支持 colorFilter），alpha 用 graphicsLayer。
  */
@@ -44,7 +45,8 @@ fun Modifier.frosted(
         targetValue = if (enabled) 1f else 0f,
         label = "frost",
     )
-    if (progress <= 0f) {
+    if (progress <= 0f || style == FreezeStyle.NONE) {
+        // NONE：真正原色，完全无遮罩
         this
     } else {
         val alphaLayer = graphicsLayer {
@@ -70,9 +72,9 @@ fun Modifier.frosted(
     }
 }
 
-/** 各样式对应的 ColorMatrix（NONE 返回 null = 无滤镜） */
+/** 各样式对应的 ColorMatrix（null = 无颜色矩阵，仅遮罩） */
 private fun matrixFor(style: FreezeStyle): ColorMatrix? = when (style) {
-    FreezeStyle.NONE -> null
+    FreezeStyle.NONE, FreezeStyle.BLUE -> null
 
     FreezeStyle.GRAY -> ColorMatrix(
         floatArrayOf(
@@ -88,15 +90,6 @@ private fun matrixFor(style: FreezeStyle): ColorMatrix? = when (style) {
             -1f, 0f, 0f, 0f, 255f,
             0f, -1f, 0f, 0f, 255f,
             0f, 0f, -1f, 0f, 255f,
-            0f, 0f, 0f, 1f, 0f,
-        )
-    )
-
-    FreezeStyle.BLUE -> ColorMatrix(
-        floatArrayOf(
-            0.70f, 0.15f, 0.15f, 0f, 10f,
-            0.15f, 0.70f, 0.15f, 0f, 20f,
-            0.10f, 0.20f, 0.70f, 0f, 40f,
             0f, 0f, 0f, 1f, 0f,
         )
     )

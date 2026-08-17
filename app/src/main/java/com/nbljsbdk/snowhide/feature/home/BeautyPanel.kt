@@ -142,7 +142,7 @@ fun BeautyPanel(
                             com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE -> "原色"
                             com.nbljsbdk.snowhide.ui.util.FreezeStyle.GRAY -> "变灰"
                             com.nbljsbdk.snowhide.ui.util.FreezeStyle.INVERT -> "反色"
-                            com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE -> "变蓝"
+                            com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE -> "淡化"
                         }
                         TextButton(
                             onClick = { onFreezeStyleSelect(style) },

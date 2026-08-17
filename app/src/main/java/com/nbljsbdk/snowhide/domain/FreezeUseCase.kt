@@ -94,32 +94,17 @@ class FreezeUseCase(
 
     /**
      * ⚠️ 神之一手（关于页，正式功能，用户拍板优先级最高）：
-     * 解冻目标 = **全部用户应用**（不论是否在雪藏列表）+
-     * **已添加列表中的系统应用**。
-     * 未添加的系统应用（厂商预置禁用，Shell 无权启用）**不碰**——
-     * 消除「Shell cannot change component state」失败噪音。
-     *
-     * 实现：`pm list packages -d`（全部禁用）与 `-d -s`（禁用系统应用）
-     * 集合运算区分用户/系统；走统一批量入口（逐个+进度）。
+     * 解冻设备上**全部**已冻结应用——包括未加入列表的应用与**系统应用**。
+     * 理由（用户拍板）：可能不小心冻结了系统应用/重置后无法解冻，
+     * 神之一手必须够「神」——全部禁用项都尝试启用（失败的系统预置
+     * 组件在结果弹窗里滚动可见+可复制）。
+     * 数据源 `pm list packages -d`，走统一批量入口（逐个+进度）。
      */
     suspend fun unfreezeEverything(): Result<Int> {
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
-        val allFrozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }
-        if (allFrozen.isEmpty()) return Result.success(0)
-        // 禁用的系统应用列表
-        val sysFrozen = engine.exec("pm list packages -d -s")
-            .getOrElse { return Result.failure(it) }
-            .lineSequence()
-            .mapNotNull { it.removePrefix("package:").trim() }
-            .filter { it.isNotEmpty() }
-            .toSet()
-        val added = gridRepository.allAddedPackages().toSet()
-        // 用户应用（非系统，不论列表）+ 已添加的系统应用
-        val targets = allFrozen.filter { pkg ->
-            pkg !in sysFrozen || pkg in added
-        }
-        if (targets.isEmpty()) return Result.success(0)
-        return engine.execBatched(targets, "pm enable", "解冻")
+        val frozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }
+        if (frozen.isEmpty()) return Result.success(0)
+        return engine.execBatched(frozen, "pm enable", "解冻")
     }
 }
