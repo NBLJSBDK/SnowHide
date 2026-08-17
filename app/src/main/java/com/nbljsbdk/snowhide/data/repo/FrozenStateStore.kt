@@ -50,10 +50,6 @@ object FrozenStateStore {
         val map = pkgs.associateWith { it in frozen }
         _states.value = map
         persistCache(map)
-        android.util.Log.d(
-            "SnowHideDock",
-            "refresh: pkgs=$pkgs frozen=$frozen engine=${EngineManager.primaryEngine.value != null}"
-        )
     }
 
     private fun persistCache(map: Map<String, Boolean>) {

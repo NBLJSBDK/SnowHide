@@ -220,7 +220,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         AppIconLoader.iconPackPkg = pkg
         AppIconLoader.clearCache()
         _icons.value = emptyMap()
-        android.util.Log.d("SnowHideIcon", "applyIconPack: $pkg (${gridRepository.allAddedPackages().size} apps)")
         // 重新加载全部已添加应用图标
         gridRepository.allAddedPackages().forEach { p ->
             viewModelScope.launch { loadIcon(p) }

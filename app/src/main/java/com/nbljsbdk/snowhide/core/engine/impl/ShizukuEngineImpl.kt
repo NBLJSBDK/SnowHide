@@ -34,10 +34,8 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
 
     override fun isAvailable(): Boolean {
         val binderOk = Shizuku.pingBinder()
-        android.util.Log.d("SnowHideEngine", "pingBinder=$binderOk")
         if (!binderOk) return false
         val perm = Shizuku.checkSelfPermission()
-        android.util.Log.d("SnowHideEngine", "checkSelfPermission=$perm (GRANTED=${PackageManager.PERMISSION_GRANTED})")
         return perm == PackageManager.PERMISSION_GRANTED
     }
 

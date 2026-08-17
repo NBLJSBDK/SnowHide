@@ -88,7 +88,6 @@ object AppIconLoader {
         runCatching {
             val packContext = context.createPackageContext(iconPackPkg, restrictedFlags())
             appFilterMap(packContext)
-            android.util.Log.d("SnowHideIcon", "prewarm done (${appFilterCache[iconPackPkg]?.size} entries)")
         }
     }
 
@@ -106,7 +105,6 @@ object AppIconLoader {
         val receivers: List<ResolveInfo> = runCatching {
             pm.queryBroadcastReceivers(Intent(ACTION_INSTALL_ICON_PACK), 0)
         }.getOrDefault(emptyList())
-        android.util.Log.d("SnowHideIcon", "broadcast receivers: ${receivers.size}")
         receivers.forEach { info ->
             val pkg = info.activityInfo?.packageName ?: return@forEach
             result.putIfAbsent(
@@ -122,7 +120,6 @@ object AppIconLoader {
 
         // 2. appfilter 扫描（非系统第三方包，assets/appfilter.xml 存在即图标包）
         val apps = pm.getInstalledApplications(0)
-        android.util.Log.d("SnowHideIcon", "installed apps: ${apps.size}")
         apps.filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
             .filter { it.packageName != context.packageName }
             .forEach { app ->
@@ -138,11 +135,9 @@ object AppIconLoader {
                     if (app.packageName.contains("pure") || app.packageName.contains("wind") ||
                         app.packageName.contains("iconpack")
                     ) {
-                        android.util.Log.d("SnowHideIcon", "scan ${app.packageName}: ${e.javaClass.simpleName} ${e.message}")
                     }
                 }.getOrDefault(false)
                 if (hasAppFilter) {
-                    android.util.Log.d("SnowHideIcon", "appfilter found: ${app.packageName}")
                     result[app.packageName] = IconPackInfo(
                         app.packageName,
                         app.loadLabel(pm).toString(),
@@ -150,8 +145,6 @@ object AppIconLoader {
                     )
                 }
             }
-
-        android.util.Log.d("SnowHideIcon", "total packs: ${result.size}")
         scannedPacks = result.values.toList()
         scannedPacks!!
     }
@@ -179,7 +172,6 @@ object AppIconLoader {
                     0,
                 ).isNotEmpty()
             }.getOrDefault(false)
-            android.util.Log.d("SnowHideIcon", "resolveIcon support $packPkg: $support")
             support
         }
 
@@ -236,14 +228,12 @@ object AppIconLoader {
             ?: launchComponent?.flattenToString()?.let { map[it] }
             ?: launchComponent?.flattenToShortString()?.let { map[it] }
         if (drawableName == null) {
-            android.util.Log.d("SnowHideIcon", "no match ${pkg} (map=${map.size})")
             return@runCatching null
         }
         val id = resIdCache.getOrPut(drawableName) {
             packContext.resources.getIdentifier(drawableName, "drawable", iconPackPkg)
         }
         if (id == 0) {
-            android.util.Log.d("SnowHideIcon", "no res ${pkg} -> $drawableName")
             return@runCatching null
         }
         val drawable = packContext.getDrawable(id) ?: return@runCatching null
@@ -258,7 +248,6 @@ object AppIconLoader {
                 drawable.draw(canvas)
             }
         }.getOrNull()
-        android.util.Log.d("SnowHideIcon", "icon ok ${pkg} -> $drawableName")
         bitmap?.let { scaleIcon(it) }?.asImageBitmap()
     }.getOrNull()
 
@@ -285,10 +274,6 @@ object AppIconLoader {
             appFilterCache.getOrPut(iconPackPkg) {
                 val t0 = System.currentTimeMillis()
                 val map = parseAppFilter(packContext)
-                android.util.Log.d(
-                    "SnowHideIcon",
-                    "appfilter parsed: ${map.size} entries, ${System.currentTimeMillis() - t0}ms"
-                )
                 map
             }
         }

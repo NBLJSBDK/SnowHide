@@ -89,7 +89,6 @@ object GridRepository {
 
     /** 添加应用到主屏末尾 */
     fun addAppToHome(pkg: String) {
-        android.util.Log.d("SnowHideGrid", "addAppToHome: $pkg, before=${_gridItems.value.size}")
         if (isAppAdded(pkg)) return
         val items = _gridItems.value.toMutableList()
         items.add(
@@ -101,7 +100,6 @@ object GridRepository {
             )
         )
         _gridItems.value = items
-        android.util.Log.d("SnowHideGrid", "addAppToHome done, after=${_gridItems.value.size}")
         persist()
     }
 
