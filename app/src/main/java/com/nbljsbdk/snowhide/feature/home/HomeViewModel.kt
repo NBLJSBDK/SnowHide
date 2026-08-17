@@ -212,11 +212,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 用户从设置切换图标包后刷新 */
+    /** 用户从设置切换图标包后刷新（持久化 + 重载全部图标） */
     fun applyIconPack(pkg: String) {
+        settingsRepository.setIconPack(pkg) // 持久化（之前缺失，重启丢失）
         AppIconLoader.iconPackPkg = pkg
         AppIconLoader.clearCache()
         _icons.value = emptyMap()
+        android.util.Log.d("SnowHideIcon", "applyIconPack: $pkg (${gridRepository.allAddedPackages().size} apps)")
         // 重新加载全部已添加应用图标
         gridRepository.allAddedPackages().forEach { p ->
             viewModelScope.launch { loadIcon(p) }
