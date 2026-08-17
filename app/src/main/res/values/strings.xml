@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">雪藏</string>
+    <string name="accessibility_lock_clean_desc">用于保活「锁屏自动清理」功能：确保息屏后定时清理可靠执行。本服务不读取任何屏幕内容。</string>
 </resources>

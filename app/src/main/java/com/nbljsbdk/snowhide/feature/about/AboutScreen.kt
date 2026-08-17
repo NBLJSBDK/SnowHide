@@ -167,8 +167,10 @@ fun AboutScreen(
             Text(
                 text = "• Shizuku（API_V23）：以 shell 身份执行冻结/解冻命令\n" +
                     "• 查询已装应用：增删应用界面显示应用列表\n" +
-                    "• 通知：快捷方式执行失败时提示（成功用 Toast）\n" +
+                    "• 通知：快捷方式/锁屏清理结果提示（成功用 Toast）\n" +
                     "• 震动：底部栏锁定/解锁反馈（受系统静音控制）\n" +
+                    "• 无障碍服务：锁屏自动清理保活（不读取屏幕内容）；\n" +
+                    "  后续「划卡停用」功能复用\n" +
                     "• 自启动/后台运行：请在系统设置中允许（锁屏清理等后台功能需要）",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

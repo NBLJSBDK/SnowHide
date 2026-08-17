@@ -50,6 +50,8 @@ class MainActivity : ComponentActivity() {
         com.nbljsbdk.snowhide.ui.util.AppIconLoader.init(applicationContext) // 图标加载器单例
         registerDynamicShortcuts()
         requestNotificationPermissionIfNeeded()
+        // 锁屏自动清理：动态注册息屏/解锁广播（进程存活期间生效）
+        com.nbljsbdk.snowhide.service.LockCleanReceiver.register(applicationContext)
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {

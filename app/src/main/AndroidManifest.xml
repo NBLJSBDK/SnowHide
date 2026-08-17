@@ -46,6 +46,29 @@
             android:taskAffinity="com.nbljsbdk.snowhide.shortcut"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- 锁屏自动清理：闹钟触发接收器（静态注册，进程被杀后闹钟仍能唤醒执行） -->
+        <receiver
+            android:name=".service.LockCleanReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nbljsbdk.snowhide.action.LOCK_CLEAN" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 锁屏自动清理保活：无障碍服务（系统信任组件防杀，不读取屏幕内容） -->
+        <service
+            android:name=".service.LockCleanAccessibilityService"
+            android:exported="false"
+            android:label="锁屏自动清理保活"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/lock_clean_accessibility" />
+        </service>
+
         <!-- 快速启停下拉磁贴（§3.9） -->
         <service
             android:name=".service.QuickToggleTileService"

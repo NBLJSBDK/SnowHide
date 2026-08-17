@@ -69,6 +69,9 @@ fun SettingsScreen(
     val showAppName by settings.showAppName.collectAsState()
     val backToDir by settings.backToLastDir.collectAsState()
     val hapticLevel by settings.hapticLevel.collectAsState()
+    val lockCleanEnabled by settings.lockCleanEnabled.collectAsState()
+    val lockCleanDelay by settings.lockCleanDelay.collectAsState()
+    val lockCleanNotify by settings.lockCleanNotify.collectAsState()
 
     // 三级菜单：创建快捷方式子屏
     var showShortcutCreate by remember { mutableStateOf(false) }
@@ -249,6 +252,43 @@ fun SettingsScreen(
                     steps = 3,
                     onValue = { settings.setHapticLevel(it.toInt()) },
                 )
+            }
+
+            // ── 锁屏自动清理（用户拍板语义：首次熄屏计时，解锁取消，到时清理一次） ──
+            SettingCard("锁屏自动清理") {
+                SwitchSetting("锁屏后自动清理", lockCleanEnabled) { settings.setLockCleanEnabled(it) }
+                SliderSetting(
+                    label = "延迟：${lockCleanDelay} 分钟（0=息屏立即）",
+                    value = lockCleanDelay.toFloat(),
+                    range = 0f..120f,
+                    steps = 11, // 10 分钟一档，共 13 档
+                    onValue = { settings.setLockCleanDelay(it.toInt()) },
+                )
+                SwitchSetting("清理完成通知", lockCleanNotify) { settings.setLockCleanNotify(it) }
+                Text(
+                    text = "息屏后 ${lockCleanDelay} 分钟内未解锁 → 自动智能清理（豁免锁定）；解锁即取消，下次熄屏重新计时。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // 无障碍保活引导（防止 ColorOS 杀进程导致计时失效）
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            )
+                        }
+                        .padding(vertical = 6.dp),
+                ) {
+                    Text(
+                        text = "开启无障碍保活（推荐，防杀后台）▸",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

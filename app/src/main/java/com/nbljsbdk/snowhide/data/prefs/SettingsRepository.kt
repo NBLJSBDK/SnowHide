@@ -34,6 +34,9 @@ object SettingsRepository {
         _iconPack.value = prefs.getString(KEY_ICON_PACK, "") ?: ""
         _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
         _iconShape.value = prefs.getString(KEY_ICON_SHAPE, "round") ?: "round"
+        _lockCleanEnabled.value = prefs.getBoolean(KEY_LOCK_CLEAN, false)
+        _lockCleanDelay.value = prefs.getInt(KEY_LOCK_CLEAN_DELAY, 30)
+        _lockCleanNotify.value = prefs.getBoolean(KEY_LOCK_CLEAN_NOTIFY, true)
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
@@ -104,6 +107,34 @@ object SettingsRepository {
     fun setIconShape(shape: String) {
         _iconShape.value = shape
         if (::prefs.isInitialized) prefs.edit().putString(KEY_ICON_SHAPE, shape).apply()
+    }
+
+    // ═══════════════════════════════════════
+    // 锁屏自动清理（设置页卡片，用户拍板语义）
+    // ═══════════════════════════════════════
+
+    private val _lockCleanEnabled = MutableStateFlow(getBool(KEY_LOCK_CLEAN, false))
+    /** 锁屏后自动清理开关 */
+    val lockCleanEnabled: StateFlow<Boolean> = _lockCleanEnabled.asStateFlow()
+
+    private val _lockCleanDelay = MutableStateFlow(getInt(KEY_LOCK_CLEAN_DELAY, 30))
+    /** 息屏后延迟分钟（0=立即，10 分钟一档 0..120） */
+    val lockCleanDelay: StateFlow<Int> = _lockCleanDelay.asStateFlow()
+
+    private val _lockCleanNotify = MutableStateFlow(getBool(KEY_LOCK_CLEAN_NOTIFY, true))
+    /** 清理完成通知开关 */
+    val lockCleanNotify: StateFlow<Boolean> = _lockCleanNotify.asStateFlow()
+
+    fun setLockCleanEnabled(enabled: Boolean) {
+        _lockCleanEnabled.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_LOCK_CLEAN, enabled).apply()
+    }
+
+    fun setLockCleanDelay(minutes: Int) = save(KEY_LOCK_CLEAN_DELAY, minutes) { _lockCleanDelay.value = it }
+
+    fun setLockCleanNotify(enabled: Boolean) {
+        _lockCleanNotify.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_LOCK_CLEAN_NOTIFY, enabled).apply()
     }
 
     fun setShowAppName(enabled: Boolean) {
@@ -193,6 +224,9 @@ object SettingsRepository {
     private const val KEY_HAPTIC = "haptic_level"
     private const val KEY_FREEZE_STYLE = "freeze_style"
     private const val KEY_ICON_SHAPE = "icon_shape"
+    private const val KEY_LOCK_CLEAN = "lock_clean_enabled"
+    private const val KEY_LOCK_CLEAN_DELAY = "lock_clean_delay"
+    private const val KEY_LOCK_CLEAN_NOTIFY = "lock_clean_notify"
     private const val KEY_APP_NAME = "show_app_name"
     private const val KEY_BACK_DIR = "back_to_last_dir"
     private const val KEY_COLUMNS = "columns"
