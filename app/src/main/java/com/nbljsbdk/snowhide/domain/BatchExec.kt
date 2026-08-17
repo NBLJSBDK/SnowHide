@@ -33,6 +33,12 @@ suspend fun PowerEngine.execBatched(
     } finally {
         BatchProgress.end()
     }
-    return if (failures.isEmpty()) Result.success(success)
-    else Result.failure(IllegalStateException("部分失败：${failures.joinToString("；")}"))
+    return if (failures.isEmpty()) {
+        Result.success(success)
+    } else {
+        // 失败汇总：数量 + 前 5 个明细 + 成功数（避免 113 个包名拼成长串）
+        val preview = failures.take(5).joinToString("；")
+        val tail = if (failures.size > 5) " 等 ${failures.size} 个失败" else ""
+        Result.failure(IllegalStateException("部分失败：$preview$tail（成功 $success 个）"))
+    }
 }
