@@ -73,6 +73,11 @@ object AppIconLoader {
         scannedPacks = null
     }
 
+    /** 只清除图标包扫描缓存（手动刷新列表用，不清图标缓存） */
+    fun clearScanCache() {
+        scannedPacks = null
+    }
+
     /** 发现所有已装图标包（广播 + appfilter 扫描，去重） */
     suspend fun queryIconPacks(): List<IconPackInfo> = withContext(Dispatchers.IO) {
         scannedPacks?.let { return@withContext it }

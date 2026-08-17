@@ -42,6 +42,8 @@ fun BeautyPanel(
     transparentBg: Boolean,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
     iconPacks: List<AppIconLoader.IconPackInfo>,
+    iconPacksLoading: Boolean = false,
+    onRefreshIconPacks: () -> Unit = {},
     onIconPackSelect: (String) -> Unit,
     onTransparentToggle: (Boolean) -> Unit,
     onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
@@ -80,6 +82,14 @@ fun BeautyPanel(
                         onIconPackSelect("")
                         showPackList = false
                     }
+                    if (iconPacksLoading && iconPacks.isEmpty()) {
+                        Text(
+                            text = "正在扫描图标包…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
                     iconPacks.forEach { pack ->
                         PackRow(pack.label, selected = iconPack == pack.pkg) {
                             onIconPackSelect(pack.pkg)
@@ -88,6 +98,8 @@ fun BeautyPanel(
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+                    // 手动刷新（用户拍板：不自动重扫，需要时点这里）
+                    TextButton(onClick = onRefreshIconPacks) { Text("刷新") }
                     TextButton(onClick = { showPackList = false }) { Text("返回") }
                 }
             } else {

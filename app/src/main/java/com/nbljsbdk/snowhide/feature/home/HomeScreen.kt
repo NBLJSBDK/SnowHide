@@ -191,9 +191,22 @@ fun HomeScreen(
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
         .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
     var iconPacks by remember { mutableStateOf<List<com.nbljsbdk.snowhide.ui.util.AppIconLoader.IconPackInfo>>(emptyList()) }
+    var iconPacksLoading by remember { mutableStateOf(false) }
     LaunchedEffect(beautyPanelOpen) {
+        // 打开时若列表为空才扫描（AppIconLoader 内部有扫描缓存，秒回）
         if (beautyPanelOpen && iconPacks.isEmpty()) {
+            iconPacksLoading = true
             iconPacks = com.nbljsbdk.snowhide.ui.util.AppIconLoader.queryIconPacks()
+            iconPacksLoading = false
+        }
+    }
+    // 手动刷新图标包列表（用户拍板：不每次自动重扫，需要时点刷新）
+    fun refreshIconPacks() {
+        com.nbljsbdk.snowhide.ui.util.AppIconLoader.clearScanCache()
+        scope.launch {
+            iconPacksLoading = true
+            iconPacks = com.nbljsbdk.snowhide.ui.util.AppIconLoader.queryIconPacks()
+            iconPacksLoading = false
         }
     }
 
@@ -760,6 +773,8 @@ fun HomeScreen(
             transparentBg = transparentBg,
             freezeStyle = freezeStyle,
             iconPacks = iconPacks,
+            iconPacksLoading = iconPacksLoading,
+            onRefreshIconPacks = { refreshIconPacks() },
             onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
             onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
             onFreezeStyleSelect = { style -> viewModel.settingsRepository.setFreezeStyle(style.name) },
