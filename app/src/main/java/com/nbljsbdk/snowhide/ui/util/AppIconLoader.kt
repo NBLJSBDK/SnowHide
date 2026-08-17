@@ -3,7 +3,7 @@ package com.nbljsbdk.snowhide.ui.util
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
@@ -18,12 +18,15 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
 /**
- * 应用图标加载器（图标包协议 + 系统图标回退 + 内存缓存）
+ * 应用图标加载器（图标包协议 + appfilter 解析 + 系统回退 + 内存缓存）
  *
  * 设计文档 §3.4：支持第三方系统图标包——
- * - 发现：queryBroadcastReceivers(INSTALL_ICON_PACK)
- * - 请求：RESOLVE_ICON 有序广播（extra 包名）→ 图标包返回 Bitmap
- * - 失败/未选择 → 回退系统默认图标
+ * 1. 发现：INSTALL_ICON_PACK 广播（标准包）+ **appfilter 扫描**
+ *    （Pure 轻语/轻风等无广播的包，assets/appfilter.xml 存在即图标包）
+ * 2. 请求：RESOLVE_ICON 有序广播（标准包）→ 失败回退
+ *    **appfilter.xml 解析**（组件 → drawable 资源，createPackageContext
+ *    访问非公开资源）
+ * 3. 失败/未选择 → 回退系统默认图标
  */
 object AppIconLoader {
 
@@ -35,11 +38,17 @@ object AppIconLoader {
         AppIconLoader.context = context.applicationContext
     }
 
-    /** 已装图标包信息（设置页选择器数据源） */
+    /** 已装图标包信息（美化浮框选择器数据源） */
     data class IconPackInfo(val pkg: String, val label: String, val icon: ImageBitmap)
 
     private val pm: PackageManager get() = context.packageManager
     private val cache = mutableMapOf<String, ImageBitmap>()
+
+    /** 已解析的 appfilter 映射缓存（图标包 → component→drawable 名） */
+    private val appFilterCache = mutableMapOf<String, Map<String, String>>()
+
+    /** appfilter 扫描结果缓存（避免每次全量遍历已装包） */
+    private var scannedPacks: List<IconPackInfo>? = null
 
     /** 当前使用的图标包包名（空 = 系统默认） */
     @Volatile
@@ -58,35 +67,73 @@ object AppIconLoader {
     }
 
     /** 清空缓存（切换图标包时调用） */
-    fun clearCache() = cache.clear()
-
-    /** 发现所有已装图标包 */
-    suspend fun queryIconPacks(): List<IconPackInfo> = withContext(Dispatchers.IO) {
-        val intent = Intent(ACTION_INSTALL_ICON_PACK)
-        val receivers: List<ResolveInfo> = runCatching {
-            pm.queryBroadcastReceivers(intent, 0)
-        }.getOrDefault(emptyList())
-
-        receivers.mapNotNull { info ->
-            val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
-            val label = runCatching {
-                info.loadLabel(pm).toString()
-            }.getOrDefault(pkg)
-            val icon = runCatching {
-                info.loadIcon(pm).toBitmap().asImageBitmap()
-            }.getOrNull()
-            IconPackInfo(pkg, label, icon ?: loadSystemIcon(pkg))
-        }
+    fun clearCache() {
+        cache.clear()
+        appFilterCache.clear()
+        scannedPacks = null
     }
 
-    /** 向图标包请求自定义图标（标准 Launcher 协议，有序广播等待结果） */
+    /** 发现所有已装图标包（广播 + appfilter 扫描，去重） */
+    suspend fun queryIconPacks(): List<IconPackInfo> = withContext(Dispatchers.IO) {
+        scannedPacks?.let { return@withContext it }
+        val result = linkedMapOf<String, IconPackInfo>()
+
+        // 1. 标准广播发现
+        val receivers: List<ResolveInfo> = runCatching {
+            pm.queryBroadcastReceivers(Intent(ACTION_INSTALL_ICON_PACK), 0)
+        }.getOrDefault(emptyList())
+        receivers.forEach { info ->
+            val pkg = info.activityInfo?.packageName ?: return@forEach
+            result.putIfAbsent(
+                pkg,
+                IconPackInfo(
+                    pkg,
+                    runCatching { info.loadLabel(pm).toString() }.getOrDefault(pkg),
+                    runCatching { info.loadIcon(pm).toBitmap().asImageBitmap() }
+                        .getOrNull() ?: loadSystemIcon(pkg),
+                ),
+            )
+        }
+
+        // 2. appfilter 扫描（非系统第三方包，assets/appfilter.xml 存在即图标包）
+        pm.getInstalledApplications(0)
+            .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
+            .filter { it.packageName != context.packageName }
+            .forEach { app ->
+                if (app.packageName in result) return@forEach
+                val hasAppFilter = runCatching {
+                    context.createPackageContext(
+                        app.packageName,
+                        Context.CONTEXT_INCLUDE_CODE,
+                    ).assets.open("appfilter.xml").close()
+                    true
+                }.getOrDefault(false)
+                if (hasAppFilter) {
+                    result[app.packageName] = IconPackInfo(
+                        app.packageName,
+                        app.loadLabel(pm).toString(),
+                        loadSystemIcon(app.packageName),
+                    )
+                }
+            }
+
+        scannedPacks = result.values.toList()
+        scannedPacks!!
+    }
+
+    /** 向图标包请求自定义图标：RESOLVE_ICON 广播优先，appfilter 解析回退 */
     private suspend fun loadIconPackIcon(pkg: String): ImageBitmap? {
         if (iconPackPkg.isEmpty()) return null
+        val broadcast = requestResolveIcon(pkg)
+        if (broadcast != null) return broadcast
+        return loadAppFilterIcon(pkg)
+    }
+
+    /** 标准 Launcher 协议：RESOLVE_ICON 有序广播 */
+    private suspend fun requestResolveIcon(pkg: String): ImageBitmap? {
         val intent = Intent(ACTION_RESOLVE_ICON).apply {
             setPackage(iconPackPkg)
             putExtra(EXTRA_PACKAGE, pkg)
-            // 标准协议：component 必须传 ComponentName（目标应用启动组件），
-            // 传字符串 "pkg/." 图标包不识别
             val component = runCatching {
                 pm.getLaunchIntentForPackage(pkg)?.component
             }.getOrNull()
@@ -118,6 +165,66 @@ object AppIconLoader {
         }.getOrNull()
     }
 
+    /**
+     * appfilter.xml 协议（Pure 轻语/轻风等无广播图标包）：
+     * 解析 <item component="ComponentInfo{com.pkg/...}" drawable="name"/>
+     * 匹配目标应用组件 → 加载图标包 res/drawable 资源。
+     */
+    private fun loadAppFilterIcon(pkg: String): ImageBitmap? = runCatching {
+        val packContext = context.createPackageContext(iconPackPkg, Context.CONTEXT_INCLUDE_CODE)
+        val map = appFilterCache.getOrPut(iconPackPkg) {
+            parseAppFilter(packContext)
+        }
+        val launchComponent = pm.getLaunchIntentForPackage(pkg)?.component
+            ?: return@runCatching null
+        // 尝试完整组件 + 包名匹配（部分图标包只写包名）
+        val drawableName = map[launchComponent.flattenToString()]
+            ?: map[launchComponent.flattenToShortString()]
+            ?: map[pkg]
+            ?: return@runCatching null
+        val id = packContext.resources.getIdentifier(drawableName, "drawable", iconPackPkg)
+        if (id == 0) return@runCatching null
+        val drawable = packContext.getDrawable(id) ?: return@runCatching null
+        val bitmap = (drawable as? BitmapDrawable)?.bitmap ?: runCatching {
+            Bitmap.createBitmap(
+                drawable.intrinsicWidth.coerceAtLeast(1),
+                drawable.intrinsicHeight.coerceAtLeast(1),
+                Bitmap.Config.ARGB_8888,
+            ).also { b ->
+                val canvas = android.graphics.Canvas(b)
+                drawable.setBounds(0, 0, b.width, b.height)
+                drawable.draw(canvas)
+            }
+        }.getOrNull()
+        bitmap?.asImageBitmap()
+    }.getOrNull()
+
+    /** 解析 appfilter.xml → component 全名 → drawable 名 */
+    private fun parseAppFilter(packContext: Context): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        runCatching {
+            val parser = android.util.Xml.newPullParser()
+            parser.setInput(packContext.assets.open("appfilter.xml"), null)
+            var event = parser.eventType
+            while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                if (event == org.xmlpull.v1.XmlPullParser.START_TAG &&
+                    parser.name == "item"
+                ) {
+                    val component = parser.getAttributeValue(null, "component")
+                    val drawable = parser.getAttributeValue(null, "drawable")
+                    if (component != null && drawable != null) {
+                        // ComponentInfo{com.pkg/com.pkg.Activity} → 提取内部全名
+                        val inner = component.substringAfter("{").substringBefore("}")
+                        map[inner] = drawable
+                        map[component.substringAfter("{").substringBefore("/")] = drawable
+                    }
+                }
+                event = parser.next()
+            }
+        }
+        return map
+    }
+
     /** 系统默认图标（回退） */
     private fun loadSystemIcon(pkg: String): ImageBitmap {
         val drawable = runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
@@ -137,7 +244,7 @@ object AppIconLoader {
         return bitmap?.asImageBitmap() ?: fallbackIcon()
     }
 
-    /** 兜底占位图标（灰色圆块） */
+    /** 兜底占位图标（浅色圆块） */
     private fun fallbackIcon(): ImageBitmap {
         val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(0xFFD8E4F1.toInt())
