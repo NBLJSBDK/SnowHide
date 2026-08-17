@@ -1,8 +1,11 @@
 package com.nbljsbdk.snowhide.feature.about
 
 import android.app.Application
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -210,12 +215,30 @@ fun AboutScreen(
         }
     }
 
-    // 神之一手结果弹窗
+    // 神之一手结果弹窗（完整明细可滚动 + 复制按钮，用户拍板）
     godHandMessage?.let { msg ->
+        val clipboard = LocalClipboardManager.current
         AlertDialog(
             onDismissRequest = { godHandMessage = null },
             title = { Text("神之一手") },
-            text = { Text(msg) },
+            text = {
+                Column {
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                    TextButton(
+                        onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(msg))
+                            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                        },
+                    ) { Text("复制") }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = { godHandMessage = null }) { Text("知道了") }
             },
