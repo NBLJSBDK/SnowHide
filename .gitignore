@@ -18,3 +18,4 @@ session-*.md
 keystore.properties
 secrets.properties
 shizuku.apk
+/assets/
