@@ -28,20 +28,38 @@ object BackupRepository {
         return root.toString(2)
     }
 
-    /** 导入 JSON 文本并写回 SP（返回写入的键总数） */
+    /** 只导出目录数据（宫格/文件夹/成员） */
+    fun exportGrid(context: Context): String {
+        val root = JSONObject()
+        root.put("version", VERSION)
+        root.put("grid", prefsToJson(context.getSharedPreferences(PREFS_GRID, Context.MODE_PRIVATE)))
+        return root.toString(2)
+    }
+
+    /** 只导出设置数据 */
+    fun exportSettings(context: Context): String {
+        val root = JSONObject()
+        root.put("version", VERSION)
+        root.put("settings", prefsToJson(context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)))
+        return root.toString(2)
+    }
+
+    /** 导入 JSON 文本并写回 SP（返回写入的键总数；缺 section 容错） */
     fun importBackup(context: Context, json: String): Int {
         val root = JSONObject(json)
-        val grid = root.getJSONObject("grid")
-        val settings = root.getJSONObject("settings")
         var count = 0
-        count += jsonToPrefs(
-            context.getSharedPreferences(PREFS_GRID, Context.MODE_PRIVATE),
-            grid,
-        )
-        count += jsonToPrefs(
-            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE),
-            settings,
-        )
+        if (root.has("grid")) {
+            count += jsonToPrefs(
+                context.getSharedPreferences(PREFS_GRID, Context.MODE_PRIVATE),
+                root.getJSONObject("grid"),
+            )
+        }
+        if (root.has("settings")) {
+            count += jsonToPrefs(
+                context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE),
+                root.getJSONObject("settings"),
+            )
+        }
         return count
     }
 

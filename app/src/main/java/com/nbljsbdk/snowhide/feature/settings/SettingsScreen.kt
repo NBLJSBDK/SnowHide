@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -88,14 +92,21 @@ fun SettingsScreen(
         }
     }
 
-    // 导出：SAF 创建文档（无需存储权限），默认文件名「雪藏备份.json」
+    // 导出：SAF 创建文档（无需存储权限）；类型 all/grid/settings 区分内容
+    var exportType by remember { mutableStateOf("all") }
+    var exportMenuOpen by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri != null) {
             val ok = runCatching {
+                val json = when (exportType) {
+                    "grid" -> com.nbljsbdk.snowhide.data.repo.BackupRepository.exportGrid(context)
+                    "settings" -> com.nbljsbdk.snowhide.data.repo.BackupRepository.exportSettings(context)
+                    else -> com.nbljsbdk.snowhide.data.repo.BackupRepository.exportBackup(context)
+                }
                 context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(com.nbljsbdk.snowhide.data.repo.BackupRepository.exportBackup(context).toByteArray())
+                    out.write(json.toByteArray())
                 } ?: error("无法打开输出流")
             }
             message = ok.fold(
@@ -210,19 +221,53 @@ fun SettingsScreen(
 
             // ── 备份（debug 导出 → release 导入，跨包迁移） ──
             SettingCard("备份") {
+                // 导出：气泡菜单（全部/目录/设置），靠右弹出（用户拍板）
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            // 文件名带时间戳精确到秒：雪藏备份2608132319.json
+                        .clickable { exportMenuOpen = true },
+                ) {
+                    Text("导出数据", modifier = Modifier.weight(1f))
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+                DropdownMenu(
+                    expanded = exportMenuOpen,
+                    onDismissRequest = { exportMenuOpen = false },
+                    modifier = Modifier.width(140.dp),
+                    // 靠右弹出：菜单宽 140dp，行宽约 300dp，右移约 160dp
+                    offset = androidx.compose.ui.unit.DpOffset(160.dp, 0.dp),
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("导出全部") },
+                        onClick = {
+                            exportMenuOpen = false
+                            exportType = "all"
                             val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
                                 .format(java.util.Date())
                             exportLauncher.launch("雪藏备份$stamp.json")
                         },
-                ) {
-                    Text("导出数据", modifier = Modifier.weight(1f))
-                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                    )
+                    DropdownMenuItem(
+                        text = { Text("导出目录") },
+                        onClick = {
+                            exportMenuOpen = false
+                            exportType = "grid"
+                            val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
+                                .format(java.util.Date())
+                            exportLauncher.launch("雪藏目录$stamp.json")
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("导出设置") },
+                        onClick = {
+                            exportMenuOpen = false
+                            exportType = "settings"
+                            val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
+                                .format(java.util.Date())
+                            exportLauncher.launch("雪藏设置$stamp.json")
+                        },
+                    )
                 }
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(vertical = 2.dp))
                 Row(
