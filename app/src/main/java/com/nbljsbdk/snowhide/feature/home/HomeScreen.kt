@@ -90,6 +90,7 @@ import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.feature.about.AboutScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
+import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
 import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
@@ -942,13 +943,10 @@ private fun AppCell(
         }
         if (showName) {
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
+            // 白字黑边（壁纸透明背景下可读）
+            OutlinedText(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = if (frozen) MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -1040,12 +1038,10 @@ private fun FolderCell(
             }
         }
         Spacer(modifier = Modifier.height(2.dp))
-        Text(
+        // 白字黑边（壁纸透明背景下可读）
+        OutlinedText(
             text = name,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

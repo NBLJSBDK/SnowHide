@@ -153,14 +153,10 @@ fun FolderScreen(
                         }
                     }
                     if (showAppName) {
-                        Text(
+                        // 白字黑边（壁纸透明背景下可读）
+                        com.nbljsbdk.snowhide.ui.components.OutlinedText(
                             text = onAppLabel(pkg),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (frozenStates[pkg] == true)
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
