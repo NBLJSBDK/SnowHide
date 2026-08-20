@@ -3,6 +3,8 @@
 package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateTo
@@ -59,6 +61,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -83,6 +86,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.R
@@ -133,6 +138,7 @@ fun HomeScreen(
     val folderPreview by viewModel.settingsRepository.folderPreview.collectAsState()
     val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
     val showReturnHomeButton by viewModel.settingsRepository.showReturnHomeButton.collectAsState()
+    val resetHomeOnReentry by viewModel.settingsRepository.resetHomeOnReentry.collectAsState()
     val message by viewModel.message.collectAsState()
     val menuOpen by viewModel.menuOpen.collectAsState()
     val organizing by viewModel.organizing.collectAsState()
@@ -256,6 +262,41 @@ fun HomeScreen(
         // 当前页索引（0=主屏）：顶栏动态显示主屏「雪藏」/ 文件夹名
         val pageIdx = pagerState.currentPage % actualCount
         val inFolder = !organizing && pageIdx != 0
+        val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
+        DisposableEffect(lifecycleOwner, resetHomeOnReentry, actualCount) {
+            var stoppedAt = 0L
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_STOP -> {
+                        stoppedAt = SystemClock.elapsedRealtime()
+                    }
+                    Lifecycle.Event.ON_START -> {
+                        val awayFor = if (stoppedAt == 0L) {
+                            0L
+                        } else {
+                            SystemClock.elapsedRealtime() - stoppedAt
+                        }
+                        stoppedAt = 0L
+                        if (resetHomeOnReentry && awayFor >= REENTRY_HOME_DELAY_MS) {
+                            searchOpen = false
+                            viewModel.setSearchQuery("")
+                            viewModel.dismissMenu()
+                            scope.launch { pagerState.scrollHome(actualCount) }
+                            Toast.makeText(
+                                context,
+                                "${context.getString(com.nbljsbdk.snowhide.R.string.app_name)}离开超过10秒，已回到主屏幕",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -1317,3 +1358,4 @@ private fun DialogAction(label: String, onClick: () -> Unit) {
 /** 循环 Pager 放大倍数（大页数实现无缝循环，取模定位真实页） */
 private const val LOOP_BASE = 500
 private const val LOOP_TOTAL = 1000
+private const val REENTRY_HOME_DELAY_MS = 10_000L

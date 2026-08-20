@@ -22,6 +22,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -46,6 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
@@ -72,7 +76,7 @@ fun SettingsScreen(
     val showToast by settings.showToast.collectAsState()
     val showAppName by settings.showAppName.collectAsState()
     val showReturnHomeButton by settings.showReturnHomeButton.collectAsState()
-    val backToDir by settings.backToLastDir.collectAsState()
+    val resetHomeOnReentry by settings.resetHomeOnReentry.collectAsState()
     val hapticLevel by settings.hapticLevel.collectAsState()
     val lockCleanEnabled by settings.lockCleanEnabled.collectAsState()
     val lockCleanDelay by settings.lockCleanDelay.collectAsState()
@@ -80,6 +84,7 @@ fun SettingsScreen(
 
     // 三级菜单：创建快捷方式子屏
     var showShortcutCreate by remember { mutableStateOf(false) }
+    var reentryInfoOpen by remember { mutableStateOf(false) }
 
     // 备份导出/导入提示
     val context = LocalContext.current
@@ -163,6 +168,19 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { restartPrompt = false }) { Text("稍后") }
+            },
+        )
+    }
+
+    if (reentryInfoOpen) {
+        AlertDialog(
+            onDismissRequest = { reentryInfoOpen = false },
+            title = { Text("重进时回到主屏") },
+            text = {
+                Text("开启后，离开雪藏超过 10 秒，再次进入会自动回到主屏并关闭搜索状态，同时提示 Toast。10 秒内返回则保留当前页面。")
+            },
+            confirmButton = {
+                TextButton(onClick = { reentryInfoOpen = false }) { Text("知道了") }
             },
         )
     }
@@ -289,7 +307,12 @@ fun SettingsScreen(
                 SwitchSetting("显示返回主屏按钮", showReturnHomeButton) {
                     settings.setShowReturnHomeButton(it)
                 }
-                SwitchSetting("退出后回到当前目录", backToDir) { settings.setBackToLastDir(it) }
+                SwitchSetting(
+                    label = "重进时回到主屏",
+                    checked = resetHomeOnReentry,
+                    onChange = { settings.setResetHomeOnReentry(it) },
+                    onInfo = { reentryInfoOpen = true },
+                )
             }
 
             // ── 震动反馈（临时放这里，位置后续再定） ──
@@ -388,6 +411,7 @@ private fun SliderSetting(
 private fun SwitchSetting(
     label: String,
     checked: Boolean,
+    onInfo: (() -> Unit)? = null,
     onChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -397,6 +421,15 @@ private fun SwitchSetting(
             .clickable { onChange(!checked) },
     ) {
         Text(label, modifier = Modifier.weight(1f))
+        if (onInfo != null) {
+            IconButton(onClick = onInfo) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = "功能说明",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Checkbox(checked = checked, onCheckedChange = onChange)
     }
 }

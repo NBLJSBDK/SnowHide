@@ -25,7 +25,7 @@ object SettingsRepository {
         _showToast.value = prefs.getBoolean(KEY_TOAST, true)
         _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
         _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, true)
-        _backToLastDir.value = prefs.getBoolean(KEY_BACK_DIR, true)
+        _resetHomeOnReentry.value = prefs.getBoolean(KEY_BACK_DIR, true)
         _hapticLevel.value = prefs.getInt(KEY_HAPTIC, 4)
         _columns.value = prefs.getInt(KEY_COLUMNS, 4)
         _iconSize.value = prefs.getInt(KEY_ICON_SIZE, 56)
@@ -72,9 +72,9 @@ object SettingsRepository {
     /** 文件夹内是否显示返回主屏按钮 */
     val showReturnHomeButton: StateFlow<Boolean> = _showReturnHomeButton.asStateFlow()
 
-    private val _backToLastDir = MutableStateFlow(getBool(KEY_BACK_DIR, true))
-    /** 退出程序后是否回到当前目录（保存最后退出目录） */
-    val backToLastDir: StateFlow<Boolean> = _backToLastDir.asStateFlow()
+    private val _resetHomeOnReentry = MutableStateFlow(getBool(KEY_BACK_DIR, true))
+    /** 离开应用超过阈值后重新进入是否回到主屏 */
+    val resetHomeOnReentry: StateFlow<Boolean> = _resetHomeOnReentry.asStateFlow()
 
     fun setShowToast(enabled: Boolean) {
         _showToast.value = enabled
@@ -170,8 +170,8 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_RETURN_HOME_BUTTON, enabled).apply()
     }
 
-    fun setBackToLastDir(enabled: Boolean) {
-        _backToLastDir.value = enabled
+    fun setResetHomeOnReentry(enabled: Boolean) {
+        _resetHomeOnReentry.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_BACK_DIR, enabled).apply()
     }
 
