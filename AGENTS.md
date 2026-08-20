@@ -237,6 +237,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 ## 14. adb usage
 
 - adb 位置：`C:\Users\nbljsbdk\AppData\Local\Android\Sdk\platform-tools\adb.exe`（WSL 全路径调用）。
+- **Shizuku 激活固定使用此命令**：`adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh`
 - **纪律**：agent 只执行**安全操作**（`adb devices`、`logcat` 只读诊断）；**安装/卸载/清数据等危险操作必须先征得用户同意**。
 - 无线调试：配对端口 ≠ 连接端口（动态）；offline 用 `kill-server` 清除；多设备加 `-s <ip:port>`。
 - logcat：`-c` 清 → 复现 → `-d -s <TAG>`（崩溃看 `AndroidRuntime`）。
