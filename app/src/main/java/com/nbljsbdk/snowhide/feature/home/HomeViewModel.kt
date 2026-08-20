@@ -238,10 +238,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else freezeUseCase.freezeApp(pkg)
             result.onSuccess {
                 refreshFrozenStates()
-                // 冻结/解冻成功提示（用户拍板：长按菜单需要反馈）
+                // 冻结/解冻成功提示与智能清理统一使用系统 Toast
                 val name = _labels.value[pkg] ?: pkg
-                showMessage(if (frozen) "已解冻：$name" else "已冻结：$name")
-            }.onFailure { showMessage("操作失败：${it.message}") }
+                toast(if (frozen) "已启用：$name" else "已停用：$name")
+            }.onFailure { toast("操作失败：${it.message}") }
         }
     }
 
@@ -314,8 +314,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun freezeFolder(folder: Folder) {
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = folder.id)
-                .onSuccess { n -> refreshFrozenStates(); showMessage("已停用目录「${folder.name}」（$n 个）") }
-                .onFailure { showMessage(it.message ?: "操作失败") }
+                .onSuccess { n -> refreshFrozenStates(); toast("已停用目录「${folder.name}」（$n 个）") }
+                .onFailure { toast(it.message ?: "操作失败") }
         }
     }
 
@@ -330,7 +330,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 freezeUseCase.unfreezeApp(pkg).onSuccess { success++ }
             }
             refreshFrozenStates()
-            showMessage("已启用目录「${folder.name}」（$success 个）")
+            toast("已启用目录「${folder.name}」（$success 个）")
         }
     }
 
