@@ -132,6 +132,7 @@ fun HomeScreen(
     val dockIconSize by viewModel.settingsRepository.dockIconSize.collectAsState()
     val folderPreview by viewModel.settingsRepository.folderPreview.collectAsState()
     val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
+    val showReturnHomeButton by viewModel.settingsRepository.showReturnHomeButton.collectAsState()
     val message by viewModel.message.collectAsState()
     val menuOpen by viewModel.menuOpen.collectAsState()
     val organizing by viewModel.organizing.collectAsState()
@@ -190,6 +191,7 @@ fun HomeScreen(
     val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
     val wallpaperOverlay by viewModel.settingsRepository.wallpaperOverlay.collectAsState()
     val iconShape by viewModel.settingsRepository.iconShape.collectAsState()
+    val animationsEnabled by viewModel.settingsRepository.animationsEnabled.collectAsState()
     val freezeStyleName by viewModel.settingsRepository.freezeStyle.collectAsState()
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
         .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
@@ -243,12 +245,27 @@ fun HomeScreen(
                     .background(androidx.compose.ui.graphics.Color.White.copy(alpha = wallpaperOverlay)),
             )
         }
+        // 循环滑动（设计文档 §3.2）：
+        // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按 sortOrder）
+        // 左右滑动循环切换；从哪个文件夹进入就从哪里开始
+        val sortedFolders = folders.sortedBy { it.sortOrder }
+        val actualCount = sortedFolders.size + 1 // 主屏 + N 文件夹
+        val pagerState = rememberPagerState(
+            initialPage = LOOP_BASE * actualCount,
+        ) { LOOP_TOTAL * actualCount }
+        // 当前页索引（0=主屏）：顶栏动态显示主屏「雪藏」/ 文件夹名
+        val pageIdx = pagerState.currentPage % actualCount
+        val inFolder = !organizing && pageIdx != 0
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (organizing) "整理目录" else stringResource(com.nbljsbdk.snowhide.R.string.app_name),
+                        text = when {
+                            organizing -> "整理目录"
+                            inFolder -> sortedFolders[pageIdx - 1].name
+                            else -> stringResource(com.nbljsbdk.snowhide.R.string.app_name)
+                        },
                         fontWeight = FontWeight.Bold,
                     )
                 },
@@ -284,10 +301,18 @@ fun HomeScreen(
                         }) { Text("取消") }
                     } else {
                         IconButton(onClick = { searchOpen = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "搜索",
+                                tint = MaterialTheme.colorScheme.onBackground,
+                            )
                         }
                         IconButton(onClick = { viewModel.toggleMenu() }) {
-                            Icon(Icons.Default.Settings, contentDescription = "设置")
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "设置",
+                                tint = MaterialTheme.colorScheme.onBackground,
+                            )
                         }
                         GearMenu(
                             expanded = menuOpen,
@@ -319,17 +344,6 @@ fun HomeScreen(
         containerColor = if (transparentBg) androidx.compose.ui.graphics.Color.Transparent
         else MaterialTheme.colorScheme.background,
     ) { innerPadding ->
-        // ═══════════════════════════════════════
-        // 循环滑动（设计文档 §3.2）：
-        // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按 sortOrder）
-        // 左右滑动循环切换；从哪个文件夹进入就从哪里开始
-        // ═══════════════════════════════════════
-        val sortedFolders = folders.sortedBy { it.sortOrder }
-        val actualCount = sortedFolders.size + 1 // 主屏 + N 文件夹
-        val pagerState = rememberPagerState(
-            initialPage = LOOP_BASE * actualCount,
-        ) { LOOP_TOTAL * actualCount }
-
         // 返回键处理：
         // ① 搜索框展开 → 关闭搜索并清空（等同「取消」按钮）
         // ② 整理目录模式 → 保存并退出整理，回到主界面
@@ -343,7 +357,7 @@ fun HomeScreen(
                 organizeViewModel.commitFolderName()
                 viewModel.setOrganizing(false)
             } else {
-                scope.launch { pagerState.animateHome(actualCount) }
+                scope.launch { if (animationsEnabled) pagerState.animateHome(actualCount) else pagerState.scrollHome(actualCount) }
             }
         }
 
@@ -361,7 +375,7 @@ fun HomeScreen(
         // 搜索有词时自动回主屏显示结果（结果只在主屏宫格渲染）
         LaunchedEffect(searchQuery) {
             if (searchQuery.isNotBlank()) {
-                pagerState.animateHome(actualCount)
+                if (animationsEnabled) pagerState.animateHome(actualCount) else pagerState.scrollHome(actualCount)
             }
         }
 
@@ -449,6 +463,7 @@ fun HomeScreen(
                                             freezeStyle = freezeStyle,
                                             previewSize = folderPreview,
                                             iconShape = iconShape,
+                                            showName = showAppName,
                                             selected = organizing &&
                                                 organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
                                                 (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
@@ -460,7 +475,7 @@ fun HomeScreen(
                                                     val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
                                                     if (folderIndex >= 0) {
                                                         scope.launch {
-                                                            pagerState.animateToFolder(actualCount, folderIndex)
+                                                            pagerState.jumpToFolder(actualCount, folderIndex)
                                                         }
                                                     }
                                                 }
@@ -514,8 +529,12 @@ fun HomeScreen(
                     freezeStyle = freezeStyle,
                     iconShape = iconShape,
                     showAppName = showAppName,
+                    showReturnHomeButton = showReturnHomeButton,
                     onBackToHome = {
-                        scope.launch { pagerState.animateHome(actualCount) }
+                        scope.launch {
+                            if (animationsEnabled) pagerState.animateHome(actualCount)
+                            else pagerState.scrollHome(actualCount)
+                        }
                     },
                     onAppClick = { viewModel.openApp(it) },
                     onAppLongClick = { item -> longPressTarget = item },
@@ -797,6 +816,7 @@ fun HomeScreen(
             iconPack = iconPack,
             transparentBg = transparentBg,
             wallpaperOverlay = wallpaperOverlay,
+            animationsEnabled = animationsEnabled,
             freezeStyle = freezeStyle,
             iconPacks = iconPacks,
             iconPacksLoading = iconPacksLoading,
@@ -805,6 +825,7 @@ fun HomeScreen(
             onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
             onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
             onWallpaperOverlayChange = { alpha -> viewModel.settingsRepository.setWallpaperOverlay(alpha) },
+            onAnimationsToggle = { on -> viewModel.settingsRepository.setAnimationsEnabled(on) },
             onFreezeStyleSelect = { style -> viewModel.settingsRepository.setFreezeStyle(style.name) },
             onIconShapeSelect = { shape -> viewModel.settingsRepository.setIconShape(shape) },
             onDismiss = { beautyPanelOpen = false },
@@ -964,6 +985,7 @@ private fun FolderCell(
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     previewSize: Int = 2,
     iconShape: String = "round",
+    showName: Boolean = true,
     selected: Boolean = false,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -1037,12 +1059,14 @@ private fun FolderCell(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        // 白字黑边（壁纸透明背景下可读）
-        OutlinedText(
-            text = name,
-            style = MaterialTheme.typography.labelSmall,
-        )
+        if (showName) {
+            Spacer(modifier = Modifier.height(2.dp))
+            // 白字黑边（壁纸透明背景下可读）
+            OutlinedText(
+                text = name,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
 

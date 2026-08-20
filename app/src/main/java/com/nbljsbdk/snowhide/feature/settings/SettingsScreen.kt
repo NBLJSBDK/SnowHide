@@ -53,7 +53,7 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 /**
  * 设置页（设计文档 §3.11 更多选项，P0 子集）
  *
- * - 简单设置：清理后 Toast / 显示应用名 / 退出回目录
+ * - 简单设置：清理后 Toast / 显示图标名称 / 返回主屏按钮 / 退出回目录
  * - 图标包选择器
  * - 壁纸：透明开关（图片选择 P1）
  * - 布局设置已移到主屏长按菜单 → 透明浮框（实时预览）
@@ -71,6 +71,7 @@ fun SettingsScreen(
     val settings = viewModel.settings
     val showToast by settings.showToast.collectAsState()
     val showAppName by settings.showAppName.collectAsState()
+    val showReturnHomeButton by settings.showReturnHomeButton.collectAsState()
     val backToDir by settings.backToLastDir.collectAsState()
     val hapticLevel by settings.hapticLevel.collectAsState()
     val lockCleanEnabled by settings.lockCleanEnabled.collectAsState()
@@ -284,7 +285,10 @@ fun SettingsScreen(
             // ── 简单设置 ──
             SettingCard("简单设置") {
                 SwitchSetting("清理应用后展示 Toast", showToast) { settings.setShowToast(it) }
-                SwitchSetting("显示应用名", showAppName) { settings.setShowAppName(it) }
+                SwitchSetting("显示图标名称", showAppName) { settings.setShowAppName(it) }
+                SwitchSetting("显示返回主屏按钮", showReturnHomeButton) {
+                    settings.setShowReturnHomeButton(it)
+                }
                 SwitchSetting("退出后回到当前目录", backToDir) { settings.setBackToLastDir(it) }
             }
 

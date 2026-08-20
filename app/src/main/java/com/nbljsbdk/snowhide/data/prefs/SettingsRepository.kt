@@ -24,6 +24,7 @@ object SettingsRepository {
         // 之前版本重启后设置全部回默认（震动档位 bug 即此）。
         _showToast.value = prefs.getBoolean(KEY_TOAST, true)
         _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
+        _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, true)
         _backToLastDir.value = prefs.getBoolean(KEY_BACK_DIR, true)
         _hapticLevel.value = prefs.getInt(KEY_HAPTIC, 4)
         _columns.value = prefs.getInt(KEY_COLUMNS, 4)
@@ -39,6 +40,7 @@ object SettingsRepository {
         _lockCleanNotify.value = prefs.getBoolean(KEY_LOCK_CLEAN_NOTIFY, true)
         _wallpaperOverlay.value = prefs.getFloat(KEY_WALLPAPER_OVERLAY, 0.25f)
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
+        _animationsEnabled.value = prefs.getBoolean(KEY_ANIMATIONS, true)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
 
@@ -63,8 +65,12 @@ object SettingsRepository {
     val showToast: StateFlow<Boolean> = _showToast.asStateFlow()
 
     private val _showAppName = MutableStateFlow(getBool(KEY_APP_NAME, true))
-    /** 是否显示应用名 */
+    /** 是否显示图标下方文字（应用、文件夹、返回主屏按钮） */
     val showAppName: StateFlow<Boolean> = _showAppName.asStateFlow()
+
+    private val _showReturnHomeButton = MutableStateFlow(getBool(KEY_RETURN_HOME_BUTTON, true))
+    /** 文件夹内是否显示返回主屏按钮 */
+    val showReturnHomeButton: StateFlow<Boolean> = _showReturnHomeButton.asStateFlow()
 
     private val _backToLastDir = MutableStateFlow(getBool(KEY_BACK_DIR, true))
     /** 退出程序后是否回到当前目录（保存最后退出目录） */
@@ -159,6 +165,11 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_APP_NAME, enabled).apply()
     }
 
+    fun setShowReturnHomeButton(enabled: Boolean) {
+        _showReturnHomeButton.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_RETURN_HOME_BUTTON, enabled).apply()
+    }
+
     fun setBackToLastDir(enabled: Boolean) {
         _backToLastDir.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_BACK_DIR, enabled).apply()
@@ -215,6 +226,15 @@ object SettingsRepository {
     /** 自定义背景图片路径（transparentBg=false 时生效） */
     val bgImagePath: StateFlow<String> = _bgImagePath.asStateFlow()
 
+    private val _animationsEnabled = MutableStateFlow(getBool(KEY_ANIMATIONS, true))
+    /** 动画速度档位：true=开（页面切换带动画），false=关（瞬时切换） */
+    val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
+
+    fun setAnimationsEnabled(enabled: Boolean) {
+        _animationsEnabled.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_ANIMATIONS, enabled).apply()
+    }
+
     fun setIconPack(pkg: String) {
         _iconPack.value = pkg
         if (::prefs.isInitialized) prefs.edit().putString(KEY_ICON_PACK, pkg).apply()
@@ -246,6 +266,7 @@ object SettingsRepository {
     private const val KEY_LOCK_CLEAN_NOTIFY = "lock_clean_notify"
     private const val KEY_WALLPAPER_OVERLAY = "wallpaper_overlay"
     private const val KEY_APP_NAME = "show_app_name"
+    private const val KEY_RETURN_HOME_BUTTON = "show_return_home_button"
     private const val KEY_BACK_DIR = "back_to_last_dir"
     private const val KEY_COLUMNS = "columns"
     private const val KEY_ICON_SIZE = "icon_size"
@@ -255,4 +276,5 @@ object SettingsRepository {
     private const val KEY_ICON_PACK = "icon_pack"
     private const val KEY_TRANSPARENT = "transparent_bg"
     private const val KEY_BG_IMAGE = "bg_image_path"
+    private const val KEY_ANIMATIONS = "animations_enabled"
 }

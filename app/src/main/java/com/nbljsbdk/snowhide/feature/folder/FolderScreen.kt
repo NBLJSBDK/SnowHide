@@ -3,11 +3,13 @@
 package com.nbljsbdk.snowhide.feature.folder
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,21 +20,16 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nbljsbdk.snowhide.R
@@ -44,10 +41,12 @@ import com.nbljsbdk.snowhide.ui.util.frosted
  * 文件夹全屏页（设计文档 §3.3）
  *
  * - 全屏展示（v1.0.9 式，不是 v3 小弹窗），二级封顶不嵌套
- * - 左上角「..」上级图标（大小与文件夹内 app 一致，P0 用箭头占位）
- * - 内部宫格展示成员应用：单击打开、长按菜单
+ * - 顶栏文件夹名由外层 Scaffold 统一接管
+ * - 内部宫格首格可放返回主屏按钮，之后是成员应用
  * - 左右滑动循环由外层 HorizontalPager 负责（本组件只是其中一页）
  */
+private const val RETURN_HOME_KEY = "__return_home__"
+
 @Composable
 fun FolderScreen(
     folder: Folder,
@@ -60,6 +59,7 @@ fun FolderScreen(
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     iconShape: String = "round",
     showAppName: Boolean,
+    showReturnHomeButton: Boolean,
     onBackToHome: () -> Unit,
     onAppClick: (String) -> Unit,
     onAppLongClick: (GridItem) -> Unit,
@@ -68,33 +68,6 @@ fun FolderScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        // 顶栏：.. 上级 + 文件夹名
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-        ) {
-            // 左上角「..」上级图标（大小与文件夹内 app 图标一致）
-            IconButton(
-                onClick = onBackToHome,
-                modifier = Modifier.align(Alignment.CenterStart),
-            ) {
-                Icon(
-                    Icons.Filled.Home,
-                    contentDescription = "返回主屏",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(iconSize),
-                )
-            }
-            Text(
-                text = folder.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.align(Alignment.Center),
-            )
-        }
-
         // 成员应用宫格
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
@@ -109,8 +82,18 @@ fun FolderScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
         ) {
+            if (showReturnHomeButton) {
+                item(key = RETURN_HOME_KEY) {
+                    ReturnHomeCell(
+                        iconSize = iconSize,
+                        iconShape = iconShape,
+                        showName = showAppName,
+                        onClick = onBackToHome,
+                    )
+                }
+            }
             // distinct 兜底：历史数据可能同文件夹重复 pkg（LazyGrid key 崩溃防御）
-            items(memberPackages.distinct(), key = { it }) { pkg ->
+            items(memberPackages.distinct(), key = { "app:$it" }) { pkg ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -161,6 +144,48 @@ fun FolderScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/** 文件夹首格的返回主屏伪应用（不写入宫格数据） */
+@Composable
+private fun ReturnHomeCell(
+    iconSize: Dp,
+    iconShape: String,
+    showName: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(4.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(iconSize)
+                .clip(
+                    if (iconShape == "circle") CircleShape
+                    else RoundedCornerShape(iconSize.value * 0.22f),
+                )
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "回到主屏",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(iconSize * 0.52f),
+            )
+        }
+        if (showName) {
+            Spacer(modifier = Modifier.size(2.dp))
+            com.nbljsbdk.snowhide.ui.components.OutlinedText(
+                text = "回到主屏",
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }

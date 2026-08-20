@@ -31,6 +31,8 @@ internal suspend fun PagerState.scrollHome(actualCount: Int) {
 internal suspend fun PagerState.animateHome(actualCount: Int) =
     animateScrollToPage(homeBase(actualCount))
 
-/** 带动画跳到指定文件夹页（主屏点文件夹图标用） */
-internal suspend fun PagerState.animateToFolder(actualCount: Int, folderIndex: Int) =
-    animateScrollToPage(homeBase(actualCount) + folderIndex + 1)
+/** 瞬时跳到指定文件夹页（主屏点文件夹图标用，无动画快速弹出） */
+internal suspend fun PagerState.jumpToFolder(actualCount: Int, folderIndex: Int) {
+    val target = homeBase(actualCount) + folderIndex + 1
+    if (currentPage != target) scrollToPage(target)
+}

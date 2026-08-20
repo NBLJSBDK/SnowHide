@@ -43,6 +43,7 @@ fun BeautyPanel(
     iconPack: String,
     transparentBg: Boolean,
     wallpaperOverlay: Float = 0.25f,
+    animationsEnabled: Boolean = true,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
     iconShape: String = "round",
     iconPacks: List<AppIconLoader.IconPackInfo>,
@@ -51,6 +52,7 @@ fun BeautyPanel(
     onIconPackSelect: (String) -> Unit,
     onTransparentToggle: (Boolean) -> Unit,
     onWallpaperOverlayChange: (Float) -> Unit = {},
+    onAnimationsToggle: (Boolean) -> Unit = {},
     onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
     onIconShapeSelect: (String) -> Unit = {},
     onDismiss: () -> Unit,
@@ -160,6 +162,31 @@ fun BeautyPanel(
                     valueRange = 0f..1f,
                     steps = 19, // 0.05 步进
                 )
+                // 动画速度档位（用户拍板：关=页面切换瞬时，快速操作）
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAnimationsToggle(!animationsEnabled) }
+                        .padding(vertical = 8.dp),
+                ) {
+                    Text(
+                        text = "动画",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = if (animationsEnabled) "开" else "关",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    Checkbox(
+                        checked = animationsEnabled,
+                        onCheckedChange = onAnimationsToggle,
+                    )
+                }
                 // 图标形状（用户拍板：未收录图标包的应用也裁成圆形）
                 Text(
                     text = "图标形状",
