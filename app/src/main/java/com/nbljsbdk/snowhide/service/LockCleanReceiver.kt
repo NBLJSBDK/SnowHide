@@ -112,6 +112,8 @@ class LockCleanReceiver : BroadcastReceiver() {
                 .setSmallIcon(R.drawable.ic_snowflake)
                 .setContentTitle("锁屏自动清理")
                 .setContentText(message)
+                // 无动作 PendingIntent 仅用于让点击触发 autoCancel，不打开任何界面
+                .setContentIntent(notificationClickPending(context))
                 .setAutoCancel(true)
                 .build()
             nm.notify(2001, notification)
@@ -125,6 +127,8 @@ class LockCleanReceiver : BroadcastReceiver() {
         private const val KEY_NOTIFY = "lock_clean_notify"
         private const val KEY_PENDING = "lock_clean_pending"
         private const val CHANNEL_ID = "lock_clean"
+        private const val ACTION_NOTIFICATION_CLICK =
+            "com.nbljsbdk.snowhide.action.LOCK_CLEAN_NOTIFICATION_CLICK"
 
         /** 动态注册 SCREEN_OFF/USER_PRESENT（MainActivity 调用） */
         fun register(context: Context) {
@@ -146,6 +150,15 @@ class LockCleanReceiver : BroadcastReceiver() {
                 context,
                 0,
                 Intent(context, LockCleanReceiver::class.java).setAction(ACTION_LOCK_CLEAN),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+
+        /** 点击通知不执行任何业务，仅配合 autoCancel 清除通知 */
+        private fun notificationClickPending(context: Context): PendingIntent =
+            PendingIntent.getBroadcast(
+                context,
+                2002,
+                Intent(context, LockCleanReceiver::class.java).setAction(ACTION_NOTIFICATION_CLICK),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
     }
