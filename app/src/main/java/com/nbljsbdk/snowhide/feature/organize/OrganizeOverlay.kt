@@ -52,10 +52,10 @@ import com.nbljsbdk.snowhide.data.model.GridItem
  * 布局自上而下（用户拍板）：
  *   ① 文件夹名称输入行（选中文件夹时显示，不自动弹输入法）
  *   ② 文件夹内应用图标横排（选中文件夹时显示）
- *   ③ 键位行（固定最底）：[上][下][左][右][垃圾桶][+]
+ *   ③ 键位行（固定最底）：[上][下][左][右][+][−]
  *
  * 键位灰显规则按状态机推导（OrganizeViewModel.OrganizeState）：
- * 垃圾桶仅在选中文件夹时可点，其余按选中目标启用。
+ * 减号仅在选中文件夹时可点，其余按选中目标启用。
  */
 @Composable
 fun OrganizeOverlay(
@@ -94,7 +94,7 @@ fun OrganizeOverlay(
             )
             .padding(8.dp),
     ) {
-        // ① 键位行（固定最上，用户拍板）：[上][下][左][右][垃圾桶][+]
+        // ① 键位行（固定最上，用户拍板）：[上][下][左][右][+][−]
         Row(
             horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxWidth(),
@@ -103,8 +103,8 @@ fun OrganizeOverlay(
             OrganizeKeyIcon(R.drawable.ic_arrow_down, enabled = canDown, onClick = onMoveDown)
             OrganizeKeyIcon(R.drawable.ic_arrow_left, enabled = canLeftRight, onClick = { onShift(-1) })
             OrganizeKeyIcon(R.drawable.ic_arrow_right, enabled = canLeftRight, onClick = { onShift(1) })
-            OrganizeKeyIcon(R.drawable.ic_trash, enabled = canDelete, onClick = onDelete)
-            OrganizeKeyIcon(R.drawable.ic_folder_plus, enabled = true, onClick = onCreate)
+            OrganizeKeyIcon(R.drawable.ic_plus, enabled = true, onClick = onCreate)
+            OrganizeKeyIcon(R.drawable.ic_minus, enabled = canDelete, onClick = onDelete)
         }
 
         // ② 名称/内应用区：选中文件夹时显示，未选中时固定留白

@@ -142,7 +142,7 @@ object GridRepository {
     }
 
     /**
-     * 删除文件夹（整理目录垃圾桶，二次确认后调用）
+     * 删除文件夹（整理目录减号，点击后立即执行）
      * 文件夹内应用按原有 sortOrder 续补到主屏后面（应用不丢，设计文档 §3.10）
      */
     fun deleteFolder(folderId: Long) {

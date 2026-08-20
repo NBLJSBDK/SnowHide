@@ -351,7 +351,7 @@ fun HomeScreen(
                 },
                 actions = {
                     if (organizing) {
-                        // 整理操作即时生效（用户拍板）；取消按钮已删，仅确认退出
+                        // 整理操作即时生效；确认按钮只负责退出整理模式
                         Text(
                             text = "确认",
                             color = MaterialTheme.colorScheme.primary,
@@ -397,7 +397,12 @@ fun HomeScreen(
                         GearMenu(
                             expanded = menuOpen,
                             onDismiss = { viewModel.dismissMenu() },
-                            onOrganize = { viewModel.setOrganizing(true) },
+                            onOrganize = {
+                                organizeViewModel.enter(
+                                    if (inFolder) sortedFolders.getOrNull(pageIdx - 1)?.id else null,
+                                )
+                                viewModel.setOrganizing(true)
+                            },
                             onUnfreezeAll = { viewModel.unfreezeAll() },
                             onFreezeAll = { viewModel.freezeAll() },
                             onAppManage = { viewModel.openAppManage() },
@@ -426,7 +431,7 @@ fun HomeScreen(
     ) { innerPadding ->
         // 返回键处理：
         // ① 搜索框展开 → 关闭搜索并清空（等同「取消」按钮）
-        // ② 整理目录模式 → 保存并退出整理，回到主界面
+        // ② 整理目录模式 → 退出整理，所有操作已经即时生效
         // ③ 文件夹页 → 滑回主屏页
         // ④ 主屏非整理 → 默认行为（退出 App）
         BackHandler(enabled = searchOpen || organizing || pagerState.currentPage % actualCount != 0) {

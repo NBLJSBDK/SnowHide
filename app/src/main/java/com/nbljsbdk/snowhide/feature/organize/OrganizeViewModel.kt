@@ -19,11 +19,19 @@ import kotlinx.coroutines.flow.asStateFlow
  * ① Empty（刚进入）：全灰仅「创建」
  * ② HomeAppSelected：选中主屏 app——左右/创建可用
  * ③ FolderSelected：选中文件夹——左右/创建/删除+名字输入+内应用展示
+ *    可同时保留一个主屏 app 高亮；左右键跟随最近点击的对象
  *    ③ 内点主屏 app → subHomeApp（下键亮）；点内 app → subFolderApp（上键亮）
  *
  * 数据操作委托 GridRepository（区内移位/跨区转移/删除续补等已实现）。
  */
 class OrganizeViewModel : ViewModel() {
+
+    /** 文件夹页中左右键的当前操作焦点 */
+    enum class SelectionFocus {
+        FOLDER,
+        HOME_APP,
+        FOLDER_APP,
+    }
 
     /** 整理目录状态（UI 渲染依据） */
     sealed interface OrganizeState {
@@ -39,6 +47,7 @@ class OrganizeViewModel : ViewModel() {
             val folderNameInput: String,
             val subHomeApp: GridItem? = null,
             val subFolderAppPkg: String? = null,
+            val focus: SelectionFocus = SelectionFocus.FOLDER,
             /** 刚创建（true=自动聚焦全选名称，点选文件夹时为 false） */
             val justCreated: Boolean = false,
         ) : OrganizeState
@@ -47,15 +56,26 @@ class OrganizeViewModel : ViewModel() {
     private val _state = MutableStateFlow<OrganizeState>(OrganizeState.Empty)
     val state: StateFlow<OrganizeState> = _state.asStateFlow()
 
-    /** 是否有未保存改动（退出询问用） */
-    private val _dirty = MutableStateFlow(false)
-    val dirty: StateFlow<Boolean> = _dirty.asStateFlow()
-
     /** 一次性提示事件（UI Snackbar） */
     private val _events = MutableStateFlow<String?>(null)
     val events: StateFlow<String?> = _events.asStateFlow()
 
     fun consumeEvent() {
+        _events.value = null
+    }
+
+    /** 进入整理目录：主屏进入不选中，文件夹页进入自动选中当前文件夹。 */
+    fun enter(initialFolderId: Long?) {
+        val folder = initialFolderId?.let { id ->
+            GridRepository.folders.value.firstOrNull { it.id == id }
+        }
+        _state.value = folder?.let {
+            OrganizeState.FolderSelected(
+                folderId = it.id,
+                folderNameInput = it.name,
+                focus = SelectionFocus.FOLDER,
+            )
+        } ?: OrganizeState.Empty
         _events.value = null
     }
 
@@ -84,31 +104,46 @@ class OrganizeViewModel : ViewModel() {
     // 点选（状态机入口）
     // ═══════════════════════════════════════
 
-    /** 点主屏 app：② 或 ③ 内 subHomeApp */
+    /** 点主屏 app：② 或 ③ 内 subHomeApp；最近点击的对象获得左右键焦点。 */
     fun tapHomeApp(item: GridItem) {
         when (val s = _state.value) {
             is OrganizeState.Empty -> _state.value = OrganizeState.HomeAppSelected(item)
             is OrganizeState.HomeAppSelected ->
                 _state.value = OrganizeState.HomeAppSelected(item) // 换选
             is OrganizeState.FolderSelected ->
-                // 文件夹框变淡 + 主屏 app 高亮（下键亮）
-                _state.value = s.copy(subHomeApp = item, subFolderAppPkg = null)
+                // 保留文件夹高亮；主屏 app 获得左右键焦点（下键亮）
+                _state.value = s.copy(
+                    subHomeApp = item,
+                    subFolderAppPkg = null,
+                    focus = SelectionFocus.HOME_APP,
+                )
         }
     }
 
-    /** 点文件夹：③（丢弃 app 选择） */
+    /** 点文件夹：③；已有主屏 app 高亮时保留它，文件夹获得左右键焦点。 */
     fun tapFolder(folder: Folder) {
+        val pairedApp = when (val s = _state.value) {
+            is OrganizeState.HomeAppSelected -> s.app
+            is OrganizeState.FolderSelected -> s.subHomeApp
+            else -> null
+        }
         _state.value = OrganizeState.FolderSelected(
             folderId = folder.id,
             folderNameInput = folder.name,
+            subHomeApp = pairedApp,
+            focus = SelectionFocus.FOLDER,
             justCreated = false, // 点选文件夹：不自动聚焦（用户拍板）
         )
     }
 
-    /** 点文件夹内 app：③ 内 subFolderApp（上键亮） */
+    /** 点文件夹内 app：③ 内 subFolderApp（上键亮），该应用获得左右键焦点。 */
     fun tapFolderApp(pkg: String) {
         val s = _state.value as? OrganizeState.FolderSelected ?: return
-        _state.value = s.copy(subFolderAppPkg = pkg, subHomeApp = null)
+        _state.value = s.copy(
+            subFolderAppPkg = pkg,
+            subHomeApp = null,
+            focus = SelectionFocus.FOLDER_APP,
+        )
     }
 
     // ═══════════════════════════════════════
@@ -120,21 +155,22 @@ class OrganizeViewModel : ViewModel() {
         when (val s = _state.value) {
             is OrganizeState.HomeAppSelected -> {
                 GridRepository.shiftItem(s.app.id, step)
-                markDirty()
             }
             is OrganizeState.FolderSelected -> {
-                when {
-                    s.subHomeApp != null -> GridRepository.shiftItem(s.subHomeApp.id, step)
-                    s.subFolderAppPkg != null ->
-                        GridRepository.shiftFolderApp(s.folderId, s.subFolderAppPkg, step)
-                    else -> {
+                when (s.focus) {
+                    SelectionFocus.HOME_APP -> s.subHomeApp?.let {
+                        GridRepository.shiftItem(it.id, step)
+                    }
+                    SelectionFocus.FOLDER_APP -> s.subFolderAppPkg?.let {
+                        GridRepository.shiftFolderApp(s.folderId, it, step)
+                    }
+                    SelectionFocus.FOLDER -> {
                         // 文件夹在主屏移位：找到对应 GridItem
                         val item = GridRepository.gridItems.value
                             .find { it.type == "folder" && it.folderId == s.folderId }
                         item?.let { GridRepository.shiftItem(it.id, step) }
                     }
                 }
-                markDirty()
             }
             else -> Unit
         }
@@ -145,8 +181,12 @@ class OrganizeViewModel : ViewModel() {
         val s = _state.value as? OrganizeState.FolderSelected ?: return
         val app = s.subHomeApp ?: return
         GridRepository.moveAppToFolder(app.pkg!!, s.folderId)
-        _state.value = s.copy(subHomeApp = null)
-        markDirty()
+        // 移动完成后自动聚焦文件夹下栏中刚加入的应用。
+        _state.value = s.copy(
+            subHomeApp = null,
+            subFolderAppPkg = app.pkg,
+            focus = SelectionFocus.FOLDER_APP,
+        )
     }
 
     /** 上键：选中的文件夹内 app 移回主屏最后 */
@@ -154,8 +194,10 @@ class OrganizeViewModel : ViewModel() {
         val s = _state.value as? OrganizeState.FolderSelected ?: return
         val pkg = s.subFolderAppPkg ?: return
         GridRepository.moveAppToHome(pkg)
-        _state.value = s.copy(subFolderAppPkg = null)
-        markDirty()
+        _state.value = s.copy(
+            subFolderAppPkg = null,
+            focus = SelectionFocus.FOLDER,
+        )
     }
 
     /** 创建：新建文件夹并自动选中（自动聚焦全选名称，用户拍板） */
@@ -165,9 +207,9 @@ class OrganizeViewModel : ViewModel() {
         _state.value = OrganizeState.FolderSelected(
             folderId = folder.id,
             folderNameInput = name,
+            focus = SelectionFocus.FOLDER,
             justCreated = true,
         )
-        markDirty()
     }
 
     /**
@@ -185,7 +227,7 @@ class OrganizeViewModel : ViewModel() {
         return "文件夹$n"
     }
 
-    /** 删除：只对选中文件夹，直接删除（用户拍板去掉二次确认）；未选中时给提示 */
+    /** 减号：只对选中文件夹，直接删除（用户拍板不需要二次确认）；未选中时给提示 */
     fun requestDeleteFolder() {
         val folder = currentFolder
         if (folder == null) {
@@ -193,7 +235,6 @@ class OrganizeViewModel : ViewModel() {
         } else {
             GridRepository.deleteFolder(folder.id)
             _state.value = OrganizeState.Empty
-            markDirty()
         }
     }
 
@@ -208,15 +249,7 @@ class OrganizeViewModel : ViewModel() {
         val s = _state.value as? OrganizeState.FolderSelected ?: return
         if (s.folderNameInput.isNotBlank()) {
             GridRepository.renameFolder(s.folderId, s.folderNameInput.trim())
-            markDirty()
         }
     }
 
-    // ═══════════════════════════════════════
-    // 退出
-    // ═══════════════════════════════════════
-
-    private fun markDirty() {
-        _dirty.value = true
-    }
 }
