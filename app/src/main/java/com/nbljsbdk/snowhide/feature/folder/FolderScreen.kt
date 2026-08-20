@@ -37,7 +37,7 @@ import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
-import com.nbljsbdk.snowhide.ui.theme.IceBlue
+import com.nbljsbdk.snowhide.ui.theme.TianyiBlue
 import com.nbljsbdk.snowhide.ui.util.frosted
 
 /**
@@ -140,7 +140,7 @@ fun FolderScreen(
                             Image(
                                 painter = painterResource(R.drawable.ic_snowflake),
                                 contentDescription = "已冻结",
-                                colorFilter = ColorFilter.tint(IceBlue),
+                                colorFilter = ColorFilter.tint(TianyiBlue),
                                 modifier = Modifier.size(iconSize * 0.38f),
                             )
                         } else if (missing) {

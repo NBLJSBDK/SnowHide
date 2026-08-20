@@ -16,6 +16,7 @@ val FrostCard = Color(0xFFD8E4F1)         // 卡片浅蓝灰
 val IceBlue = Color(0xFF3D7EC9)           // 主题色（浅底对比足够）
 val IceBlueDim = Color(0xFFC9DDF3)        // 浅蓝容器
 val IceBlueOn = Color(0xFFFFFFFF)         // 冰蓝上的文字
+val TianyiBlue = Color(0xFF66CCFF)        // 洛天依蓝：冻结雪花角标
 
 // 冻结态
 val FrostWhite = Color(0xFF24303E)        // 主文字（深蓝灰）

@@ -102,7 +102,7 @@ import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
 import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
-import com.nbljsbdk.snowhide.ui.theme.IceBlue
+import com.nbljsbdk.snowhide.ui.theme.TianyiBlue
 import com.nbljsbdk.snowhide.ui.theme.WarmOrange
 import com.nbljsbdk.snowhide.ui.util.frosted
 
@@ -1056,7 +1056,7 @@ private fun AppCell(
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.ic_snowflake),
                     contentDescription = "已冻结",
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(IceBlue),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(TianyiBlue),
                     modifier = Modifier
                         .size(size * 0.38f)
                         .align(Alignment.TopStart),
@@ -1161,7 +1161,7 @@ private fun FolderCell(
                                                 androidx.compose.foundation.Image(
                                                     painter = painterResource(R.drawable.ic_snowflake),
                                                     contentDescription = "已冻结",
-                                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(IceBlue),
+                                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(TianyiBlue),
                                                     modifier = Modifier.size(size / grid * 0.32f),
                                                 )
                                             } else if (missing) {
