@@ -91,23 +91,30 @@ class LockCleanReceiver : BroadcastReceiver() {
         SettingsRepository.init(context)
         val useCase = FreezeUseCase(FreezeExecutor(EngineManager), GridRepository, EngineManager)
         Thread {
-            val n = runCatching { runBlocking { useCase.quickClean() } }
-                .getOrNull()?.getOrNull() ?: -1
+            val cleanedPackages = runCatching { runBlocking { useCase.quickCleanPackages() } }
+                .getOrNull()?.getOrNull()
             runCatching { runBlocking { FrozenStateStore.refresh() } }
             if (prefs(context).getBoolean(KEY_NOTIFY, true)) {
-                notifyResult(context, n)
+                notifyResult(context, cleanedPackages)
             }
         }.start()
     }
 
     /** 清理结果通知（后台 Toast 被吞，通知兜底） */
-    private fun notifyResult(context: Context, n: Int) {
+    private fun notifyResult(context: Context, cleanedPackages: List<String>?) {
         runCatching {
             val nm = context.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "锁屏自动清理", NotificationManager.IMPORTANCE_DEFAULT)
             )
-            val message = if (n >= 0) "已停用 $n 个应用" else "清理执行失败"
+            val message = when {
+                cleanedPackages == null -> "清理执行失败"
+                cleanedPackages.isEmpty() -> "没有需要停用的应用"
+                cleanedPackages.size <= 3 -> {
+                    "已停用：" + cleanedPackages.joinToString("、") { appLabel(context, it) }
+                }
+                else -> "已停用 ${cleanedPackages.size} 个应用"
+            }
             val notification = android.app.Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_snowflake)
                 .setContentTitle("锁屏自动清理")
@@ -119,6 +126,12 @@ class LockCleanReceiver : BroadcastReceiver() {
             nm.notify(2001, notification)
         }
     }
+
+    /** 获取应用显示名（冻结状态不影响读取应用信息） */
+    private fun appLabel(context: Context, pkg: String): String = runCatching {
+        val info = context.packageManager.getApplicationInfo(pkg, 0)
+        context.packageManager.getApplicationLabel(info).toString()
+    }.getOrDefault(pkg)
 
     companion object {
         const val ACTION_LOCK_CLEAN = "com.nbljsbdk.snowhide.action.LOCK_CLEAN"

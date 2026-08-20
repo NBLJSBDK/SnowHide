@@ -82,14 +82,19 @@ class FreezeUseCase(
      * 智能清理（底部图标栏最右按钮）：停用全部未锁定且未冻结的应用
      * 设计文档 §3.6；走统一批量入口（分块+进度）。
      */
-    suspend fun quickClean(): Result<Int> {
+    suspend fun quickClean(): Result<Int> =
+        quickCleanPackages().map { it.size }
+
+    /** 智能清理并返回成功清理的应用包名（锁屏通知需要显示名称） */
+    suspend fun quickCleanPackages(): Result<List<String>> {
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         val frozenSet = engine.listFrozenPackages().getOrDefault(emptyList()).toSet()
         val targets = gridRepository.allAddedPackages()
             .filter { !gridRepository.isLocked(it) && it !in frozenSet }
-        if (targets.isEmpty()) return Result.success(0)
+        if (targets.isEmpty()) return Result.success(emptyList())
         return engine.execBatched(targets, "pm disable-user --user 0", "停用")
+            .map { targets }
     }
 
     /**
