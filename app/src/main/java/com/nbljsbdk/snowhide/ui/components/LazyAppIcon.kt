@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,12 +24,13 @@ import com.nbljsbdk.snowhide.ui.util.AppIconLoader
  * 懒加载应用图标（列表行/宫格共用组件）
  *
  * 首次组合时异步加载（图标包优先、系统回退、全局缓存），
- * 加载完成后自动显示；加载中显示灰色占位块。
+ * 加载完成后自动显示；加载中显示灰色占位块。图标形状跟随全局设置。
  */
 @Composable
 fun LazyAppIcon(
     pkg: String,
     size: Dp,
+    iconShape: String = "round",
     modifier: Modifier = Modifier,
 ) {
     var icon by remember(pkg) { mutableStateOf<ImageBitmap?>(null) }
@@ -45,14 +47,20 @@ fun LazyAppIcon(
             contentScale = ContentScale.Fit,
             modifier = modifier
                 .size(size)
-                .clip(RoundedCornerShape(size.value * 0.22f)),
+                .clip(
+                    if (iconShape == "circle") CircleShape
+                    else RoundedCornerShape(size.value * 0.22f),
+                ),
         )
     } else {
         // 占位块（加载中/失败）
         Box(
             modifier = modifier
                 .size(size)
-                .clip(RoundedCornerShape(size.value * 0.22f))
+                .clip(
+                    if (iconShape == "circle") CircleShape
+                    else RoundedCornerShape(size.value * 0.22f),
+                )
                 .background(Color(0xFFD8E4F1)),
         )
     }

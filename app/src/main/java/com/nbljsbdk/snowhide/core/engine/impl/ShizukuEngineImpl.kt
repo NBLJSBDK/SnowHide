@@ -32,14 +32,11 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
     override val id: String = "shizuku"
     override val displayName: String = "Shizuku"
 
-    override fun isAvailable(): Boolean {
-        val binderOk = Shizuku.pingBinder()
-        if (!binderOk) return false
-        val perm = Shizuku.checkSelfPermission()
-        return perm == PackageManager.PERMISSION_GRANTED
-    }
+    override fun isAvailable(): Boolean = runCatching {
+        Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+    }.getOrDefault(false)
 
-    override fun isBinderConnected(): Boolean = Shizuku.pingBinder()
+    override fun isBinderConnected(): Boolean = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
 
     override suspend fun exec(cmd: String): Result<String> = runCatching {
         execViaUserService(cmd)

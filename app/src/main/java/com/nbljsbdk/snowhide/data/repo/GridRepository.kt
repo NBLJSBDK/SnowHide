@@ -90,6 +90,7 @@ object GridRepository {
     /** 添加应用到主屏末尾 */
     fun addAppToHome(pkg: String) {
         if (isAppAdded(pkg)) return
+        ListOrderRepository.recordAppManageAdded(pkg)
         val items = _gridItems.value.toMutableList()
         items.add(
             GridItem(
@@ -105,6 +106,7 @@ object GridRepository {
 
     /** 从宫格体系完全移除应用（移除应用界面：解冻并移出） */
     fun removeApp(pkg: String) {
+        if (isAppAdded(pkg)) ListOrderRepository.recordAppManageRemoved(pkg)
         _gridItems.value = _gridItems.value.filterNot { it.pkg == pkg }
         _folderApps.value = _folderApps.value.filterNot { it.pkg == pkg }
         persist()

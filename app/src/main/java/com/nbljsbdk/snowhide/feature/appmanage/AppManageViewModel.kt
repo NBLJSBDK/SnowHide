@@ -10,6 +10,7 @@ import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
+import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,7 +26,7 @@ import kotlinx.coroutines.launch
  *
  * - 左栏「未添加应用」：默认安装时间倒序（新装最前），左下排序选项
  * - 右栏「已添加应用」：默认名称正序，右下排序选项
- * - 排序 4 档：时间正序/倒序、名字正序/倒序（不持久化，会话级）
+ * - 排序 5 档：时间正序/倒序、名字正序/倒序、最近添加（排序档位不持久化）
  * - 滑动移动：左栏右滑=加入；右栏左滑=解冻并移出
  * - 系统应用按钮（默认隐藏，关于页版本号 7 次解锁）：
  *   未解锁 → 只显示用户应用；解锁后按钮选中=只显示系统应用，不选=只显示用户应用
@@ -53,6 +54,7 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         TIME_ASC,   // 安装时间正序
         NAME_DESC,  // 名字倒序
         NAME_ASC,   // 名字正序（默认右栏）
+        RECENT_DESC, // 最近进入当前列表倒序
     }
 
     /** 过滤参数聚合（combine 输入合并用） */
@@ -100,6 +102,7 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
                 systemOk(app, filter) && queryOk(app, filter.query) && app.pkg !in added
             },
             filter.leftSort,
+            recentOrder = { ListOrderRepository.appManageRemoved.value[it] ?: 0L },
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -116,6 +119,7 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
                 systemOk(app, filter) && queryOk(app, filter.query) && app.pkg in added
             },
             filter.rightSort,
+            recentOrder = { ListOrderRepository.appManageAdded.value[it] ?: 0L },
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -133,12 +137,21 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         query.isEmpty() || app.label.contains(query, ignoreCase = true) ||
             app.pkg.contains(query, ignoreCase = true)
 
-    private fun sortApps(list: List<AppListRepository.AppInfo>, mode: SortMode): List<AppListRepository.AppInfo> =
+    private fun sortApps(
+        list: List<AppListRepository.AppInfo>,
+        mode: SortMode,
+        recentOrder: (String) -> Long,
+    ): List<AppListRepository.AppInfo> =
         when (mode) {
             SortMode.TIME_DESC -> list.sortedByDescending { it.installTime }
             SortMode.TIME_ASC -> list.sortedBy { it.installTime }
             SortMode.NAME_DESC -> list.sortedByDescending { it.label }
             SortMode.NAME_ASC -> list.sortedBy { it.label }
+            // 没有滑动记录的旧数据按包名自然倒序兜底。
+            SortMode.RECENT_DESC -> list.sortedWith(
+                compareByDescending<AppListRepository.AppInfo> { recentOrder(it.pkg) }
+                    .thenByDescending { it.pkg },
+            )
         }
 
     init {
@@ -212,7 +225,8 @@ class AppManageViewModel(application: Application) : AndroidViewModel(applicatio
         SortMode.TIME_DESC -> SortMode.TIME_ASC
         SortMode.TIME_ASC -> SortMode.NAME_DESC
         SortMode.NAME_DESC -> SortMode.NAME_ASC
-        SortMode.NAME_ASC -> SortMode.TIME_DESC
+        SortMode.NAME_ASC -> SortMode.RECENT_DESC
+        SortMode.RECENT_DESC -> SortMode.TIME_DESC
     }
 
     /** 右滑加入（即时落盘，列表立即更新） */

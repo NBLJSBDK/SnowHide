@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
 
 /**
@@ -52,6 +53,7 @@ import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
  * - 左栏 = 已添加但未加入快速启停；右滑 = 加入
  * - 右栏 = 快速启停成员；左滑 = 移出
  * - 成员在「已添加」里被移出时自动同步剔除（数据一致性）
+ * - 两栏排序、图标形状、包名整行显示与增删应用一致
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +68,9 @@ fun QuickToggleScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showPackageName by viewModel.showPackageName.collectAsState()
     val members by viewModel.members.collectAsState()
+    val leftSort by viewModel.leftSort.collectAsState()
+    val rightSort by viewModel.rightSort.collectAsState()
+    val iconShape by SettingsRepository.iconShape.collectAsState()
     // 左右栏列表：combine 派生 StateFlow，数据变化立即刷新
     val leftApps by viewModel.leftApps.collectAsState()
     val rightApps by viewModel.rightApps.collectAsState()
@@ -152,15 +157,18 @@ fun QuickToggleScreen(
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(leftApps, key = { it }) { pkg ->
                             SwipeRow(
-                                label = viewModel.displayLabel(pkg),
-                                pkg = pkg,
-                                showPackageName = showPackageName,
-                                background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                onSwipe = { viewModel.addMember(pkg) },
+                                 label = viewModel.displayLabel(pkg),
+                                 pkg = pkg,
+                                 showPackageName = showPackageName,
+                                 iconShape = iconShape,
+                                 background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                 allowedDirection = SwipeToDismissBoxValue.StartToEnd,
+                                 onSwipe = { viewModel.addMember(pkg) },
                             )
-                        }
-                    }
-                }
+                         }
+                     }
+                    SortButton(label = sortLabel(leftSort), onClick = { viewModel.cycleLeftSort() })
+                 }
 
                 // 右栏：快速启停成员
                 Column(
@@ -173,15 +181,18 @@ fun QuickToggleScreen(
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(rightApps, key = { it }) { pkg ->
                             SwipeRow(
-                                label = viewModel.displayLabel(pkg),
-                                pkg = pkg,
-                                showPackageName = showPackageName,
-                                background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                onSwipe = { viewModel.removeMember(pkg) },
+                                 label = viewModel.displayLabel(pkg),
+                                 pkg = pkg,
+                                 showPackageName = showPackageName,
+                                 iconShape = iconShape,
+                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                 allowedDirection = SwipeToDismissBoxValue.EndToStart,
+                                 onSwipe = { viewModel.removeMember(pkg) },
                             )
-                }
-            }
-        }
+                 }
+             }
+                    SortButton(label = sortLabel(rightSort), onClick = { viewModel.cycleRightSort() })
+         }
     }
 
     // 磁贴手动添加引导
@@ -218,6 +229,25 @@ private fun ColumnLabel(text: String, count: Int) {
     )
 }
 
+private fun sortLabel(mode: QuickToggleViewModel.SortMode): String = when (mode) {
+    QuickToggleViewModel.SortMode.TIME_DESC -> "时间倒序"
+    QuickToggleViewModel.SortMode.TIME_ASC -> "时间正序"
+    QuickToggleViewModel.SortMode.NAME_DESC -> "名字倒序"
+    QuickToggleViewModel.SortMode.NAME_ASC -> "名字正序"
+    QuickToggleViewModel.SortMode.RECENT_DESC -> "最近添加"
+}
+
+@Composable
+private fun SortButton(label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(
+            text = "排序：$label ▸",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 /** 可滑动行（与增删应用同款交互）；显示应用名+（开关时）包名两行 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -225,19 +255,23 @@ private fun SwipeRow(
     label: String,
     pkg: String,
     showPackageName: Boolean,
+    iconShape: String,
     background: androidx.compose.ui.graphics.Color,
+    allowedDirection: SwipeToDismissBoxValue,
     onSwipe: () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) {
+            if (value == allowedDirection) {
                 onSwipe()
                 false
-            } else true
+            } else value == SwipeToDismissBoxValue.Settled
         },
     )
     SwipeToDismissBox(
         state = dismissState,
+        enableDismissFromStartToEnd = allowedDirection == SwipeToDismissBoxValue.StartToEnd,
+        enableDismissFromEndToStart = allowedDirection == SwipeToDismissBoxValue.EndToStart,
         backgroundContent = {
             // 无文字提示，仅淡色背景
             Box(
@@ -255,16 +289,19 @@ private fun SwipeRow(
                 .background(background)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            LazyAppIcon(pkg = pkg, size = 36.dp)
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(start = 10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LazyAppIcon(pkg = pkg, size = 36.dp, iconShape = iconShape)
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(start = 10.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 if (showPackageName) {
                     Text(
                         text = pkg,
@@ -272,6 +309,7 @@ private fun SwipeRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }

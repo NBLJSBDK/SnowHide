@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.SystemClock
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.core.engine.EngineManager
@@ -59,11 +60,27 @@ class LockCleanReceiver : BroadcastReceiver() {
         }
         prefs.edit().putBoolean(KEY_PENDING, true).apply()
         val alarm = alarmManager(context)
-        alarm.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            System.currentTimeMillis() + delayMs,
-            alarmPending(context),
-        )
+        val triggerAt = System.currentTimeMillis() + delayMs
+        val exactScheduled = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarm.canScheduleExactAlarms()) {
+                false
+            } else {
+                alarm.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAt,
+                    alarmPending(context),
+                )
+                true
+            }
+        }.getOrDefault(false)
+        if (!exactScheduled) {
+            // 没有精确闹钟权限时使用系统允许的非精确闹钟，不能让广播接收器崩溃。
+            alarm.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAt,
+                alarmPending(context),
+            )
+        }
     }
 
     /** 解锁：取消闹钟，清挂起标记 */

@@ -51,15 +51,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
+import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
 
 /**
- * 增删应用界面（设计文档 §3.8 用户拍板终版，左右分栏 + 暂存模式）
+ * 增删应用界面（设计文档 §3.8 用户拍板终版，左右分栏 + 即时应用）
  *
  * 顶行：搜索框 + 系统应用切换（彩蛋解锁后显示）+ 显示隐藏包名
  * 左栏：未添加应用（默认安装时间倒序，左下排序选项）
  * 右栏：已添加应用（默认名称正序，右下排序选项）
- * 滑动移动：左栏右滑=加入，右栏左滑=解冻并移出（暂存，确认才落盘）
+ * 滑动移动：左栏只允许右滑加入，右栏只允许左滑解冻并移出
  * 顶栏三按钮（长按=说明，点击=弹窗确认）：
  *   返回=丢弃改动并返回；确认=加入列表不冻结；应用=加入列表并立即冻结
  */
@@ -79,6 +80,7 @@ fun AppManageScreen(
     val showSystemOnly by viewModel.showSystemOnly.collectAsState()
     val leftSort by viewModel.leftSort.collectAsState()
     val rightSort by viewModel.rightSort.collectAsState()
+    val iconShape by SettingsRepository.iconShape.collectAsState()
     val leftApps by viewModel.leftApps.collectAsState()
     val rightApps by viewModel.rightApps.collectAsState()
     val loaded by AppListRepository.loaded.collectAsState()
@@ -174,7 +176,9 @@ fun AppManageScreen(
                                 label = app.label,
                                 pkg = app.pkg,
                                 showPackageName = showPackageName,
+                                iconShape = iconShape,
                                 background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                allowedDirection = SwipeToDismissBoxValue.StartToEnd,
                                 onSwipe = { viewModel.addApp(app.pkg) },
                             )
                         }
@@ -196,7 +200,9 @@ fun AppManageScreen(
                                 label = app.label,
                                 pkg = app.pkg,
                                 showPackageName = showPackageName,
+                                iconShape = iconShape,
                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                allowedDirection = SwipeToDismissBoxValue.EndToStart,
                                 onSwipe = { viewModel.removeApp(app.pkg) },
                             )
                         }
@@ -265,6 +271,7 @@ private fun sortLabel(mode: AppManageViewModel.SortMode): String = when (mode) {
     AppManageViewModel.SortMode.TIME_ASC -> "时间正序"
     AppManageViewModel.SortMode.NAME_DESC -> "名字倒序"
     AppManageViewModel.SortMode.NAME_ASC -> "名字正序"
+    AppManageViewModel.SortMode.RECENT_DESC -> "最近添加"
 }
 
 /** 栏标题 + 数量 */
@@ -298,19 +305,23 @@ private fun SwipeableAppRow(
     label: String,
     pkg: String,
     showPackageName: Boolean,
+    iconShape: String,
     background: androidx.compose.ui.graphics.Color,
+    allowedDirection: SwipeToDismissBoxValue,
     onSwipe: () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) {
+            if (value == allowedDirection) {
                 onSwipe()
                 false // 不真正移除列表项，由数据刷新驱动
-            } else true
+            } else value == SwipeToDismissBoxValue.Settled
         },
     )
     SwipeToDismissBox(
         state = dismissState,
+        enableDismissFromStartToEnd = allowedDirection == SwipeToDismissBoxValue.StartToEnd,
+        enableDismissFromEndToStart = allowedDirection == SwipeToDismissBoxValue.EndToStart,
         backgroundContent = {
             Box(
                 modifier = Modifier
@@ -327,16 +338,19 @@ private fun SwipeableAppRow(
                 .background(background)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            LazyAppIcon(pkg = pkg, size = 36.dp)
-            Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LazyAppIcon(pkg = pkg, size = 36.dp, iconShape = iconShape)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 if (showPackageName) {
                     Text(
                         text = pkg,
@@ -344,6 +358,7 @@ private fun SwipeableAppRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }

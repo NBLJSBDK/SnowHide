@@ -12,6 +12,7 @@ import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
+import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.feature.home.HomeScreen
 import com.nbljsbdk.snowhide.ui.theme.SnowHideTheme
 import rikka.shizuku.Shizuku
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         EngineRegistry.init(applicationContext)
         GridRepository.init(applicationContext)
+        ListOrderRepository.init(applicationContext)
         com.nbljsbdk.snowhide.data.repo.FrozenStateStore.init(applicationContext)
         SettingsRepository.init(applicationContext)
         AppListRepository.init(applicationContext) // 预加载应用列表（避免首次打开增删界面空白）

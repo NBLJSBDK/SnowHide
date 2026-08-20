@@ -113,6 +113,7 @@ core/                  ★核心抽象（P0 就位，扩展点全在这）
 data/
   model/GridModels.kt  — GridItem / Folder / FolderApp（type/parent 概念见设计文档 §4）
   repo/GridRepository.kt — 宫格/文件夹/排序/整理目录全部数据操作（SP+JSON，StateFlow）
+  repo/ListOrderRepository.kt — 增删应用/快速启停滑入列表顺序（排序档位不持久化）
   prefs/SettingsRepository.kt — 布局/壁纸/开关/图标包（SP 持久化）
 
 domain/
@@ -170,6 +171,7 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
   - Shizuku **应用包名 = `moe.shizuku.privileged.api`**（进程名、启动入口都用它；`getLaunchIntentForPackage` 必须用它）
   - `moe.shizuku.manager` **不是可启动包名**，只是权限/组件的命名空间前缀（如 `moe.shizuku.manager.permission.API_V23`）
   - 打开 Shizuku 管理器、检查进程都要用 `privileged.api`
+- **Shizuku 启动竞态**：服务刚重启或 Binder 尚未重新挂载时，`checkSelfPermission()` 可能抛 `Not an attached client`；引擎可用性探测必须 `runCatching`，异常按暂不可用处理，不能让主界面启动崩溃。
 - **Shizuku 授权与权限**：授权结果走 `OnRequestPermissionResultListener` 回调（listener 模式，**不是** onRequestPermissionsResult 转发——13.x 无此方法）。`requestPermission` 前必须 `pingBinder()` 检查，否则抛 `binder haven't been received`。**执行 pm 命令用 UserService 方案**：`Shizuku.bindUserService` 把 ShellCommandService 拉起到 shell 身份进程，手写 Binder 事务执行 `pm disable-user/enable`（13.1.5 的 `newProcess` 是 private 不可用）。
 - **R8 混淆会杀死 Shizuku UserService（release 专属坑）**：ShellCommandService 由 Shizuku server 端实例化（构造器/onTransact 经框架调用），release 混淆后构造器被破坏 → 所有 pm 命令静默挂起（冻结解冻无效、增删界面移出卡死）。**proguard-rules.pro 必须 keep 该类**（已加，勿删）。
 - **卸载重装会清掉 Shizuku 授权**：API_V23 是 dangerous 权限，覆盖安装（`install -r`）保留、卸载重装清零且可能带「不再询问」标记 → 授权弹窗弹不出。真机调试需要时用 `adb shell pm grant <pkg> moe.shizuku.manager.permission.API_V23`。
@@ -185,6 +187,7 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 - **Compose BOM 2024.09.00**：`TextOverflow.MiddleEllipsis` 不可用（用 Ellipsis）；`animateFloatAsState` 需要 `androidx.compose.animation.core.animateFloatAsState`（注意 import 路径，旧 BOM 下 animation 包结构）。
 - **debug/release 包名**：`com.nbljsbdk.snowhide` / `...snowhide.debug`——logcat 过滤、数据目录、Shizuku 授权均按包名独立。
 - **SP+JSON 存储键**：`snowhide_grid`（grid_items/folders/folder_apps）、`snowhide_settings`。
+- **锁屏精确闹钟权限**：未授予 `SCHEDULE_EXACT_ALARM` 时，锁屏清理必须回退 `setAndAllowWhileIdle()`，不能直接调用 `setExactAndAllowWhileIdle()` 让广播接收器崩溃。
 
 ---
 
@@ -214,6 +217,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 冻结滤镜语义重排、浅色主题、设置持久化修复、版本号精确到分钟
 - 备份导入导出（SAF + 立即重启确认）、搜索自动聚焦、权限说明
 - 全局震动统一、锁屏自动清理说明弹窗、整理目录双高亮与即时状态机
+- 增删应用/快速启停方向手势限制、最近添加排序、图标形状同步、包名整行显示
 
 **未完成（候选下一步）**：
 1. 应用分身（pm --user 分用户冻结）
