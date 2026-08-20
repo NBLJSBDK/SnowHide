@@ -181,6 +181,20 @@ fun HomeScreen(
         return hapticLevel > 0 && !silent && !dnd
     }
 
+    /** 全局统一短震：锁定、进入文件夹、返回主屏共用；强度和时长按原档位加倍 */
+    fun vibrateAction() {
+        if (!shouldVibrate()) return
+        val (duration, amplitude) = when (hapticLevel) {
+            1 -> 60 to 192
+            2 -> 100 to 255
+            3 -> 140 to 255
+            else -> 180 to 255
+        }
+        vibrator?.vibrate(
+            android.os.VibrationEffect.createOneShot(duration.toLong(), amplitude),
+        )
+    }
+
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
     var invalidAppTarget by remember { mutableStateOf<String?>(null) }
@@ -541,6 +555,7 @@ fun HomeScreen(
                                                     // 跳到该文件夹页（循环内当前位置的相邻页）
                                                     val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
                                                     if (folderIndex >= 0) {
+                                                        vibrateAction()
                                                         scope.launch {
                                                             pagerState.jumpToFolder(actualCount, folderIndex)
                                                         }
@@ -600,6 +615,7 @@ fun HomeScreen(
                     appStates = appStates,
                     showReturnHomeButton = showReturnHomeButton,
                     onBackToHome = {
+                        vibrateAction()
                         scope.launch {
                             if (animationsEnabled) pagerState.animateHome(actualCount)
                             else pagerState.scrollHome(actualCount)
@@ -673,21 +689,7 @@ fun HomeScreen(
                 onAppClick = { handleAppClick(it) },
                 onAppLongClick = { pkg ->
                     viewModel.gridRepository.toggleLock(pkg)
-                    // 锁定与解锁都短震；档位 0 不震，系统静音/勿扰不震
-                    if (shouldVibrate()) {
-                        val (duration, amplitude) = when (hapticLevel) {
-                            1 -> 30 to 96
-                            2 -> 50 to 160
-                            3 -> 70 to 224
-                            else -> 90 to 255
-                        }
-                        vibrator?.vibrate(
-                            android.os.VibrationEffect.createOneShot(
-                                duration.toLong(),
-                                amplitude,
-                            )
-                        )
-                    }
+                    vibrateAction()
                 },
                 onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
             )
