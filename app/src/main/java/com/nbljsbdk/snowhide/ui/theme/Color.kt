@@ -26,6 +26,11 @@ val FrostWhiteDim = Color(0xFF5E7085)     // 次要文字（灰蓝）
 val WarmOrange = Color(0xFFE56A3C)        // 暖橙（全部解冻/快速清理等）
 val WarmOrangeOn = Color(0xFFFFFFFF)
 
+// 整理目录三类高亮（实际使用 50% 透明度）
+val OrganizeAppHighlight = IceBlue       // A：主屏应用
+val OrganizeFolderHighlight = Color(0xFF9B7BFF) // F：主屏文件夹
+val OrganizeMemberHighlight = WarmOrange // M：文件夹下栏应用
+
 // 通用
 val FrostSurface = Color(0xFFF4F8FC)
 val FrostOutline = Color(0xFFB9CBE0)

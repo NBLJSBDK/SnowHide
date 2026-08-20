@@ -76,6 +76,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -102,6 +103,8 @@ import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
 import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
+import com.nbljsbdk.snowhide.ui.theme.OrganizeAppHighlight
+import com.nbljsbdk.snowhide.ui.theme.OrganizeFolderHighlight
 import com.nbljsbdk.snowhide.ui.theme.TianyiBlue
 import com.nbljsbdk.snowhide.ui.theme.WarmOrange
 import com.nbljsbdk.snowhide.ui.util.frosted
@@ -550,9 +553,10 @@ fun HomeScreen(
                                             previewSize = folderPreview,
                                             iconShape = iconShape,
                                             showName = showAppName,
-                                            selected = organizing &&
+                                            selectionColor = if (organizing &&
                                                 organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
-                                                (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id,
+                                                (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id
+                                            ) OrganizeFolderHighlight else null,
                                             onClick = {
                                                 if (organizing) {
                                                     organizeViewModel.tapFolder(folder)
@@ -582,11 +586,13 @@ fun HomeScreen(
                                         showName = showAppName,
                                         freezeStyle = freezeStyle,
                                         iconShape = iconShape,
-                                        selected = organizing && when (val s = organizeState) {
-                                            is OrganizeViewModel.OrganizeState.HomeAppSelected -> s.app.id == item.id
-                                            is OrganizeViewModel.OrganizeState.FolderSelected -> s.subHomeApp?.id == item.id
-                                            else -> false
-                                        },
+                                        selectionColor = if (organizing) when (val s = organizeState) {
+                                            is OrganizeViewModel.OrganizeState.HomeAppSelected ->
+                                                if (s.app.id == item.id) OrganizeAppHighlight else null
+                                            is OrganizeViewModel.OrganizeState.FolderSelected ->
+                                                if (s.subHomeApp?.id == item.id) OrganizeAppHighlight else null
+                                            else -> null
+                                        } else null,
                                         onClick = {
                                             if (organizing) organizeViewModel.tapHomeApp(item)
                                             else handleAppClick(item.pkg)
@@ -670,6 +676,7 @@ fun HomeScreen(
                 folders = folders,
                 folderApps = organizeFolderApps,
                 icons = icons,
+                iconShape = iconShape,
                 transparentBg = transparentBg,
                 onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
                 onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
@@ -1022,7 +1029,7 @@ private fun AppCell(
     showName: Boolean,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     iconShape: String = "round",
-    selected: Boolean = false,
+    selectionColor: Color? = null,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -1033,8 +1040,7 @@ private fun AppCell(
             .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .padding(4.dp)
             .background(
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-                else androidx.compose.ui.graphics.Color.Transparent,
+                selectionColor?.copy(alpha = 0.5f) ?: Color.Transparent,
             ),
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -1104,7 +1110,7 @@ private fun FolderCell(
     previewSize: Int = 2,
     iconShape: String = "round",
     showName: Boolean = true,
-    selected: Boolean = false,
+    selectionColor: Color? = null,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -1115,16 +1121,17 @@ private fun FolderCell(
             .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .padding(4.dp)
             .background(
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-                else androidx.compose.ui.graphics.Color.Transparent,
+                selectionColor?.copy(alpha = 0.5f) ?: Color.Transparent,
             ),
     ) {
-        // 文件夹 2×2 / 3×3 拼贴预览（前 4/9 个成员，空文件夹显示基础图标）
+        // 文件夹 2×2 / 3×3 拼贴预览（前 4/9 个成员，空文件夹显示空外框）
         if (previewPackages.isEmpty()) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(R.drawable.ic_folder),
-                contentDescription = name,
-                modifier = Modifier.size(size),
+            // 空文件夹沿用非空文件夹的外框，只是不绘制内部应用。
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(RoundedCornerShape(size.value * 0.22f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
             )
         } else {
             val grid = previewSize.coerceIn(2, 3)

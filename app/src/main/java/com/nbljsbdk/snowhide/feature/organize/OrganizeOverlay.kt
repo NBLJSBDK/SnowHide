@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,7 +35,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -45,6 +45,8 @@ import androidx.compose.ui.text.input.ImeAction
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.ui.components.OutlinedText
+import com.nbljsbdk.snowhide.ui.theme.OrganizeMemberHighlight
 
 /**
  * 整理目录底部操作区（无状态 Composable，设计文档 §3.10 状态机）
@@ -63,6 +65,7 @@ fun OrganizeOverlay(
     folders: List<Folder>,
     folderApps: List<String>,
     icons: Map<String, ImageBitmap>,
+    iconShape: String = "round",
     transparentBg: Boolean = false,
     onTapHomeApp: (GridItem) -> Unit,
     onTapFolder: (Folder) -> Unit,
@@ -172,8 +175,8 @@ fun OrganizeOverlay(
                                     .padding(4.dp)
                                     .background(
                                         if (folderSelected.subFolderAppPkg == pkg)
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            OrganizeMemberHighlight.copy(alpha = 0.5f)
+                                        else androidx.compose.ui.graphics.Color.Transparent,
                                     ),
                             ) {
                                 icons[pkg]?.let { bmp ->
@@ -181,15 +184,17 @@ fun OrganizeOverlay(
                                         bitmap = bmp,
                                         contentDescription = pkg,
                                         contentScale = ContentScale.Fit,
-                                        modifier = Modifier.size(40.dp),
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(
+                                                if (iconShape == "circle") CircleShape
+                                                else RoundedCornerShape(40.dp * 0.22f),
+                                            ),
                                     )
                                 }
-                                Text(
+                                OutlinedText(
                                     text = onAppLabel(pkg),
                                     style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
