@@ -180,6 +180,13 @@ fun HomeScreen(
 
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
+    fun appLocation(pkg: String): String {
+        if (gridItems.any { it.type == "app" && it.pkg == pkg }) {
+            return "主屏幕"
+        }
+        val folderId = folderApps.firstOrNull { it.pkg == pkg }?.folderId
+        return folders.firstOrNull { it.id == folderId }?.name ?: "主屏幕"
+    }
     // 文件夹重命名/删除弹窗状态
     var renameFolder by remember { mutableStateOf<com.nbljsbdk.snowhide.data.model.Folder?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -796,6 +803,7 @@ fun HomeScreen(
             frozen = target.pkg?.let { frozenStates[it] == true } ?: false,
             folderName = folders.find { it.id == target.folderId }?.name ?: "",
             appLabel = target.pkg?.let { labels[it] ?: it } ?: "",
+            locationName = target.pkg?.let(::appLocation) ?: "",
             targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
             onToggleFreeze = { pkg -> viewModel.toggleFreeze(pkg); longPressTarget = null },
@@ -1303,6 +1311,7 @@ private fun ContextMenu(
     frozen: Boolean,
     folderName: String,
     appLabel: String,
+    locationName: String,
     targetFolder: com.nbljsbdk.snowhide.data.model.Folder?,
     onDismiss: () -> Unit,
     onToggleFreeze: (String) -> Unit,
@@ -1316,7 +1325,26 @@ private fun ContextMenu(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (item.type == "folder") folderName else appLabel)
+            if (item.type == "folder") {
+                Text(folderName)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = appLabel,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = locationName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+            }
         },
         text = {
             Column {
