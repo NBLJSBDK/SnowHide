@@ -7,10 +7,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
+import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
+import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
@@ -43,7 +45,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 冻结状态映射（pkg → 是否冻结，共享存储：磁贴/增删界面操作后同样刷新） */
     val frozenStates: StateFlow<Map<String, Boolean>> =
-        com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states
+        FrozenStateStore.states
+
+    /** 应用系统实际状态（冻结/正常/已删除/无法确认） */
+    val appStates: StateFlow<Map<String, AppRuntimeState>> = FrozenStateStore.appStates
 
     /** 图标缓存（pkg → 图标） */
     private val _icons = MutableStateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap())
@@ -210,7 +215,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** 刷新全部已添加应用的冻结状态（一次批量查询，共享存储） */
     fun refreshFrozenStates() {
         viewModelScope.launch {
-            com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
+            FrozenStateStore.refresh()
+        }
+    }
+
+    /** 手动/自动同步系统实际状态；自动模式静默，手动模式给结果 Toast */
+    fun syncActualStatus(silent: Boolean = false) {
+        viewModelScope.launch {
+            val result = FrozenStateStore.refresh()
+            if (!silent) {
+                if (result.success) {
+                    val message = if (result.missingCount > 0) {
+                        "同步完成：发现 ${result.missingCount} 个已删除应用"
+                    } else {
+                        "同步完成：状态已更新"
+                    }
+                    toast(message)
+                } else {
+                    toast("同步失败：${result.errorMessage ?: "无法读取系统状态"}")
+                }
+            }
         }
     }
 

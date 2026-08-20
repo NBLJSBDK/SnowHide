@@ -29,12 +29,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.data.model.AppRuntimeState
+import com.nbljsbdk.snowhide.ui.theme.IceBlue
 import com.nbljsbdk.snowhide.ui.util.frosted
 
 /**
@@ -53,6 +56,7 @@ fun FolderScreen(
     memberPackages: List<String>,
     icons: Map<String, ImageBitmap>,
     frozenStates: Map<String, Boolean>,
+    appStates: Map<String, AppRuntimeState> = emptyMap(),
     columns: Int,
     iconSize: Dp,
     verticalSpace: Int,
@@ -94,6 +98,11 @@ fun FolderScreen(
             }
             // distinct 兜底：历史数据可能同文件夹重复 pkg（LazyGrid key 崩溃防御）
             items(memberPackages.distinct(), key = { "app:$it" }) { pkg ->
+                val runtimeState = appStates[pkg]
+                val frozen = runtimeState == AppRuntimeState.FROZEN ||
+                    ((runtimeState == null || runtimeState == AppRuntimeState.UNKNOWN) &&
+                        frozenStates[pkg] == true)
+                val missing = runtimeState == AppRuntimeState.MISSING
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -123,14 +132,22 @@ fun FolderScreen(
                                     .size(iconSize)
                                     .clip(if (iconShape == "circle") CircleShape
                                     else RoundedCornerShape(iconSize.value * 0.22f))
-                                    .frosted(enabled = frozenStates[pkg] == true, style = freezeStyle),
+                                    .frosted(enabled = frozen, style = freezeStyle),
                             )
                         }
                         // 雪花角标（与主屏一致）
-                        if (frozenStates[pkg] == true) {
+                        if (frozen) {
                             Image(
                                 painter = painterResource(R.drawable.ic_snowflake),
                                 contentDescription = "已冻结",
+                                colorFilter = ColorFilter.tint(IceBlue),
+                                modifier = Modifier.size(iconSize * 0.38f),
+                            )
+                        } else if (missing) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_trash),
+                                contentDescription = "应用已删除",
+                                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.error),
                                 modifier = Modifier.size(iconSize * 0.38f),
                             )
                         }

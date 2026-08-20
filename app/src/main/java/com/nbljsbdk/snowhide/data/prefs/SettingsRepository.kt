@@ -41,6 +41,7 @@ object SettingsRepository {
         _wallpaperOverlay.value = prefs.getFloat(KEY_WALLPAPER_OVERLAY, 0.25f)
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
         _animationsEnabled.value = prefs.getBoolean(KEY_ANIMATIONS, true)
+        _autoSyncStatus.value = prefs.getBoolean(KEY_AUTO_SYNC_STATUS, true)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
     }
 
@@ -235,6 +236,15 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_ANIMATIONS, enabled).apply()
     }
 
+    private val _autoSyncStatus = MutableStateFlow(getBool(KEY_AUTO_SYNC_STATUS, true))
+    /** 是否在应用回到前台时静默同步系统实际状态 */
+    val autoSyncStatus: StateFlow<Boolean> = _autoSyncStatus.asStateFlow()
+
+    fun setAutoSyncStatus(enabled: Boolean) {
+        _autoSyncStatus.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_AUTO_SYNC_STATUS, enabled).apply()
+    }
+
     fun setIconPack(pkg: String) {
         _iconPack.value = pkg
         if (::prefs.isInitialized) prefs.edit().putString(KEY_ICON_PACK, pkg).apply()
@@ -277,4 +287,5 @@ object SettingsRepository {
     private const val KEY_TRANSPARENT = "transparent_bg"
     private const val KEY_BG_IMAGE = "bg_image_path"
     private const val KEY_ANIMATIONS = "animations_enabled"
+    private const val KEY_AUTO_SYNC_STATUS = "auto_sync_status"
 }

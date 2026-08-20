@@ -66,6 +66,7 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 @Composable
 fun SettingsScreen(
     onClose: () -> Unit,
+    onSyncStatus: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application
@@ -77,6 +78,7 @@ fun SettingsScreen(
     val showAppName by settings.showAppName.collectAsState()
     val showReturnHomeButton by settings.showReturnHomeButton.collectAsState()
     val resetHomeOnReentry by settings.resetHomeOnReentry.collectAsState()
+    val autoSyncStatus by settings.autoSyncStatus.collectAsState()
     val hapticLevel by settings.hapticLevel.collectAsState()
     val lockCleanEnabled by settings.lockCleanEnabled.collectAsState()
     val lockCleanDelay by settings.lockCleanDelay.collectAsState()
@@ -225,6 +227,25 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // ── 状态同步（手动按钮 + 静默自动同步） ──
+            SettingCard("状态同步") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("手动同步实际状态", modifier = Modifier.weight(1f))
+                    TextButton(onClick = onSyncStatus) { Text("立即同步") }
+                }
+                SwitchSetting("自动同步状态", autoSyncStatus) {
+                    settings.setAutoSyncStatus(it)
+                }
+                Text(
+                    text = "同步系统真实冻结状态和已删除应用；自动同步在回到前台时静默执行。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             // ── 系统集成 ──
             SettingCard("系统集成") {
                 Row(
