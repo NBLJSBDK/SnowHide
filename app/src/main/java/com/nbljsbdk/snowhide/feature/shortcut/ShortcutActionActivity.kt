@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +35,7 @@ import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
+import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -164,9 +164,13 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
             val successMsg = result.second
             runOnUiThread {
                 if (successMsg != null) {
-                    Toast.makeText(appContext, successMsg, Toast.LENGTH_SHORT).show()
+                    FeedbackController.toast(appContext, successMsg)
                 } else {
-                    Toast.makeText(appContext, "${result.first}${result.third ?: "失败"}", Toast.LENGTH_LONG).show()
+                    FeedbackController.notifyFailure(
+                        appContext,
+                        result.first,
+                        result.third ?: "失败",
+                    )
                 }
                 finish()
             }

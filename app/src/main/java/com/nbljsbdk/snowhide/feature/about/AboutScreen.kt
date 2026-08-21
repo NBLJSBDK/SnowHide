@@ -1,7 +1,6 @@
 package com.nbljsbdk.snowhide.feature.about
 
 import android.app.Application
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
@@ -43,6 +42,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
+import com.nbljsbdk.snowhide.ui.util.FeedbackController
 
 /**
  * 关于页（极简）
@@ -93,7 +93,7 @@ fun AboutScreen(
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
         } else {
-            Toast.makeText(context, "权限都已授予", Toast.LENGTH_SHORT).show()
+            FeedbackController.toast(context, "权限都已授予")
         }
     }
 
@@ -268,7 +268,7 @@ fun AboutScreen(
                     TextButton(
                         onClick = {
                             clipboard.setText(androidx.compose.ui.text.AnnotatedString(msg))
-                            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                            FeedbackController.toast(context, "已复制")
                         },
                     ) { Text("复制") }
                 }

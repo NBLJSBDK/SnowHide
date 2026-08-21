@@ -16,6 +16,7 @@ import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
+import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -232,7 +233,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     toast(message)
                 } else {
-                    toast("同步失败：${result.errorMessage ?: "无法读取系统状态"}")
+                    showMessage("同步失败：${result.errorMessage ?: "无法读取系统状态"}")
                 }
             }
         }
@@ -265,7 +266,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // 冻结/解冻成功提示与智能清理统一使用系统 Toast
                 val name = _labels.value[pkg] ?: pkg
                 toast(if (frozen) "已启用：$name" else "已停用：$name")
-            }.onFailure { toast("操作失败：${it.message}") }
+            }.onFailure { showMessage("操作失败：${it.message}") }
         }
     }
 
@@ -305,7 +306,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     // 批量结果用系统 Toast（Snackbar 在底部易被忽略）
                     toast("智能清理：已停用 $n 个应用")
                 }
-                .onFailure { toast("智能清理失败：${it.message}") }
+                .onFailure { showMessage("智能清理失败：${it.message}") }
         }
     }
 
@@ -315,7 +316,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             freezeUseCase.unfreezeAll()
                 .onSuccess { n -> refreshFrozenStates(); toast("已启用 $n 个应用") }
-                .onFailure { toast(it.message ?: "操作失败") }
+                .onFailure { showMessage(it.message ?: "操作失败") }
         }
     }
 
@@ -325,13 +326,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = false)
                 .onSuccess { n -> refreshFrozenStates(); toast("已停用 $n 个应用") }
-                .onFailure { toast(it.message ?: "操作失败") }
+                .onFailure { showMessage(it.message ?: "操作失败") }
         }
     }
 
-    /** 系统 Toast（批量结果提示，用户拍板用 Toast 弹窗） */
+    /** 成功结果使用统一 Toast；失败结果使用主界面 Snackbar。 */
     private fun toast(text: String) {
-        android.widget.Toast.makeText(getApplication(), text, android.widget.Toast.LENGTH_SHORT).show()
+        FeedbackController.toast(getApplication(), text)
     }
 
     /** 目录级批量：停用某文件夹内全部应用（文件夹长按菜单「停用目录」） */
@@ -339,7 +340,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = folder.id)
                 .onSuccess { n -> refreshFrozenStates(); toast("已停用目录「${folder.name}」（$n 个）") }
-                .onFailure { toast(it.message ?: "操作失败") }
+                .onFailure { showMessage(it.message ?: "操作失败") }
         }
     }
 
@@ -350,11 +351,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 .filter { it.folderId == folder.id }
                 .map { it.pkg }
             var success = 0
+            var failures = 0
             members.forEach { pkg ->
-                freezeUseCase.unfreezeApp(pkg).onSuccess { success++ }
+                freezeUseCase.unfreezeApp(pkg)
+                    .onSuccess { success++ }
+                    .onFailure { failures++ }
             }
             refreshFrozenStates()
-            toast("已启用目录「${folder.name}」（$success 个）")
+            if (failures == 0) {
+                toast("已启用目录「${folder.name}」（$success 个）")
+            } else {
+                showMessage("已启用目录「${folder.name}」（成功 $success 个，失败 $failures 个）")
+            }
         }
     }
 

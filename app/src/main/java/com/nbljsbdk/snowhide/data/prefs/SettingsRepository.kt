@@ -23,6 +23,7 @@ object SettingsRepository {
         // 对象初始化时 prefs 尚未就绪，属性拿到的是默认值——
         // 之前版本重启后设置全部回默认（震动档位 bug 即此）。
         _showToast.value = prefs.getBoolean(KEY_TOAST, true)
+        _showReentryToast.value = prefs.getBoolean(KEY_REENTRY_TOAST, true)
         _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
         _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, true)
         _resetHomeOnReentry.value = prefs.getBoolean(KEY_BACK_DIR, true)
@@ -62,8 +63,12 @@ object SettingsRepository {
     // ═══════════════════════════════════════
 
     private val _showToast = MutableStateFlow(getBool(KEY_TOAST, true))
-    /** 清理应用后是否展示 Toast（默认启用） */
+    /** 操作完成后是否展示 Toast（默认启用） */
     val showToast: StateFlow<Boolean> = _showToast.asStateFlow()
+
+    private val _showReentryToast = MutableStateFlow(getBool(KEY_REENTRY_TOAST, true))
+    /** 离开应用超过阈值后重进时是否展示提示 Toast（默认启用） */
+    val showReentryToast: StateFlow<Boolean> = _showReentryToast.asStateFlow()
 
     private val _showAppName = MutableStateFlow(getBool(KEY_APP_NAME, true))
     /** 是否显示图标下方文字（应用、文件夹、返回主屏按钮） */
@@ -80,6 +85,11 @@ object SettingsRepository {
     fun setShowToast(enabled: Boolean) {
         _showToast.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_TOAST, enabled).apply()
+    }
+
+    fun setShowReentryToast(enabled: Boolean) {
+        _showReentryToast.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_REENTRY_TOAST, enabled).apply()
     }
 
     // ═══════════════════════════════════════
@@ -268,6 +278,7 @@ object SettingsRepository {
     }
 
     private const val KEY_TOAST = "show_toast"
+    private const val KEY_REENTRY_TOAST = "show_reentry_toast"
     private const val KEY_HAPTIC = "haptic_level"
     private const val KEY_FREEZE_STYLE = "freeze_style"
     private const val KEY_ICON_SHAPE = "icon_shape"

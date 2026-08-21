@@ -4,7 +4,6 @@ package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
 import android.os.SystemClock
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateTo
@@ -108,6 +107,7 @@ import com.nbljsbdk.snowhide.ui.theme.OrganizeFolderHighlight
 import com.nbljsbdk.snowhide.ui.theme.TianyiBlue
 import com.nbljsbdk.snowhide.ui.theme.WarmOrange
 import com.nbljsbdk.snowhide.ui.util.frosted
+import com.nbljsbdk.snowhide.ui.util.FeedbackController
 
 /**
  * 主屏幕（P0，设计文档 §3.2）
@@ -144,6 +144,7 @@ fun HomeScreen(
     val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
     val showReturnHomeButton by viewModel.settingsRepository.showReturnHomeButton.collectAsState()
     val resetHomeOnReentry by viewModel.settingsRepository.resetHomeOnReentry.collectAsState()
+    val showReentryToast by viewModel.settingsRepository.showReentryToast.collectAsState()
     val autoSyncStatus by viewModel.settingsRepository.autoSyncStatus.collectAsState()
     val message by viewModel.message.collectAsState()
     val menuOpen by viewModel.menuOpen.collectAsState()
@@ -300,7 +301,14 @@ fun HomeScreen(
         val pageIdx = pagerState.currentPage % actualCount
         val inFolder = !organizing && pageIdx != 0
         val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
-        DisposableEffect(lifecycleOwner, resetHomeOnReentry, actualCount, autoSyncStatus, engineReady) {
+        DisposableEffect(
+            lifecycleOwner,
+            resetHomeOnReentry,
+            showReentryToast,
+            actualCount,
+            autoSyncStatus,
+            engineReady,
+        ) {
             var stoppedAt = 0L
             var hasStarted = false
             val observer = LifecycleEventObserver { _, event ->
@@ -320,11 +328,11 @@ fun HomeScreen(
                             viewModel.setSearchQuery("")
                             viewModel.dismissMenu()
                             scope.launch { pagerState.scrollHome(actualCount) }
-                            Toast.makeText(
+                            FeedbackController.toast(
                                 context,
                                 "${context.getString(com.nbljsbdk.snowhide.R.string.app_name)}离开超过10秒，已回到主屏幕",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                                enabled = showReentryToast,
+                            )
                         }
                         if (hasStarted && autoSyncStatus && engineReady) {
                             viewModel.syncActualStatus(silent = true)

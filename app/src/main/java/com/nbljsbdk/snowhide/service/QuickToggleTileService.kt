@@ -11,6 +11,7 @@ import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
+import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -50,7 +51,13 @@ class QuickToggleTileService : TileService() {
                         if (it.failures.isNotEmpty()) append("，部分失败")
                     }
                 }
-                toast(msg)
+                val failureMessage = result?.exceptionOrNull()?.message
+                    ?: resultData?.failures?.takeIf { it.isNotEmpty() }?.joinToString("；")
+                if (failureMessage != null) {
+                    FeedbackController.notifyFailure(applicationContext, "快速启停", failureMessage)
+                } else {
+                    toast(msg)
+                }
             } else {
                 // 点亮：解冻成员中已添加且冻结的应用
                 val result = runCatching { runBlocking { useCase.lightUp() } }
@@ -61,7 +68,17 @@ class QuickToggleTileService : TileService() {
                     else -> "快速启停：已解冻 $n 个应用"
                 }
                 setTileActive(tile, n != null)
-                toast(msg)
+                val failureMessage = result.exceptionOrNull()?.message
+                    ?: result.getOrNull()?.exceptionOrNull()?.message
+                if (failureMessage != null || n == null) {
+                    FeedbackController.notifyFailure(
+                        applicationContext,
+                        "快速启停",
+                        failureMessage ?: msg,
+                    )
+                } else {
+                    toast(msg)
+                }
             }
         }.start()
     }
@@ -95,7 +112,7 @@ class QuickToggleTileService : TileService() {
 
     private fun toast(msg: String) {
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG).show()
+            FeedbackController.toast(applicationContext, msg, Toast.LENGTH_LONG)
         }
     }
 }

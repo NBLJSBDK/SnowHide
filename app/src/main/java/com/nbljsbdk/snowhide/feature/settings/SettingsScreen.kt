@@ -57,7 +57,7 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 /**
  * 设置页（设计文档 §3.11 更多选项，P0 子集）
  *
- * - 简单设置：清理后 Toast / 显示图标名称 / 返回主屏按钮 / 退出回目录
+ * - 简单设置：提示与反馈 / 显示图标名称 / 返回主屏按钮 / 退出回目录
  * - 图标包选择器
  * - 壁纸：透明开关（图片选择 P1）
  * - 布局设置已移到主屏长按菜单 → 透明浮框（实时预览）
@@ -86,6 +86,7 @@ fun SettingsScreen(
 
     // 三级菜单：创建快捷方式子屏
     var showShortcutCreate by remember { mutableStateOf(false) }
+    var showFeedbackSettings by remember { mutableStateOf(false) }
     var reentryInfoOpen by remember { mutableStateOf(false) }
     var lockCleanInfoOpen by remember { mutableStateOf(false) }
 
@@ -180,7 +181,7 @@ fun SettingsScreen(
             onDismissRequest = { reentryInfoOpen = false },
             title = { Text("重进时回到主屏") },
             text = {
-                Text("开启后，离开雪藏超过 10 秒，再次进入会自动回到主屏并关闭搜索状态，同时提示 Toast。10 秒内返回则保留当前页面。")
+                Text("开启后，离开雪藏超过 10 秒，再次进入会自动回到主屏并关闭搜索状态。是否显示提示可在“提示与反馈”中单独设置。10 秒内返回则保留当前页面。")
             },
             confirmButton = {
                 TextButton(onClick = { reentryInfoOpen = false }) { Text("知道了") }
@@ -231,6 +232,10 @@ fun SettingsScreen(
 
     if (showShortcutCreate) {
         ShortcutCreateScreen(onBack = { showShortcutCreate = false })
+        return
+    }
+    if (showFeedbackSettings) {
+        FeedbackSettingsScreen(onBack = { showFeedbackSettings = false })
         return
     }
 
@@ -362,7 +367,22 @@ fun SettingsScreen(
 
             // ── 简单设置 ──
             SettingCard("简单设置") {
-                SwitchSetting("清理应用后展示 Toast", showToast) { settings.setShowToast(it) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showFeedbackSettings = true },
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("提示与反馈")
+                        Text(
+                            text = if (showToast) "Toast 已开启" else "Toast 已关闭",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
                 SwitchSetting("显示图标名称", showAppName) { settings.setShowAppName(it) }
                 SwitchSetting("显示返回主屏按钮", showReturnHomeButton) {
                     settings.setShowReturnHomeButton(it)
@@ -409,7 +429,7 @@ fun SettingsScreen(
 
 /** 设置分组卡片 */
 @Composable
-private fun SettingCard(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+internal fun SettingCard(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -449,7 +469,7 @@ private fun SliderSetting(
 
 /** 开关设置行 */
 @Composable
-private fun SwitchSetting(
+internal fun SwitchSetting(
     label: String,
     checked: Boolean,
     onInfo: (() -> Unit)? = null,
