@@ -109,6 +109,8 @@ core/                  ★核心抽象（P0 就位，扩展点全在这）
   mode/
     FreezeMode.kt      — 枚举（isImplemented 标志，未开放灰显）
     FreezeExecutor.kt  — 引擎×模式分发
+  feedback/
+    HapticType.kt      — 分场景震动反馈类型
 
 data/
   model/GridModels.kt  — GridItem / Folder / FolderApp（type/parent 概念见设计文档 §4）
@@ -127,6 +129,8 @@ service/               — P1+（accessibility 划卡停用 / lockclean / tile�
 
 ui/
   util/AppIconLoader.kt — 图标包协议 + 系统回退 + 缓存
+  util/FeedbackController.kt — Toast 总开关与后台失败通知
+  util/HapticController.kt — 震动硬件调用与系统静音/勿扰过滤
   util/FrostModifiers.kt — 霜化 Modifier（ColorMatrix）
   theme/               — 霜冻深色主题（IceBlue/FrostCard 等）
 
@@ -218,6 +222,8 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 备份导入导出（SAF + 立即重启确认）、搜索自动聚焦、权限说明
 - 全局震动统一、锁屏自动清理说明弹窗、整理目录双高亮与即时状态机
 - 增删应用/快速启停方向手势限制、最近添加排序、图标形状同步、包名整行显示
+- 提示与反馈三级页：统一 Toast 开关、重进主屏提示开关、前台 Snackbar/后台失败通知分流
+- 震动反馈三级页：总开关 + 导航/冻结锁定/整理列表/批量四类强度，动作确认或完成时触发
 
 **未完成（候选下一步）**：
 1. 应用分身（pm --user 分用户冻结）

@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.Folder
@@ -17,6 +18,7 @@ import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
+import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -263,6 +265,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             else freezeUseCase.freezeApp(pkg)
             result.onSuccess {
                 refreshFrozenStates()
+                HapticController.vibrate(context, HapticType.FREEZE_LOCK)
                 // 冻结/解冻成功提示与智能清理统一使用系统 Toast
                 val name = _labels.value[pkg] ?: pkg
                 toast(if (frozen) "已启用：$name" else "已停用：$name")
@@ -303,6 +306,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             freezeUseCase.quickClean()
                 .onSuccess { n ->
                     refreshFrozenStates()
+                    HapticController.vibrate(context, HapticType.BATCH)
                     // 批量结果用系统 Toast（Snackbar 在底部易被忽略）
                     toast("智能清理：已停用 $n 个应用")
                 }
@@ -315,7 +319,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.unfreezeAll()
-                .onSuccess { n -> refreshFrozenStates(); toast("已启用 $n 个应用") }
+                .onSuccess {
+                    n ->
+                    refreshFrozenStates()
+                    HapticController.vibrate(context, HapticType.BATCH)
+                    toast("已启用 $n 个应用")
+                }
                 .onFailure { showMessage(it.message ?: "操作失败") }
         }
     }
@@ -325,7 +334,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = false)
-                .onSuccess { n -> refreshFrozenStates(); toast("已停用 $n 个应用") }
+                .onSuccess {
+                    n ->
+                    refreshFrozenStates()
+                    HapticController.vibrate(context, HapticType.BATCH)
+                    toast("已停用 $n 个应用")
+                }
                 .onFailure { showMessage(it.message ?: "操作失败") }
         }
     }
@@ -339,7 +353,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun freezeFolder(folder: Folder) {
         viewModelScope.launch {
             freezeUseCase.freezeAll(onlyFolderId = folder.id)
-                .onSuccess { n -> refreshFrozenStates(); toast("已停用目录「${folder.name}」（$n 个）") }
+                .onSuccess {
+                    n ->
+                    refreshFrozenStates()
+                    HapticController.vibrate(context, HapticType.BATCH)
+                    toast("已停用目录「${folder.name}」（$n 个）")
+                }
                 .onFailure { showMessage(it.message ?: "操作失败") }
         }
     }
@@ -359,6 +378,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             refreshFrozenStates()
             if (failures == 0) {
+                HapticController.vibrate(context, HapticType.BATCH)
                 toast("已启用目录「${folder.name}」（$success 个）")
             } else {
                 showMessage("已启用目录「${folder.name}」（成功 $success 个，失败 $failures 个）")

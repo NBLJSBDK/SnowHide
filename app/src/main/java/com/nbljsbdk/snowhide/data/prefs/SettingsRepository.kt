@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.data.prefs
 
 import android.content.Context
+import com.nbljsbdk.snowhide.core.feedback.HapticType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,7 +28,13 @@ object SettingsRepository {
         _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
         _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, true)
         _resetHomeOnReentry.value = prefs.getBoolean(KEY_BACK_DIR, true)
-        _hapticLevel.value = prefs.getInt(KEY_HAPTIC, 4)
+        val legacyHapticLevel = prefs.getInt(KEY_HAPTIC, 4).coerceIn(0, 4)
+        _hapticLevel.value = legacyHapticLevel
+        _hapticEnabled.value = prefs.getBoolean(KEY_HAPTIC_ENABLED, legacyHapticLevel > 0)
+        _hapticNavigationLevel.value = prefs.getInt(KEY_HAPTIC_NAVIGATION, legacyHapticLevel).coerceIn(0, 4)
+        _hapticFreezeLockLevel.value = prefs.getInt(KEY_HAPTIC_FREEZE_LOCK, legacyHapticLevel).coerceIn(0, 4)
+        _hapticOrganizeListLevel.value = prefs.getInt(KEY_HAPTIC_ORGANIZE_LIST, legacyHapticLevel).coerceIn(0, 4)
+        _hapticBatchLevel.value = prefs.getInt(KEY_HAPTIC_BATCH, legacyHapticLevel).coerceIn(0, 4)
         _columns.value = prefs.getInt(KEY_COLUMNS, 4)
         _iconSize.value = prefs.getInt(KEY_ICON_SIZE, 56)
         _verticalSpace.value = prefs.getInt(KEY_V_SPACE, 12)
@@ -93,14 +100,65 @@ object SettingsRepository {
     }
 
     // ═══════════════════════════════════════
-    // 震动反馈（dock 锁定/解锁，0-4 档，0=关闭）
+    // 震动反馈（总开关 + 四类场景，0-4 档，0=关闭）
     // ═══════════════════════════════════════
 
     private val _hapticLevel = MutableStateFlow(getInt(KEY_HAPTIC, 4))
-    /** 震感档位 0-4（默认最高档，用户拍板） */
+    /** 旧版全局档位，仅用于兼容旧设置 */
     val hapticLevel: StateFlow<Int> = _hapticLevel.asStateFlow()
 
-    fun setHapticLevel(value: Int) = save(KEY_HAPTIC, value) { _hapticLevel.value = it }
+    private val _hapticEnabled = MutableStateFlow(getBool(KEY_HAPTIC_ENABLED, true))
+    /** 震动总开关 */
+    val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
+
+    private val _hapticNavigationLevel = MutableStateFlow(getInt(KEY_HAPTIC_NAVIGATION, getInt(KEY_HAPTIC, 4)))
+    /** 导航操作震感档位 */
+    val hapticNavigationLevel: StateFlow<Int> = _hapticNavigationLevel.asStateFlow()
+
+    private val _hapticFreezeLockLevel = MutableStateFlow(getInt(KEY_HAPTIC_FREEZE_LOCK, getInt(KEY_HAPTIC, 4)))
+    /** 冻结与锁定震感档位 */
+    val hapticFreezeLockLevel: StateFlow<Int> = _hapticFreezeLockLevel.asStateFlow()
+
+    private val _hapticOrganizeListLevel = MutableStateFlow(getInt(KEY_HAPTIC_ORGANIZE_LIST, getInt(KEY_HAPTIC, 4)))
+    /** 整理与列表操作震感档位 */
+    val hapticOrganizeListLevel: StateFlow<Int> = _hapticOrganizeListLevel.asStateFlow()
+
+    private val _hapticBatchLevel = MutableStateFlow(getInt(KEY_HAPTIC_BATCH, getInt(KEY_HAPTIC, 4)))
+    /** 批量操作震感档位 */
+    val hapticBatchLevel: StateFlow<Int> = _hapticBatchLevel.asStateFlow()
+
+    fun setHapticEnabled(enabled: Boolean) {
+        _hapticEnabled.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_HAPTIC_ENABLED, enabled).apply()
+    }
+
+    /** 兼容旧版调用：只更新旧全局键，新代码使用按场景设置。 */
+    fun setHapticLevel(value: Int) = save(KEY_HAPTIC, value.coerceIn(0, 4)) { _hapticLevel.value = it }
+
+    fun setHapticLevel(type: HapticType, value: Int) {
+        val level = value.coerceIn(0, 4)
+        when (type) {
+            HapticType.NAVIGATION -> _hapticNavigationLevel.value = level
+            HapticType.FREEZE_LOCK -> _hapticFreezeLockLevel.value = level
+            HapticType.ORGANIZE_LIST -> _hapticOrganizeListLevel.value = level
+            HapticType.BATCH -> _hapticBatchLevel.value = level
+        }
+        if (::prefs.isInitialized) prefs.edit().putInt(hapticKey(type), level).apply()
+    }
+
+    fun hapticLevel(type: HapticType): Int = when (type) {
+        HapticType.NAVIGATION -> _hapticNavigationLevel.value
+        HapticType.FREEZE_LOCK -> _hapticFreezeLockLevel.value
+        HapticType.ORGANIZE_LIST -> _hapticOrganizeListLevel.value
+        HapticType.BATCH -> _hapticBatchLevel.value
+    }
+
+    private fun hapticKey(type: HapticType): String = when (type) {
+        HapticType.NAVIGATION -> KEY_HAPTIC_NAVIGATION
+        HapticType.FREEZE_LOCK -> KEY_HAPTIC_FREEZE_LOCK
+        HapticType.ORGANIZE_LIST -> KEY_HAPTIC_ORGANIZE_LIST
+        HapticType.BATCH -> KEY_HAPTIC_BATCH
+    }
 
     // ═══════════════════════════════════════
     // 冻结滤镜样式（美化设置，默认变蓝）
@@ -280,6 +338,11 @@ object SettingsRepository {
     private const val KEY_TOAST = "show_toast"
     private const val KEY_REENTRY_TOAST = "show_reentry_toast"
     private const val KEY_HAPTIC = "haptic_level"
+    private const val KEY_HAPTIC_ENABLED = "haptic_enabled"
+    private const val KEY_HAPTIC_NAVIGATION = "haptic_navigation_level"
+    private const val KEY_HAPTIC_FREEZE_LOCK = "haptic_freeze_lock_level"
+    private const val KEY_HAPTIC_ORGANIZE_LIST = "haptic_organize_list_level"
+    private const val KEY_HAPTIC_BATCH = "haptic_batch_level"
     private const val KEY_FREEZE_STYLE = "freeze_style"
     private const val KEY_ICON_SHAPE = "icon_shape"
     private const val KEY_LOCK_CLEAN = "lock_clean_enabled"

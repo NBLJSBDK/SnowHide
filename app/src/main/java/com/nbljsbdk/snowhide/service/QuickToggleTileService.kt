@@ -9,9 +9,11 @@ import android.service.quicksettings.TileService
 import android.widget.Toast
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
+import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -56,6 +58,7 @@ class QuickToggleTileService : TileService() {
                 if (failureMessage != null) {
                     FeedbackController.notifyFailure(applicationContext, "快速启停", failureMessage)
                 } else {
+                    HapticController.vibrate(applicationContext, HapticType.BATCH)
                     toast(msg)
                 }
             } else {
@@ -77,6 +80,7 @@ class QuickToggleTileService : TileService() {
                         failureMessage ?: msg,
                     )
                 } else {
+                    HapticController.vibrate(applicationContext, HapticType.BATCH)
                     toast(msg)
                 }
             }

@@ -93,6 +93,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.feature.about.AboutScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
@@ -108,6 +109,7 @@ import com.nbljsbdk.snowhide.ui.theme.TianyiBlue
 import com.nbljsbdk.snowhide.ui.theme.WarmOrange
 import com.nbljsbdk.snowhide.ui.util.frosted
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
+import com.nbljsbdk.snowhide.ui.util.HapticController
 
 /**
  * 主屏幕（P0，设计文档 §3.2）
@@ -166,38 +168,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    // dock 长按锁定/解锁震动（档位 0-4，0=关；受系统静音/勿扰控制）
-    val hapticLevel by viewModel.settingsRepository.hapticLevel.collectAsState()
-    val vibrator = remember {
-        runCatching { context.getSystemService(android.os.Vibrator::class.java) }.getOrNull()
-    }
-    val audioManager = remember {
-        context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
-    }
-    val notificationManager = remember {
-        context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-    }
-    fun shouldVibrate(): Boolean {
-        val silent = audioManager.ringerMode == android.media.AudioManager.RINGER_MODE_SILENT
-        val dnd = notificationManager.currentInterruptionFilter ==
-            android.app.NotificationManager.INTERRUPTION_FILTER_NONE
-        return hapticLevel > 0 && !silent && !dnd
-    }
-
-    /** 全局统一短震：锁定、进入文件夹、返回主屏共用；强度和时长按原档位加倍 */
-    fun vibrateAction() {
-        if (!shouldVibrate()) return
-        val (duration, amplitude) = when (hapticLevel) {
-            1 -> 60 to 192
-            2 -> 100 to 255
-            3 -> 140 to 255
-            else -> 180 to 255
-        }
-        vibrator?.vibrate(
-            android.os.VibrationEffect.createOneShot(duration.toLong(), amplitude),
-        )
-    }
 
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
@@ -572,7 +542,7 @@ fun HomeScreen(
                                                     // 跳到该文件夹页（循环内当前位置的相邻页）
                                                     val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
                                                     if (folderIndex >= 0) {
-                                                        vibrateAction()
+                                                         HapticController.vibrate(context, HapticType.NAVIGATION)
                                                         scope.launch {
                                                             pagerState.jumpToFolder(actualCount, folderIndex)
                                                         }
@@ -634,7 +604,7 @@ fun HomeScreen(
                     appStates = appStates,
                     showReturnHomeButton = showReturnHomeButton,
                     onBackToHome = {
-                        vibrateAction()
+                        HapticController.vibrate(context, HapticType.NAVIGATION)
                         scope.launch {
                             if (animationsEnabled) pagerState.animateHome(actualCount)
                             else pagerState.scrollHome(actualCount)
@@ -689,11 +659,26 @@ fun HomeScreen(
                 onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
                 onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
                 onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
-                onShift = { step -> organizeViewModel.shift(step) },
-                onMoveUp = { organizeViewModel.moveUp() },
-                onMoveDown = { organizeViewModel.moveDown() },
-                onCreate = { organizeViewModel.createFolder() },
-                onDelete = { organizeViewModel.requestDeleteFolder() },
+                onShift = { step ->
+                    organizeViewModel.shift(step)
+                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                },
+                onMoveUp = {
+                    organizeViewModel.moveUp()
+                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                },
+                onMoveDown = {
+                    organizeViewModel.moveDown()
+                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                },
+                onCreate = {
+                    organizeViewModel.createFolder()
+                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                },
+                onDelete = {
+                    organizeViewModel.requestDeleteFolder()
+                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                },
                 onNameChange = { name -> organizeViewModel.updateFolderName(name) },
                 onNameCommit = { organizeViewModel.commitFolderName() },
                 onAppLabel = { pkg -> labels[pkg] ?: "" },
@@ -709,7 +694,7 @@ fun HomeScreen(
                 onAppClick = { handleAppClick(it) },
                 onAppLongClick = { pkg ->
                     viewModel.gridRepository.toggleLock(pkg)
-                    vibrateAction()
+                    HapticController.vibrate(context, HapticType.FREEZE_LOCK)
                 },
                 onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
             )

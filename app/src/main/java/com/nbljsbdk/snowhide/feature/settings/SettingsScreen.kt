@@ -79,7 +79,7 @@ fun SettingsScreen(
     val showReturnHomeButton by settings.showReturnHomeButton.collectAsState()
     val resetHomeOnReentry by settings.resetHomeOnReentry.collectAsState()
     val autoSyncStatus by settings.autoSyncStatus.collectAsState()
-    val hapticLevel by settings.hapticLevel.collectAsState()
+    val hapticEnabled by settings.hapticEnabled.collectAsState()
     val lockCleanEnabled by settings.lockCleanEnabled.collectAsState()
     val lockCleanDelay by settings.lockCleanDelay.collectAsState()
     val lockCleanNotify by settings.lockCleanNotify.collectAsState()
@@ -87,6 +87,7 @@ fun SettingsScreen(
     // 三级菜单：创建快捷方式子屏
     var showShortcutCreate by remember { mutableStateOf(false) }
     var showFeedbackSettings by remember { mutableStateOf(false) }
+    var showHapticSettings by remember { mutableStateOf(false) }
     var reentryInfoOpen by remember { mutableStateOf(false) }
     var lockCleanInfoOpen by remember { mutableStateOf(false) }
 
@@ -238,6 +239,10 @@ fun SettingsScreen(
         FeedbackSettingsScreen(onBack = { showFeedbackSettings = false })
         return
     }
+    if (showHapticSettings) {
+        HapticSettingsScreen(onBack = { showHapticSettings = false })
+        return
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -383,6 +388,22 @@ fun SettingsScreen(
                     }
                     Text("▸", color = MaterialTheme.colorScheme.primary)
                 }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showHapticSettings = true },
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("震动反馈")
+                        Text(
+                            text = if (hapticEnabled) "已开启" else "已关闭",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
                 SwitchSetting("显示图标名称", showAppName) { settings.setShowAppName(it) }
                 SwitchSetting("显示返回主屏按钮", showReturnHomeButton) {
                     settings.setShowReturnHomeButton(it)
@@ -392,17 +413,6 @@ fun SettingsScreen(
                     checked = resetHomeOnReentry,
                     onChange = { settings.setResetHomeOnReentry(it) },
                     onInfo = { reentryInfoOpen = true },
-                )
-            }
-
-            // ── 震动反馈（临时放这里，位置后续再定） ──
-            SettingCard("震动反馈") {
-                SliderSetting(
-                    label = "震感档位：$hapticLevel（0=关闭）",
-                    value = hapticLevel.toFloat(),
-                    range = 0f..4f,
-                    steps = 3,
-                    onValue = { settings.setHapticLevel(it.toInt()) },
                 )
             }
 

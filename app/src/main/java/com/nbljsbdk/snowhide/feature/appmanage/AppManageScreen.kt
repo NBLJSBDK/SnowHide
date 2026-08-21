@@ -52,7 +52,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
+import com.nbljsbdk.snowhide.ui.util.HapticController
 
 /**
  * 增删应用界面（设计文档 §3.8 用户拍板终版，左右分栏 + 即时应用）
@@ -84,6 +86,7 @@ fun AppManageScreen(
     val leftApps by viewModel.leftApps.collectAsState()
     val rightApps by viewModel.rightApps.collectAsState()
     val loaded by AppListRepository.loaded.collectAsState()
+    val context = LocalContext.current
 
     // 顶栏弹窗：apply / help-confirm / help-apply
     var dialog by remember { mutableStateOf<String?>(null) }
@@ -179,7 +182,10 @@ fun AppManageScreen(
                                 iconShape = iconShape,
                                 background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 allowedDirection = SwipeToDismissBoxValue.StartToEnd,
-                                onSwipe = { viewModel.addApp(app.pkg) },
+                                 onSwipe = {
+                                     viewModel.addApp(app.pkg)
+                                     HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                                 },
                             )
                         }
                     }
@@ -203,7 +209,10 @@ fun AppManageScreen(
                                 iconShape = iconShape,
                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 allowedDirection = SwipeToDismissBoxValue.EndToStart,
-                                onSwipe = { viewModel.removeApp(app.pkg) },
+                                 onSwipe = {
+                                     viewModel.removeApp(app.pkg)
+                                     HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                                 },
                             )
                         }
                     }

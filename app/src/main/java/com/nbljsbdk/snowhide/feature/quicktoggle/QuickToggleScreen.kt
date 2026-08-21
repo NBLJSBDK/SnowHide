@@ -42,8 +42,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
+import com.nbljsbdk.snowhide.ui.util.HapticController
 
 /**
  * 快速启停管理界面（设计文档 §3.9，用户拍板终版）
@@ -163,7 +165,10 @@ fun QuickToggleScreen(
                                  iconShape = iconShape,
                                  background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                  allowedDirection = SwipeToDismissBoxValue.StartToEnd,
-                                 onSwipe = { viewModel.addMember(pkg) },
+                                  onSwipe = {
+                                      viewModel.addMember(pkg)
+                                      HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                                  },
                             )
                          }
                      }
@@ -187,7 +192,10 @@ fun QuickToggleScreen(
                                  iconShape = iconShape,
                                  background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                  allowedDirection = SwipeToDismissBoxValue.EndToStart,
-                                 onSwipe = { viewModel.removeMember(pkg) },
+                                  onSwipe = {
+                                      viewModel.removeMember(pkg)
+                                      HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                                  },
                             )
                  }
              }
