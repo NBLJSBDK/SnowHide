@@ -276,6 +276,60 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // ── 简单设置（基础开关置顶） ──
+            SettingCard("简单设置") {
+                SwitchSetting("显示图标名称", showAppName) { settings.setShowAppName(it) }
+                SwitchSetting("显示返回主屏按钮", showReturnHomeButton) {
+                    settings.setShowReturnHomeButton(it)
+                }
+                SwitchSetting(
+                    label = "重进时回到主屏",
+                    checked = resetHomeOnReentry,
+                    onChange = { settings.setResetHomeOnReentry(it) },
+                    onInfo = { reentryInfoOpen = true },
+                )
+            }
+
+            // ── 提示与反馈（独立三级页入口） ──
+            SettingCard("提示与反馈") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showFeedbackSettings = true },
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("操作结果 Toast")
+                        Text(
+                            text = if (showToast) "已开启" else "已关闭",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // ── 震动反馈（独立三级页入口） ──
+            SettingCard("震动反馈") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showHapticSettings = true },
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("震动反馈设置")
+                        Text(
+                            text = if (hapticEnabled) "已开启" else "已关闭",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
             // ── 状态同步（手动按钮 + 静默自动同步） ──
             SettingCard("状态同步") {
                 Row(
@@ -368,52 +422,6 @@ fun SettingsScreen(
                     Text("导入数据", modifier = Modifier.weight(1f))
                     Text("▸", color = MaterialTheme.colorScheme.primary)
                 }
-            }
-
-            // ── 简单设置 ──
-            SettingCard("简单设置") {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showFeedbackSettings = true },
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("提示与反馈")
-                        Text(
-                            text = if (showToast) "Toast 已开启" else "Toast 已关闭",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text("▸", color = MaterialTheme.colorScheme.primary)
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showHapticSettings = true },
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("震动反馈")
-                        Text(
-                            text = if (hapticEnabled) "已开启" else "已关闭",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text("▸", color = MaterialTheme.colorScheme.primary)
-                }
-                SwitchSetting("显示图标名称", showAppName) { settings.setShowAppName(it) }
-                SwitchSetting("显示返回主屏按钮", showReturnHomeButton) {
-                    settings.setShowReturnHomeButton(it)
-                }
-                SwitchSetting(
-                    label = "重进时回到主屏",
-                    checked = resetHomeOnReentry,
-                    onChange = { settings.setResetHomeOnReentry(it) },
-                    onInfo = { reentryInfoOpen = true },
-                )
             }
 
             // ── 锁屏自动清理（用户拍板语义：首次熄屏计时，解锁取消，到时清理一次） ──
