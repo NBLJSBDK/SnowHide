@@ -1378,7 +1378,7 @@ private fun GearMenu(
             onClick = { onDismiss(); onSettings() },
         )
         DropdownMenuItem(
-            text = { Text("关于") },
+            text = { Text("关于应用") },
             onClick = { onDismiss(); onAbout() },
         )
     }

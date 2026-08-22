@@ -88,6 +88,7 @@ fun SettingsScreen(
     var showShortcutCreate by remember { mutableStateOf(false) }
     var showFeedbackSettings by remember { mutableStateOf(false) }
     var showHapticSettings by remember { mutableStateOf(false) }
+    var showSwipeDisableSettings by remember { mutableStateOf(false) }
     var reentryInfoOpen by remember { mutableStateOf(false) }
     var lockCleanInfoOpen by remember { mutableStateOf(false) }
 
@@ -243,6 +244,10 @@ fun SettingsScreen(
         HapticSettingsScreen(onBack = { showHapticSettings = false })
         return
     }
+    if (showSwipeDisableSettings) {
+        SwipeDisableSettingsScreen(onBack = { showSwipeDisableSettings = false })
+        return
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -322,6 +327,26 @@ fun SettingsScreen(
                         Text("震动反馈设置")
                         Text(
                             text = if (hapticEnabled) "已开启" else "已关闭",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("▸", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // ── Recent 划卡停用（独立三级页） ──
+            SettingCard("划卡停用") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showSwipeDisableSettings = true },
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Recent 划卡停用")
+                        Text(
+                            text = "退出 Recent 后冻结被划掉的应用",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

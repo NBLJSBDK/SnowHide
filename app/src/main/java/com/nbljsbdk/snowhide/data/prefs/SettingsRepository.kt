@@ -25,6 +25,7 @@ object SettingsRepository {
         // 之前版本重启后设置全部回默认（震动档位 bug 即此）。
         _showToast.value = prefs.getBoolean(KEY_TOAST, true)
         _showReentryToast.value = prefs.getBoolean(KEY_REENTRY_TOAST, true)
+        _swipeDisableEnabled.value = prefs.getBoolean(KEY_SWIPE_DISABLE, false)
         _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
         _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, true)
         _resetHomeOnReentry.value = prefs.getBoolean(KEY_BACK_DIR, true)
@@ -97,6 +98,21 @@ object SettingsRepository {
     fun setShowReentryToast(enabled: Boolean) {
         _showReentryToast.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_REENTRY_TOAST, enabled).apply()
+    }
+
+    // ═══════════════════════════════════════
+    // Recent 划卡停用
+    // ═══════════════════════════════════════
+
+    private val _swipeDisableEnabled = MutableStateFlow(
+        getBool(KEY_SWIPE_DISABLE, false),
+    )
+    /** 划掉 Recent 卡片后，退出 Recent 时冻结已添加且未锁定应用。 */
+    val swipeDisableEnabled: StateFlow<Boolean> = _swipeDisableEnabled.asStateFlow()
+
+    fun setSwipeDisableEnabled(enabled: Boolean) {
+        _swipeDisableEnabled.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_SWIPE_DISABLE, enabled).apply()
     }
 
     // ═══════════════════════════════════════
@@ -337,6 +353,7 @@ object SettingsRepository {
 
     private const val KEY_TOAST = "show_toast"
     private const val KEY_REENTRY_TOAST = "show_reentry_toast"
+    private const val KEY_SWIPE_DISABLE = "swipe_disable_enabled"
     private const val KEY_HAPTIC = "haptic_level"
     private const val KEY_HAPTIC_ENABLED = "haptic_enabled"
     private const val KEY_HAPTIC_NAVIGATION = "haptic_navigation_level"

@@ -8,8 +8,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// 对外版本号使用构建日期时间（YYMMDDHHmm，如 2608132319），每次构建自动生成
-val buildDate: String = SimpleDateFormat("yyMMddHHmm", Locale.US).format(Date())
+// 对外版本号使用语义版本；编译时间单独展示，避免版本号随每次构建漂移。
+val versionNameValue = "0.2.0"
+val buildTimestamp: String = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
 
 // 从 local.properties 加载签名信息（此文件在 .gitignore 中，不上传仓库）
 val localProps = Properties()
@@ -41,7 +42,8 @@ android {
         targetSdk = 36
         // versionCode 固定为 1（故意不递增）：使每次构建都能覆盖安装，仅供侧载自用
         versionCode = 1
-        versionName = buildDate
+        versionName = versionNameValue
+        resValue("string", "build_timestamp", buildTimestamp)
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -66,6 +68,7 @@ android {
     }
     buildFeatures {
         compose = true
+        resValues = true
     }
 }
 

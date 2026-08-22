@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">雪藏D</string>
-    <string name="accessibility_lock_clean_label">锁屏自动清理保活D</string>
+    <string name="accessibility_lock_clean_label">锁屏清理与划卡停用D</string>
 </resources>

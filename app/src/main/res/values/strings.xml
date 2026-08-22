@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">雪藏</string>
-    <string name="accessibility_lock_clean_label">锁屏自动清理保活</string>
-    <string name="accessibility_lock_clean_desc">用于保活「锁屏自动清理」功能：确保息屏后定时清理可靠执行。本服务不读取任何屏幕内容。</string>
+    <string name="accessibility_lock_clean_label">锁屏清理与划卡停用</string>
+    <string name="accessibility_lock_clean_desc">用于锁屏自动清理和 Recent 划卡停用：读取最近任务界面，识别被划掉的已添加且未锁定应用。</string>
 </resources>

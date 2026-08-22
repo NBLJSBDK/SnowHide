@@ -37,6 +37,25 @@ class FreezeUseCase(
     suspend fun unfreezeApp(pkg: String, mode: FreezeMode = FreezeMode.FREEZE): Result<Unit> =
         executor.unfreeze(mode, pkg)
 
+    /**
+     * 冻结 Recent 划卡产生的一组应用。
+     *
+     * 只过滤“已添加”和“未锁定”，不查询当前冻结状态；调用方要求每个
+     * 目标都发送一次 `pm disable-user`，并通过统一批量入口串行执行。
+     */
+    suspend fun freezePackages(packages: Collection<String>): Result<Int> {
+        val targets = packages
+            .asSequence()
+            .filter { gridRepository.isAppAdded(it) }
+            .filterNot { gridRepository.isLocked(it) }
+            .distinct()
+            .toList()
+        if (targets.isEmpty()) return Result.success(0)
+        val engine = executorEngine()
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
+        return engine.execBatched(targets, "pm disable-user --user 0", "划卡停用")
+    }
+
     /** 查询冻结状态（引擎不可用时返回 false，不报错） */
     suspend fun isFrozen(pkg: String): Boolean =
         executor.isFrozen(FreezeMode.FREEZE, pkg).getOrDefault(false)

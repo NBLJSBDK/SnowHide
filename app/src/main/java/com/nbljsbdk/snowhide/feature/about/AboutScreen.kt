@@ -66,6 +66,7 @@ fun AboutScreen(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrDefault("1.0")
     }
+    var showVersionHistory by remember { mutableStateOf(false) }
 
     val systemUnlocked by appManageViewModel.systemUnlocked.collectAsState()
 
@@ -112,10 +113,15 @@ fun AboutScreen(
 
     BackHandler(onBack = onClose)
 
+    if (showVersionHistory) {
+        VersionHistoryScreen(onBack = { showVersionHistory = false })
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("关于", fontWeight = FontWeight.Bold) },
+                title = { Text("关于应用", fontWeight = FontWeight.Bold) },
                 actions = {
                     // 右上角返回（用户拍板：返回按钮放右上）
                     Text(
@@ -157,7 +163,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(32.dp))
             // 版本号（彩蛋点击区）
             Text(
-                text = "版本 $versionName",
+                text = "版本 v$versionName",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -174,6 +180,15 @@ fun AboutScreen(
                     }
                     .padding(8.dp),
             )
+            Text(
+                text = "编译时间：${stringResource(com.nbljsbdk.snowhide.R.string.build_timestamp)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(
+                onClick = { showVersionHistory = true },
+                modifier = Modifier.padding(top = 4.dp),
+            ) { Text("更新说明") }
             Spacer(modifier = Modifier.height(32.dp))
             Text(
                 text = if (systemUnlocked) "系统应用按钮：已解锁（再点版本号 7 次关闭）"
@@ -194,8 +209,8 @@ fun AboutScreen(
                     "• 查询已装应用：增删应用界面显示应用列表\n" +
                     "• 通知：快捷方式/锁屏清理结果提示（成功用 Toast）\n" +
                     "• 震动：底部栏锁定/解锁反馈（受系统静音控制）\n" +
-                    "• 无障碍服务：锁屏自动清理保活（不读取屏幕内容）；\n" +
-                    "  后续「划卡停用」功能复用\n" +
+                    "• 无障碍服务：锁屏自动清理与 Recent 划卡停用；\n" +
+                    "  读取最近任务窗口，不读取应用数据\n" +
                     "• 自启动/后台运行：请在系统设置中允许（锁屏清理等后台功能需要）",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

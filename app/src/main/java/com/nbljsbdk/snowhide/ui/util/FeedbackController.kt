@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
@@ -18,6 +20,7 @@ object FeedbackController {
     private const val FAILURE_CHANNEL_ID = "operation_failure"
     private const val FAILURE_CHANNEL_NAME = "操作失败"
     private const val FAILURE_NOTIFICATION_ID = 3001
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /** 显示受设置控制的 Toast；enabled=false 可用于场景级开关。 */
     fun toast(
@@ -29,7 +32,7 @@ object FeedbackController {
         val appContext = context.applicationContext
         SettingsRepository.init(appContext)
         if (!enabled || !SettingsRepository.showToast.value) return
-        Toast.makeText(appContext, message, duration).show()
+        mainHandler.post { Toast.makeText(appContext, message, duration).show() }
     }
 
     /** 后台入口失败时使用通知，避免关闭 Toast 后完全没有结果。 */
