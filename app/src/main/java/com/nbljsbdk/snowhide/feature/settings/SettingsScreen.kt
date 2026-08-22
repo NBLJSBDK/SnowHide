@@ -346,7 +346,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Recent 划卡停用")
                         Text(
-                            text = "退出 Recent 后冻结被划掉的应用",
+                            text = "划卡确认后立即停用被划掉的应用",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -86,7 +86,7 @@ fun SwipeDisableSettingsScreen(onBack: () -> Unit) {
                     SettingsRepository.setSwipeDisableEnabled(it)
                 }
                 Text(
-                    text = "每次进入 Recent 重新识别卡片；上滑只记录差异，退出 Recent 后冻结被划掉的已添加且未锁定应用。",
+                    text = "每次进入 Recent 重新获取任务快照；上滑确认后立即停用被划掉的已添加且未锁定应用。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -95,7 +95,7 @@ fun SwipeDisableSettingsScreen(onBack: () -> Unit) {
 
             SettingCard("无障碍服务") {
                 Text(
-                    text = "需要开启“锁屏自动清理保活”无障碍服务。服务会读取 Recent 窗口，锁屏清理只使用其保活能力。",
+                    text = "需要开启“锁屏自动清理保活”无障碍服务。服务由系统托管，任务移除后仍可继续工作，不另起常驻前台通知；开机后由系统自动恢复，ColorOS 仍可能要求允许自启动/后台活动。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">雪藏</string>
     <string name="accessibility_lock_clean_label">锁屏清理与划卡停用</string>
-    <string name="accessibility_lock_clean_desc">用于锁屏自动清理和 Recent 划卡停用：读取最近任务界面，识别被划掉的已添加且未锁定应用。</string>
+    <string name="accessibility_lock_clean_desc">用于锁屏自动清理和 Recent 划卡停用：读取最近任务界面，确认划卡后立即停用被划掉的已添加且未锁定应用。</string>
 </resources>

@@ -107,7 +107,7 @@ object SettingsRepository {
     private val _swipeDisableEnabled = MutableStateFlow(
         getBool(KEY_SWIPE_DISABLE, false),
     )
-    /** 划掉 Recent 卡片后，退出 Recent 时冻结已添加且未锁定应用。 */
+    /** 划掉 Recent 卡片后，立即冻结已添加且未锁定应用。 */
     val swipeDisableEnabled: StateFlow<Boolean> = _swipeDisableEnabled.asStateFlow()
 
     fun setSwipeDisableEnabled(enabled: Boolean) {

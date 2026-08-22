@@ -9,6 +9,11 @@ data class VersionRecord(
 
 val versionHistory = listOf(
     VersionRecord(
+        "v0.2.1",
+        "Recent 即时停用修复",
+        "修复进入 Recent 建立基线期间误停用全部应用；改为任务快照确认后逐个即时停用，不触发主界面批量进度条。增加服务重连补执行队列、雪藏自身排除和 ColorOS 窗口兜底；停用提示显示为“应用名称已被划卡停用”。",
+    ),
+    VersionRecord(
         "v0.2.0",
         "Recent 划卡停用",
         "增加无障碍 Recent 识别、自动与手动校准，以及退出 Recent 后冻结；通过 Shizuku 静默读取真实任务包名，支持 ColorOS 同名卡片并优化滑动时序。仅处理已添加且未锁定的应用，不删除应用数据。",

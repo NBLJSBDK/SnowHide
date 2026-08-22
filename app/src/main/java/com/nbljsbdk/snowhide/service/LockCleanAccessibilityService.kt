@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityEvent
  * 保证 SCREEN_OFF/USER_PRESENT 动态广播持续注册，锁屏清理计时可靠。
  *
  * 读取 Recent 窗口用于划卡停用，同时继续承担锁屏清理保活和广播注册。
+ * 不另起常驻前台服务：该系统托管服务在任务移除后仍保持独立生命周期。
  * 用户需在系统无障碍设置里手动开启。
  */
 class LockCleanAccessibilityService : AccessibilityService() {

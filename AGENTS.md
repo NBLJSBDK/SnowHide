@@ -128,7 +128,7 @@ feature/
 
 service/               — 锁屏清理与 Recent 划卡停用；未来扩展 tile
   LockCleanAccessibilityService.kt — 唯一无障碍服务入口
-  RecentSwipeController.kt — Recent 会话快照、校准、差异和退出后冻结
+  RecentSwipeController.kt — Recent 会话快照、校准、差异和即时冻结
   RecentTaskParser.kt — Recent 无障碍节点解析
 
 ui/
@@ -162,10 +162,10 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 4. 结果 Snackbar 提示（设置里有 toast 开关）。
 
 ### Recent 划卡停用
-- 每次进入 Recent 建立当前快照；页面内只记录从快照消失的应用，退出 Recent 后统一冻结。
+- 每次进入 Recent 建立当前快照；确认已添加且未锁定应用从快照消失后立即冻结，短期持久化队列用于无障碍服务重连后补执行，退出 Recent 只负责会话收尾。
 - 校准记录为空时首次进入自动校准且不冻结；手动校准用于修复识别失败。
-- 只冻结已添加且未锁定的应用；不查询当前冻结状态，直接经 `FreezeUseCase.freezePackages()` 执行命令。
-- 无障碍事件在服务层合并处理，节点遍历和批量冻结均限制规模并放在后台执行，避免主线程 ANR。
+- 只冻结已添加且未锁定的应用，候选、任务快照和执行前均排除雪藏自身；不查询当前冻结状态，Recent 逐包经 `FreezeUseCase.freezeApp()` 执行命令，不进入全局 `BatchProgress`。
+- 无障碍事件在服务层合并处理，节点遍历和单包冻结均放在后台执行，避免主线程 ANR。
 
 ### 整理目录状态机（设计文档 §3.10 即时应用版）
 - 主屏进入整理目录时无高亮；从文件夹页进入时自动高亮当前文件夹。
@@ -190,6 +190,7 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 - **R8 混淆会杀死 Shizuku UserService（release 专属坑）**：ShellCommandService 由 Shizuku server 端实例化（构造器/onTransact 经框架调用），release 混淆后构造器被破坏 → 所有 pm 命令静默挂起（冻结解冻无效、增删界面移出卡死）。**proguard-rules.pro 必须 keep 该类**（已加，勿删）。
 - **卸载重装会清掉 Shizuku 授权**：API_V23 是 dangerous 权限，覆盖安装（`install -r`）保留、卸载重装清零且可能带「不再询问」标记 → 授权弹窗弹不出。真机调试需要时用 `adb shell pm grant <pkg> moe.shizuku.manager.permission.API_V23`。
 - **ColorOS 吞后台 Toast** → 通知兜底（本项目 P0 前台操作为主，受影响小）。
+- **任务移除后进程被回收** → Recent 使用系统托管无障碍服务，不另起常驻前台服务；即时冻结队列落 SharedPreferences，服务重连后补执行；`stopWithTask=false` 防止划掉雪藏任务时主动停止服务。
 - **OPPO 静态 shortcuts 崩** → 用动态 ShortcutManager（MediaSync 已验证方案）。
 - **图标包协议**：发现 `queryBroadcastReceivers(INSTALL_ICON_PACK)`；请求 `RESOLVE_ICON` 有序广播（`sendOrderedBroadcast` + result receiver 取 `icon` extra）；失败回退系统图标。
 - **`pm list packages -d`**：输出 `package:com.xxx` 逐行解析（`-d -s` 只列系统禁用项，神之一手目标过滤用）。
@@ -243,6 +244,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 设置页卡片层级：简单设置置顶，提示与反馈/震动反馈独立卡片进入三级页；整体视觉协调留待后期 UI 优化
 - v0.2.0：Recent 划卡停用（自动/手动校准、会话差异、退出后批量冻结）完成并通过真机验证；经 Shizuku 静默读取真实任务包名，支持 ColorOS 同名卡片并优化滑动时序
 - v0.2.0：关于应用显示语义版本、编译时间和版本历史
+- v0.2.1：修复 Recent 基线建立期间误停用全部应用；改为任务快照确认后逐包即时停用，不触发主界面批量进度条；增加持久化补执行队列、雪藏自身排除和应用名 Toast
 
 **未完成（候选下一步）**：
 1. 应用分身（pm --user 分用户冻结）
@@ -270,9 +272,10 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 ## 13. Repo / git
 
-- 当前分支：`master`，基线提交：`5cd8ce6`（`baseline-before-v0.2.0` tag）；v0.2.0 已完成真机验证，正式提交与 `v0.2.0` tag 由本次发布归档。
+- 当前分支：`master`，基线提交：`5cd8ce6`（`baseline-before-v0.2.0` tag）；`v0.2.0` 已发布，`v0.2.1` 修复已完成真机验证并由本次发布归档。
 - 基线历史仍包含 `v0.1.6`（指向 `69df809`）及提示、震动、设置页卡片层级功能。
 - `v0.2.0` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
+- `v0.2.1` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
 - 未经用户明确允许，不执行 commit、amend、push 或创建 tag。
 
 ---
@@ -281,7 +284,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 - adb 位置：`C:\Users\nbljsbdk\AppData\Local\Android\Sdk\platform-tools\adb.exe`（WSL 全路径调用）。
 - **Shizuku 激活固定使用此命令**：`adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh`
-- **纪律**：agent 只执行**安全操作**（`adb devices`、`logcat` 只读诊断）；**安装/卸载/清数据等危险操作必须先征得用户同意**。
+- **纪律**：编译完成后 agent 可自动执行 `adb install -r` 覆盖安装验证 APK（不清除应用数据）；卸载、清数据和修改设备包管理器状态等危险操作仍须先征得用户同意。
 - 无线调试：配对端口 ≠ 连接端口（动态）；offline 用 `kill-server` 清除；多设备加 `-s <ip:port>`。
 - logcat：`-c` 清 → 复现 → `-d -s <TAG>`（崩溃看 `AndroidRuntime`）。
 - 安装：`adb -s <ip:port> install -r app/build/outputs/apk/debug/app-debug.apk`（versionCode 恒 1，覆盖装永远有效）。
@@ -295,8 +298,8 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 分层纪律：feature 间零 import、UI 无状态、注册表驱动、impl 隔离。
 - 改权限/版本/插件/架构时，同步更新本文件与 `~/opencode_dev/冻结工具设计.md`。
 - 未经用户明确允许，不写应用代码、不修改功能性文件；用户明确要求同步文档时，只修改指定文档。
-- 未经用户明确允许，不执行 commit、amend、push、创建 tag 或安装/卸载/清理设备上的应用。
+- 未经用户明确允许，不执行 commit、amend、push 或创建 tag；编译完成后的 `adb install -r` 可自动执行，卸载、清数据和修改设备包管理器状态仍须明确授权。
 - 遇到困难不擅自退缩、跳过或终止；主动说明阻塞原因，并询问用户是否继续或是否执行下一步操作。
-- 可以主动提醒用户是否需要编译、安装、提交或推送，但提醒不等于获得执行授权。
+- 编译通过后可以直接安装 APK 并继续真机验证；commit、amend、push、创建 tag 仍必须先获得用户明确授权。
 - 用户明确授权后，每个可编译的小功能点再单独 commit 存档（§13 规范）。
 - **HARD RULE（用户强调）**：集成任何三方库前，**必须先看官方文档并核对 jar 内真实 API 签名**，绝不凭训练数据假设 API 存在（训练数据会过期）。Shizuku 教训：`newProcess` 已私有、`onRequestPermissionsResult` 转发已移除、`ShizukuProvider` 必须手动声明——三个坑全是凭训练数据写的。正确做法：① webfetch 官方 README/GitHub ② javap/jadx 反编译核对 jar 签名 ③ 再写代码。

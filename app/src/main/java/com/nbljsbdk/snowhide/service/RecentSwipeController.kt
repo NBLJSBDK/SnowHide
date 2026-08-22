@@ -15,6 +15,7 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
+import com.nbljsbdk.snowhide.data.repo.RecentFreezeQueueRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +29,7 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Recent 会话控制器。
  *
- * Recent 页面内只更新快照和待冻结集合，离开 Recent 后才执行冻结；
+ * Recent 页面内更新快照，确认卡片消失后立即执行冻结；
  * 手动/自动校准只负责建立识别结果，不会把校准过程当作划卡。
  */
 internal class RecentSwipeController(
@@ -52,7 +53,6 @@ internal class RecentSwipeController(
     private var recentWindowClass: String? = null
     private var lastRecentAt = 0L
     private var emptySnapshotStreak = 0
-    private val pendingFreezePackages = linkedSetOf<String>()
 
     private var calibrationMode = false
     private var manualCalibrationRequested = false
@@ -71,7 +71,15 @@ internal class RecentSwipeController(
     private var taskSnapshotRefreshPending = false
     private var waitingToFinishForTaskSnapshot = false
     private var sessionGeneration = 0L
+    private var queueDrainInFlight = false
+    private var queueDrainAttemptedAt = 0L
     private lateinit var freezeUseCase: FreezeUseCase
+
+    private data class RecentFreezeOutcome(
+        val handled: List<String>,
+        val successful: List<String>,
+        val failures: List<String>,
+    )
 
     fun onServiceConnected() {
         current = this
@@ -80,6 +88,7 @@ internal class RecentSwipeController(
         FrozenStateStore.init(context)
         SettingsRepository.init(context)
         RecentCalibrationRepository.init(context)
+        RecentFreezeQueueRepository.init(context)
         knownWindowPackage = RecentCalibrationRepository.windowPackage
         knownWindowClass = RecentCalibrationRepository.windowClass
         freezeUseCase = FreezeUseCase(
@@ -91,6 +100,7 @@ internal class RecentSwipeController(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
             0,
         )?.activityInfo?.packageName
+        handler.postDelayed(::drainQueuedFreezes, QUEUE_INITIAL_DELAY_MS)
     }
 
     /** 合并高频事件，滑动/窗口切换优先处理。 */
@@ -118,7 +128,6 @@ internal class RecentSwipeController(
         handler.removeCallbacksAndMessages(null)
         pendingEvent?.recycle()
         pendingEvent = null
-        pendingFreezePackages.clear()
         scope.cancel()
     }
 
@@ -163,6 +172,7 @@ internal class RecentSwipeController(
         if (!shouldProcessEvents()) return
         val now = SystemClock.elapsedRealtime()
         refreshCandidates(now)
+        drainQueuedFreezes()
         val refreshTaskSnapshot = event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED ||
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
             event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
@@ -225,14 +235,18 @@ internal class RecentSwipeController(
         recentWindowClass = snapshot.windowClass
         lastRecentAt = now
         emptySnapshotStreak = if (snapshot.packages.isEmpty()) 1 else 0
-        pendingFreezePackages.clear()
+        calibrationMode = manualCalibrationRequested || noCalibrationData
+        // 进入 Recent 的首轮无障碍事件仍在布局稳定过程中，必须等 Shizuku
+        // 返回第一份任务列表后再建立基线，不能把首轮差异当成用户划卡。
         taskSnapshot = emptySet()
         taskSnapshotInitialized = false
+        taskSnapshotRequestedAt = 0L
         taskSnapshotRefreshPending = false
         waitingToFinishForTaskSnapshot = false
         handler.removeCallbacks(taskFinishTimeoutRunnable)
+        handler.removeCallbacks(sessionWatchdogRunnable)
+        handler.postDelayed(sessionWatchdogRunnable, SESSION_WATCHDOG_MS)
 
-        calibrationMode = manualCalibrationRequested || noCalibrationData
         manualCalibrationRequested = false
     }
 
@@ -251,19 +265,6 @@ internal class RecentSwipeController(
             if (!trustedEmpty) return
         } else {
             emptySnapshotStreak = 0
-        }
-
-        // 只有 Recent 内容变化事件才产生移除差异；窗口切换事件只用于进出判断。
-        val removed = if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            emptySet()
-        } else {
-            previous - current
-        }
-        if (!calibrationMode && !taskSnapshotInitialized) {
-            pendingFreezePackages.removeAll(current)
-            pendingFreezePackages.addAll(removed)
-        } else {
-            pendingFreezePackages.clear()
         }
 
         recentPackages = current
@@ -294,7 +295,7 @@ internal class RecentSwipeController(
         }
     }
 
-    /** Recent 窗口离开后执行待冻结集合。 */
+    /** Recent 窗口离开后收尾会话；停用动作已在划卡确认时执行。 */
     private fun finishRecentSession(force: Boolean = false) {
         if (!recentSessionActive) return
         if (taskSnapshotInFlight && !force) {
@@ -305,15 +306,10 @@ internal class RecentSwipeController(
         }
         waitingToFinishForTaskSnapshot = false
         handler.removeCallbacks(taskFinishTimeoutRunnable)
+        handler.removeCallbacks(sessionWatchdogRunnable)
         recentSessionActive = false
         sessionGeneration++
         pendingExitToken = null
-        val targets = if (!calibrationMode && SettingsRepository.swipeDisableEnabled.value) {
-            pendingFreezePackages.toList()
-        } else {
-            emptyList()
-        }
-        pendingFreezePackages.clear()
         recentPackages = emptySet()
         recentWindowPackage = null
         recentWindowClass = null
@@ -325,24 +321,6 @@ internal class RecentSwipeController(
         manualCalibrationToken = null
         manualCalibrationRequested = false
         manualToastPending = false
-
-        if (targets.isEmpty()) return
-        scope.launch {
-            freezeMutex.withLock {
-                val result = runCatching { freezeUseCase.freezePackages(targets) }
-                    .getOrElse { Result.failure(it) }
-                if (result.isSuccess) {
-                    runCatching { FrozenStateStore.refresh() }
-                    FeedbackController.toast(context, "已停用 ${targets.size} 个划掉的应用")
-                } else {
-                    FeedbackController.notifyFailure(
-                        context,
-                        "划卡停用",
-                        result.exceptionOrNull()?.message ?: "未知错误",
-                    )
-                }
-            }
-        }
     }
 
     /** 在后台读取任务包名，解决 ColorOS 同名卡片无法靠文字区分的问题。 */
@@ -399,15 +377,100 @@ internal class RecentSwipeController(
 
         val removed = taskSnapshot - packages
         if (!calibrationMode) {
-            pendingFreezePackages.removeAll(packages)
-            pendingFreezePackages.addAll(removed)
+            freezePackagesImmediately(removed)
         } else {
-            pendingFreezePackages.clear()
+            // 校准期间只更新基线，不执行任何停用。
         }
         taskSnapshot = packages
         recentPackages = packages
         lastRecentAt = now
     }
+
+    /** 划卡确认后立即入队，避免依赖离开 Recent 的时序。 */
+    private fun freezePackagesImmediately(packages: Collection<String>) {
+        val targets = packages
+            .asSequence()
+            .filter { it.isNotBlank() && it != service.packageName }
+            .distinct()
+            .toList()
+        if (targets.isEmpty()) return
+        scope.launch {
+            RecentFreezeQueueRepository.enqueue(targets)
+            handler.post(::drainQueuedFreezes)
+        }
+    }
+
+    /** 执行持久化队列；队列保留到命令成功，服务重连后可继续补执行。 */
+    private fun drainQueuedFreezes() {
+        if (!::freezeUseCase.isInitialized || queueDrainInFlight) return
+        if (!SettingsRepository.swipeDisableEnabled.value) {
+            RecentFreezeQueueRepository.clear()
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now - queueDrainAttemptedAt < QUEUE_RETRY_INTERVAL_MS) return
+        val queued = RecentFreezeQueueRepository.peek()
+        if (queued.isEmpty()) return
+
+        queueDrainAttemptedAt = now
+        queueDrainInFlight = true
+        scope.launch {
+            val outcome = freezeMutex.withLock { executeRecentFreezes(queued) }
+            if (outcome.successful.isNotEmpty()) {
+                runCatching { FrozenStateStore.refresh() }
+            }
+            handler.post {
+                queueDrainInFlight = false
+                outcome.successful.forEach { pkg ->
+                    FeedbackController.toast(context, "${appLabel(pkg)}已被划卡停用")
+                }
+                if (outcome.failures.isNotEmpty()) {
+                    FeedbackController.notifyFailure(
+                        context,
+                        "划卡停用",
+                        outcome.failures.take(5).joinToString("；"),
+                    )
+                }
+                if (RecentFreezeQueueRepository.peek().isNotEmpty()) {
+                    queueDrainAttemptedAt = 0L
+                    handler.post(::drainQueuedFreezes)
+                }
+            }
+        }
+    }
+
+    /** Recent 专用逐包执行，不进入全局 BatchProgress。 */
+    private suspend fun executeRecentFreezes(packages: List<String>): RecentFreezeOutcome {
+        val handled = mutableListOf<String>()
+        val successful = mutableListOf<String>()
+        val failures = mutableListOf<String>()
+        packages.forEach { pkg ->
+            if (pkg == service.packageName ||
+                !GridRepository.isAppAdded(pkg) ||
+                GridRepository.isLocked(pkg)
+            ) {
+                handled += pkg
+                return@forEach
+            }
+            val result = runCatching { freezeUseCase.freezeApp(pkg) }
+            if (result.isSuccess) {
+                handled += pkg
+                successful += pkg
+            } else {
+                failures += "$pkg: ${result.exceptionOrNull()?.message ?: "未知错误"}"
+            }
+        }
+        if (handled.isNotEmpty()) RecentFreezeQueueRepository.remove(handled)
+        return RecentFreezeOutcome(handled, successful, failures)
+    }
+
+    private fun appLabel(pkg: String): String = runCatching {
+        val info = service.packageManager.getApplicationInfo(
+            pkg,
+            android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS,
+        )
+        service.packageManager.getApplicationLabel(info).toString()
+    }.getOrDefault(pkg)
 
     private fun scheduleSessionExit() {
         if (!recentSessionActive) return
@@ -430,6 +493,29 @@ internal class RecentSwipeController(
         }
     }
 
+    /** 兜底检测回桌面或直接进入其他应用时没有发出可靠退出事件。 */
+    private val sessionWatchdogRunnable = object : Runnable {
+        override fun run() {
+            if (!recentSessionActive) return
+            val root = runCatching { service.rootInActiveWindow }.getOrNull()
+            val isRecent = root?.let {
+                RecentTaskParser.isRecentWindow(
+                    root = it,
+                    launcherPackage = launcherPackage,
+                    knownWindowPackage = knownWindowPackage,
+                    knownWindowClass = knownWindowClass,
+                )
+            } == true
+            root?.recycle()
+            if (isRecent) {
+                cancelSessionExit()
+            } else if (!waitingToFinishForTaskSnapshot) {
+                scheduleSessionExit()
+            }
+            handler.postDelayed(this, SESSION_WATCHDOG_MS)
+        }
+    }
+
     private val taskFinishTimeoutRunnable = Runnable {
         if (waitingToFinishForTaskSnapshot) {
             waitingToFinishForTaskSnapshot = false
@@ -445,7 +531,9 @@ internal class RecentSwipeController(
     private fun refreshCandidates(now: Long) {
         if (now - candidatesRefreshedAt < CANDIDATE_REFRESH_INTERVAL_MS) return
         candidatesRefreshedAt = now
-        val packages = GridRepository.allAddedPackages().toSet()
+        val packages = GridRepository.allAddedPackages()
+            .filterNot { it == service.packageName }
+            .toSet()
         if (packages == candidatePackages) return
         candidatePackages = packages
         candidateLabels = packages.associateWith { pkg ->
@@ -463,6 +551,9 @@ internal class RecentSwipeController(
         private const val CANDIDATE_REFRESH_INTERVAL_MS = 1_000L
         private const val TASK_SNAPSHOT_REFRESH_MS = 300L
         private const val TASK_FINISH_TIMEOUT_MS = 800L
+        private const val SESSION_WATCHDOG_MS = 250L
+        private const val QUEUE_INITIAL_DELAY_MS = 500L
+        private const val QUEUE_RETRY_INTERVAL_MS = 2_000L
         private const val MANUAL_CALIBRATION_TIMEOUT_MS = 30_000L
         private const val EMPTY_SNAPSHOT_CONFIRMATIONS = 2
         private val SUPPORTED_EVENT_TYPES = setOf(

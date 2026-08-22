@@ -14,7 +14,12 @@ import com.nbljsbdk.snowhide.core.engine.impl.ShizukuEngineImpl
  */
 object EngineRegistry {
 
+    private var initialized = false
+
+    @Synchronized
     fun init(context: Context) {
+        if (initialized) return
+        initialized = true
         EngineManager.register(RootEngineImpl(), priority = 30)             // root，P3（能力最全，最优先）
         EngineManager.register(DoEngineImpl(), priority = 20)               // Device Owner，P2
         EngineManager.register(ShizukuEngineImpl(context.applicationContext), priority = 10) // shell，P0 默认
