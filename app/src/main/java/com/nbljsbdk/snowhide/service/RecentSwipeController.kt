@@ -422,7 +422,7 @@ internal class RecentSwipeController(
             handler.post {
                 queueDrainInFlight = false
                 outcome.successful.forEach { pkg ->
-                    FeedbackController.toast(context, "${appLabel(pkg)}已被划卡停用")
+                    FeedbackController.toast(context, "已停用：${appLabel(pkg)}")
                 }
                 if (outcome.failures.isNotEmpty()) {
                     FeedbackController.notifyFailure(
