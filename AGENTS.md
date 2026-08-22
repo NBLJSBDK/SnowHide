@@ -54,7 +54,7 @@ gradlew.bat assembleDebug / assembleRelease
 ## 4. Versioning (do NOT change casually)
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
-- `versionName` = 构建日期时间 `YYMMDDHHmm`（gradle 里 SimpleDateFormat 自动生成，精确到分钟，用户拍板）。
+- `versionName` = 语义版本（如 `0.2.1`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
 
@@ -87,7 +87,7 @@ gradlew.bat assembleDebug / assembleRelease
 | `android.permission.POST_NOTIFICATIONS` | 快捷方式执行失败通知（Android 13+ 首次启动申请） |
 | `android.permission.VIBRATE` | dock 锁定/解锁震动反馈（受系统静音/勿扰控制） |
 
-- Shizuku 授权流程：UI 引导卡 → `Shizuku.requestPermission(code)`（必须从 Activity 发起）→ `MainActivity.onRequestPermissionsResult` 转发给 `Shizuku.onRequestPermissionsResult` → `EngineManager.refresh()`。
+- Shizuku 授权流程：UI 引导卡 → `Shizuku.requestPermission(code)`（必须从 Activity 发起）→ `OnRequestPermissionResultListener` 接收结果 → `EngineManager.refresh()`。
 - 后续阶段权限：P1 通知（POST_NOTIFICATIONS）、P2 Device Owner、P3 root——到时按设计文档补。
 
 ---
@@ -303,3 +303,243 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 编译通过后可以直接安装 APK 并继续真机验证；commit、amend、push、创建 tag 仍必须先获得用户明确授权。
 - 用户明确授权后，每个可编译的小功能点再单独 commit 存档（§13 规范）。
 - **HARD RULE（用户强调）**：集成任何三方库前，**必须先看官方文档并核对 jar 内真实 API 签名**，绝不凭训练数据假设 API 存在（训练数据会过期）。Shizuku 教训：`newProcess` 已私有、`onRequestPermissionsResult` 转发已移除、`ShizukuProvider` 必须手动声明——三个坑全是凭训练数据写的。正确做法：① webfetch 官方 README/GitHub ② javap/jadx 反编译核对 jar 签名 ③ 再写代码。
+
+---
+
+## 16. 渐进式解耦指导（长期硬约束）
+
+### 16.1 目标
+
+本项目不进行一次性大重构，不为了“架构漂亮”重写已经真机验证过的业务。
+
+目标是：新功能不再扩大耦合；每次修改一个小功能时，只顺手把该功能触及的边界向正确方向迁移一小步。旧代码允许暂时存在过渡依赖，逐个功能收敛，直到达到目标结构。
+
+### 16.2 目标架构树
+
+```text
+com.nbljsbdk.snowhide/
+├── MainActivity.kt                         # 极薄入口：Activity 权限与 CompositionRoot
+├── app/                                    # 唯一组合根（逐步新增）
+│   ├── CompositionRoot.kt                  # 冷启动初始化与依赖装配
+│   └── AppShell.kt                         # 页面组合与导航
+├── core/                                   # Android 无关核心抽象/引擎契约
+│   ├── engine/                             # PowerEngine、Manager、Registry、impl
+│   ├── mode/                               # FreezeMode、FreezeExecutor
+│   └── feedback/                           # HapticType、反馈接口（逐步新增）
+├── data/                                   # SP+JSON、缓存、Repository、数据模型
+│   ├── model/
+│   ├── prefs/
+│   └── repo/
+├── domain/                                 # 业务规则和 UseCase
+│   ├── recent/                             # Recent 纯状态与业务差异
+│   ├── backup/                             # 备份导入导出业务
+│   └── quicktoggle/                        # 快速启停业务
+├── feature/                                # 页面状态、交互、无状态 Compose
+│   ├── home/
+│   ├── settings/
+│   ├── appmanage/
+│   ├── organize/
+│   ├── folder/
+│   ├── quicktoggle/
+│   ├── about/
+│   └── shortcut/
+├── service/                                # Android 系统入口和事件适配
+│   ├── LockCleanAccessibilityService.kt
+│   ├── LockCleanReceiver.kt
+│   ├── QuickToggleTileService.kt
+│   ├── RecentSwipeController.kt
+│   ├── RecentTaskParser.kt
+│   └── RecentTaskSnapshotProvider.kt
+├── platform/                               # 共享 Android 适配（有真实需要再新增）
+│   ├── feedback/
+│   └── recent/
+├── ui/                                     # 纯视觉组件、主题、Modifier、图标视觉工具
+│   ├── components/
+│   ├── theme/
+│   └── util/
+└── bridge/                                 # 外部应用桥；当前保持预留
+```
+
+### 16.3 依赖方向
+
+`A → B` 表示 A 可以依赖 B：
+
+```text
+app/组合根 → feature / service / domain / data / core / platform
+feature    → domain / ui
+service    → domain / core / platform
+domain     → data / core
+data       → core
+platform   → core
+ui         → core
+bridge     → core
+```
+
+严格禁止新增以下依赖：
+
+```text
+data     ✕→ ui / feature / service / domain
+domain   ✕→ Compose / Activity / Service / Toast / Notification / SharedPreferences
+service  ✕→ feature / ui
+feature  ✕→ service / 其他 feature
+ui       ✕→ data / service / feature
+feature  ✕→ ShizukuEngineImpl / RootEngineImpl 等具体实现
+```
+
+现有的 `feature → data.repo`、`service → ui.util`、`data → ui` 等越层依赖暂不一次性清除；以后触碰相关功能时，必须优先迁移当前调用点，且新代码不得继续复制这种写法。
+
+### 16.4 各层职责
+
+**core**
+
+- `PowerEngine` 接口是宪法，不随功能改签名。
+- 具体引擎和第三方 API 只在 `core/engine/impl/` 内出现。
+- `EngineRegistry` 是唯一注册引擎的文件；新增引擎原则上只增加 impl 文件和注册行。
+- `FreezeExecutor` 负责引擎×模式分发，不负责 UI 状态和提示。
+
+**data**
+
+- 只负责持久化、缓存、JSON 编解码和数据 StateFlow。
+- Repository 是某类数据的唯一所有者。
+- 新增 SP key 必须放在对应 Repository，禁止 feature/service 直接读写 SharedPreferences。
+- 现有 key、备份格式和已保存数据必须向后兼容。
+- `SettingsRepository` 不再新增对 `ui` 类型的依赖；视觉枚举以后迁移到 data model 或 core model。
+
+**domain**
+
+- 负责业务规则、过滤、状态转换和 UseCase。
+- 所有冻结/解冻/批量/Recent 动作必须经 domain，不允许 UI 或 service 拼接业务命令。
+- domain 不创建 Toast、Notification、Activity、AccessibilityService 或 Compose 状态。
+- 批量入口可以使用 `BatchExec`；Recent 单包入口必须调用 `FreezeUseCase.freezeApp()`，不得触发全局 `BatchProgress`。
+
+**feature/ui**
+
+- ViewModel 只暴露 `UiState`、事件和动作，不把 Repository 暴露给 Composable。
+- Composable 只接收 state 和 callback，不直接访问 EngineManager、Repository、SharedPreferences 或 Service。
+- `feature` 之间不互相 import；页面组合由 `app/AppShell.kt` 负责。
+- 主题、颜色、间距、字体、动画和卡片视觉优先放在 `ui/`，不要把视觉判断写进 domain。
+
+**service**
+
+- 只负责系统生命周期、事件接收、节点读取和调度。
+- `RecentTaskParser` 只解析无障碍节点，不执行冻结。
+- `RecentTaskSnapshotProvider` 只负责读取系统任务身份，不决定业务结果。
+- `RecentSwipeController` 逐步缩小为 Android 事件/Handler/生命周期适配层；Recent 会话状态、候选过滤和冻结队列业务逐步迁移到 `domain/recent`。
+- service 不直接依赖 `ui.util.FeedbackController`；反馈能力以后通过 `core/feedback` 接口或 `platform` adapter 注入。
+
+### 16.5 重点模块的解耦边界
+
+**Home**
+
+- 当前 `HomeScreen.kt` 允许继续工作，但新代码不得继续在其中增加业务分支。
+- 逐步拆成 `HomeRoute`、`HomeContent`、`HomeGrid`、`HomeDock`、`HomeDialogs`。
+- `HomeRoute` 收集状态并处理副作用；`HomeContent` 和子组件只绘制并回调。
+- 先抽无状态 UI，再移动 ViewModel 业务，不改变 Pager、手势、冻结和导航行为。
+
+**Settings**
+
+- `SettingsScreen` 逐步变成页面组合和设置项展示层。
+- 备份导入导出迁移到 `BackupUseCase` + `BackupViewModel`，保留现有 JSON 格式。
+- Recent 设置页通过 callback 或 domain 门面请求校准，不直接 import `RecentSwipeController`。
+- About 不直接依赖其他 feature 的 ViewModel。
+
+**Recent**
+
+- 首次任务快照未建立前，任何差异都不得停用。
+- parser 负责识别，snapshot provider 负责事实，domain 负责差异和策略，controller 负责时序。
+- 新增 `domain/recent/RecentSessionState.kt`，先抽纯 Kotlin 状态，不先搬 Android Handler。
+- 新增 `domain/recent/RecentSwipeUseCase.kt`，逐步收回候选过滤、锁定判断、队列和逐包冻结。
+- `RecentFreezeQueueRepository` 继续只保存包名短队列；读写、schema、成功移除和失败保留必须保持安全。
+- 雪藏自身在候选、任务快照、队列和执行入口全部排除。
+
+**QuickToggle**
+
+- 新增 `QuickToggleRepository` 作为成员列表和 opened 状态唯一数据源。
+- `QuickToggleUseCase` 负责成员和执行规则。
+- `QuickToggleViewModel` 负责搜索、排序和 UI 状态。
+- TileService 和 ShortcutActionActivity 只做系统入口，不能各自解析 JSON 或复制业务。
+
+**Backup**
+
+- `BackupRepository` 先保持 v1 JSON 读写兼容。
+- `BackupUseCase` 负责导入校验、版本判断和导入结果。
+- `SettingsScreen` 只处理 SAF Uri 和页面反馈。
+- 未经单独设计，不修改既有备份 key，不删除旧字段。
+
+**初始化**
+
+- Activity、AccessibilityService、Receiver、TileService 的冷启动初始化逐步集中到 `CompositionRoot`。
+- 不再在每个入口复制 EngineRegistry、Repository、UseCase 装配代码。
+- `MainActivity` 仍保留 Shizuku Activity 权限请求和 binder 回调。
+- 不引入 Hilt/Koin，仅使用轻量手写组合根。
+
+### 16.6 每个小功能的工作规则
+
+每次新增一个小功能时，按以下顺序执行：
+
+1. 先确定功能真正属于 UI、feature、domain、data、service 还是 core。
+2. 业务动作优先进入已有 UseCase；没有合适 UseCase 才新增一个小 UseCase。
+3. 持久化字段只进入 Repository；不在 UI/service 内直接写 SP。
+4. Android 系统入口只接收事件，业务交给 domain。
+5. 新 Composable 必须保持无状态。
+6. 如果触碰旧越层代码，只迁移本次功能涉及的局部调用，不做全局重写。
+7. 一个小功能最多附带一个相邻的局部解耦动作，避免功能和重构互相遮蔽。
+8. 保持既有行为、SP key、备份格式、版本规则和安全约束不变。
+9. 完成后至少执行编译、相关真机验证和 `git diff --check`。
+10. 每个可编译小功能单独存档；commit、push、tag 仍按 §13 授权规则执行。
+
+### 16.7 分阶段迁移顺序
+
+**阶段 0：规则生效**
+
+- 只更新本指导，不改业务行为。
+- 新代码停止增加 feature→feature、service→ui、data→ui 等依赖。
+
+**阶段 1：组合根**
+
+- 新增 `app/CompositionRoot.kt`。
+- 统一冷启动初始化和 UseCase 装配。
+- 不改变业务时序，不改持久化格式。
+
+**阶段 2：数据所有权**
+
+- 先处理 QuickToggle 重复 JSON。
+- 再处理 Backup 的 UseCase/ViewModel 边界。
+- 触碰 `FrozenStateStore` 时再逐步处理它对 EngineManager 的直接依赖。
+
+**阶段 3：UI 页面壳**
+
+- Home 先拆 Route/Content，再拆 Dock、Pager、Dialog。
+- Settings 先拆 Route/ViewModel，再处理各功能 section。
+- 视觉优化优先在纯 UI 组件进行。
+
+**阶段 4：Recent 纯逻辑**
+
+- 先抽 `RecentSessionState`。
+- 再抽差异、过滤和队列执行。
+- 最后缩小 `RecentSwipeController`。
+- 每一步单独编译和真机验证。
+
+**阶段 5：共享 Android 适配和安全边界**
+
+- 反馈、震动、任务读取等确实被多个入口共享时，再新增 platform adapter。
+- 触碰 shell 命令时补充包名校验和受控命令参数，不能继续扩大 `sh -c` 字符串拼接风险。
+- 不为了提前“完整架构”而创建空壳目录或抽象接口。
+
+### 16.8 暂时不要大改
+
+以下文件和协议除非当前功能明确涉及，否则保持稳定：
+
+- `core/engine/Engine.kt`
+- `core/engine/impl/ShizukuEngineImpl.kt`
+- `core/engine/impl/ShellCommandService.kt`
+- `core/mode/FreezeExecutor.kt`
+- `data/repo/GridRepository.kt`
+- `data/repo/BackupRepository.kt`
+- `service/RecentSwipeController.kt`
+- `service/RecentTaskParser.kt`
+- `ui/util/AppIconLoader.kt`
+- `AndroidManifest.xml`
+- 既有 SP key、备份 JSON、Shizuku UserService 协议和 `versionCode=1`
+
+不引入 Room、Hilt/Koin、多模块或事件总线解决当前问题；先用现有 SP+JSON、手写组合根和小步迁移保持可控。
