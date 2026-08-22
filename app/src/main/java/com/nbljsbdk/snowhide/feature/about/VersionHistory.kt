@@ -11,7 +11,7 @@ val versionHistory = listOf(
     VersionRecord(
         "v0.2.0",
         "Recent 划卡停用",
-        "增加无障碍 Recent 识别、手动校准和退出 Recent 后冻结；仅处理已添加且未锁定的应用。",
+        "增加无障碍 Recent 识别、自动与手动校准，以及退出 Recent 后冻结；通过 Shizuku 静默读取真实任务包名，支持 ColorOS 同名卡片并优化滑动时序。仅处理已添加且未锁定的应用，不删除应用数据。",
     ),
     VersionRecord(
         "v0.1.7",

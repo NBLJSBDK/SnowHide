@@ -64,6 +64,13 @@ internal class RecentSwipeController(
     private var launcherPackage: String? = null
     private var knownWindowPackage: String? = null
     private var knownWindowClass: String? = null
+    private var taskSnapshot = emptySet<String>()
+    private var taskSnapshotInitialized = false
+    private var taskSnapshotRequestedAt = 0L
+    private var taskSnapshotInFlight = false
+    private var taskSnapshotRefreshPending = false
+    private var waitingToFinishForTaskSnapshot = false
+    private var sessionGeneration = 0L
     private lateinit var freezeUseCase: FreezeUseCase
 
     fun onServiceConnected() {
@@ -117,7 +124,7 @@ internal class RecentSwipeController(
 
     /** 手动校准：重建识别结果，但不冻结校准过程中的任何卡片。 */
     fun beginCalibration() {
-        if (recentSessionActive) finishRecentSession()
+        if (recentSessionActive) finishRecentSession(force = true)
         handler.removeCallbacks(processRunnable)
         eventScheduled = false
         pendingEvent?.recycle()
@@ -156,6 +163,10 @@ internal class RecentSwipeController(
         if (!shouldProcessEvents()) return
         val now = SystemClock.elapsedRealtime()
         refreshCandidates(now)
+        val refreshTaskSnapshot = event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        if (recentSessionActive && refreshTaskSnapshot) requestTaskSnapshot(now)
         val root = runCatching { service.rootInActiveWindow }.getOrNull()
         if (root == null) {
             scheduleSessionExit()
@@ -191,10 +202,14 @@ internal class RecentSwipeController(
             return
         }
         cancelSessionExit()
-        if (!recentSessionActive) {
+        val newSession = !recentSessionActive
+        if (newSession) {
             beginRecentSession(snapshot, now, noCalibrationData)
         } else {
             updateRecentSession(snapshot, event, now)
+        }
+        if (newSession || refreshTaskSnapshot) {
+            requestTaskSnapshot(now, force = newSession)
         }
     }
 
@@ -204,18 +219,21 @@ internal class RecentSwipeController(
         noCalibrationData: Boolean,
     ) {
         recentSessionActive = true
+        sessionGeneration++
         recentPackages = snapshot.packages
         recentWindowPackage = snapshot.windowPackage
         recentWindowClass = snapshot.windowClass
         lastRecentAt = now
         emptySnapshotStreak = if (snapshot.packages.isEmpty()) 1 else 0
         pendingFreezePackages.clear()
+        taskSnapshot = emptySet()
+        taskSnapshotInitialized = false
+        taskSnapshotRefreshPending = false
+        waitingToFinishForTaskSnapshot = false
+        handler.removeCallbacks(taskFinishTimeoutRunnable)
 
         calibrationMode = manualCalibrationRequested || noCalibrationData
         manualCalibrationRequested = false
-        if (calibrationMode && snapshot.packages.isNotEmpty()) {
-            completeCalibration(snapshot)
-        }
     }
 
     private fun updateRecentSession(
@@ -241,7 +259,7 @@ internal class RecentSwipeController(
         } else {
             previous - current
         }
-        if (!calibrationMode) {
+        if (!calibrationMode && !taskSnapshotInitialized) {
             pendingFreezePackages.removeAll(current)
             pendingFreezePackages.addAll(removed)
         } else {
@@ -252,7 +270,9 @@ internal class RecentSwipeController(
         recentWindowPackage = snapshot.windowPackage
         recentWindowClass = snapshot.windowClass
         lastRecentAt = now
-        if (calibrationMode && current.isNotEmpty()) completeCalibration(snapshot)
+        if (calibrationMode && !taskSnapshotInitialized && current.isNotEmpty()) {
+            completeCalibration(snapshot)
+        }
     }
 
     private fun completeCalibration(snapshot: RecentTaskParser.Snapshot) {
@@ -275,9 +295,18 @@ internal class RecentSwipeController(
     }
 
     /** Recent 窗口离开后执行待冻结集合。 */
-    private fun finishRecentSession() {
+    private fun finishRecentSession(force: Boolean = false) {
         if (!recentSessionActive) return
+        if (taskSnapshotInFlight && !force) {
+            waitingToFinishForTaskSnapshot = true
+            handler.removeCallbacks(taskFinishTimeoutRunnable)
+            handler.postDelayed(taskFinishTimeoutRunnable, TASK_FINISH_TIMEOUT_MS)
+            return
+        }
+        waitingToFinishForTaskSnapshot = false
+        handler.removeCallbacks(taskFinishTimeoutRunnable)
         recentSessionActive = false
+        sessionGeneration++
         pendingExitToken = null
         val targets = if (!calibrationMode && SettingsRepository.swipeDisableEnabled.value) {
             pendingFreezePackages.toList()
@@ -290,6 +319,8 @@ internal class RecentSwipeController(
         recentWindowClass = null
         lastRecentAt = 0L
         emptySnapshotStreak = 0
+        taskSnapshot = emptySet()
+        taskSnapshotInitialized = false
         calibrationMode = false
         manualCalibrationToken = null
         manualCalibrationRequested = false
@@ -314,6 +345,70 @@ internal class RecentSwipeController(
         }
     }
 
+    /** 在后台读取任务包名，解决 ColorOS 同名卡片无法靠文字区分的问题。 */
+    private fun requestTaskSnapshot(now: Long, force: Boolean = false) {
+        if (candidatePackages.isEmpty()) return
+        if (taskSnapshotInFlight) {
+            taskSnapshotRefreshPending = true
+            return
+        }
+        if (!force && now - taskSnapshotRequestedAt < TASK_SNAPSHOT_REFRESH_MS) return
+        taskSnapshotRequestedAt = now
+        taskSnapshotInFlight = true
+        taskSnapshotRefreshPending = false
+        val generation = sessionGeneration
+        val candidates = candidatePackages
+        scope.launch {
+            val result = RecentTaskSnapshotProvider.query(candidates, service.packageName)
+            handler.post {
+                taskSnapshotInFlight = false
+                result.getOrNull()?.let { packages ->
+                    if (recentSessionActive && generation == sessionGeneration) {
+                        applyTaskSnapshot(packages)
+                    } else if (recentSessionActive) {
+                        taskSnapshotRefreshPending = true
+                    }
+                }
+                if (taskSnapshotRefreshPending) {
+                    taskSnapshotRefreshPending = false
+                    taskSnapshotRequestedAt = 0L
+                    requestTaskSnapshot(SystemClock.elapsedRealtime())
+                } else if (waitingToFinishForTaskSnapshot) {
+                    finishRecentSession()
+                }
+            }
+        }
+    }
+
+    private fun applyTaskSnapshot(packages: Set<String>) {
+        val now = SystemClock.elapsedRealtime()
+        if (!taskSnapshotInitialized) {
+            taskSnapshot = packages
+            taskSnapshotInitialized = true
+            if (calibrationMode && packages.isNotEmpty()) {
+                completeCalibration(
+                    RecentTaskParser.Snapshot(
+                        packages = packages,
+                        windowPackage = recentWindowPackage.orEmpty(),
+                        windowClass = recentWindowClass.orEmpty(),
+                    ),
+                )
+            }
+            return
+        }
+
+        val removed = taskSnapshot - packages
+        if (!calibrationMode) {
+            pendingFreezePackages.removeAll(packages)
+            pendingFreezePackages.addAll(removed)
+        } else {
+            pendingFreezePackages.clear()
+        }
+        taskSnapshot = packages
+        recentPackages = packages
+        lastRecentAt = now
+    }
+
     private fun scheduleSessionExit() {
         if (!recentSessionActive) return
         val token = Any()
@@ -329,6 +424,17 @@ internal class RecentSwipeController(
     private fun cancelSessionExit() {
         pendingExitToken = null
         handler.removeCallbacks(exitRunnable)
+        if (waitingToFinishForTaskSnapshot) {
+            waitingToFinishForTaskSnapshot = false
+            handler.removeCallbacks(taskFinishTimeoutRunnable)
+        }
+    }
+
+    private val taskFinishTimeoutRunnable = Runnable {
+        if (waitingToFinishForTaskSnapshot) {
+            waitingToFinishForTaskSnapshot = false
+            finishRecentSession(force = true)
+        }
     }
 
     private fun shouldProcessEvents(): Boolean =
@@ -355,6 +461,8 @@ internal class RecentSwipeController(
         private const val EVENT_DEBOUNCE_MS = 80L
         private const val SESSION_EXIT_DEBOUNCE_MS = 180L
         private const val CANDIDATE_REFRESH_INTERVAL_MS = 1_000L
+        private const val TASK_SNAPSHOT_REFRESH_MS = 300L
+        private const val TASK_FINISH_TIMEOUT_MS = 800L
         private const val MANUAL_CALIBRATION_TIMEOUT_MS = 30_000L
         private const val EMPTY_SNAPSHOT_CONFIRMATIONS = 2
         private val SUPPORTED_EVENT_TYPES = setOf(

@@ -46,11 +46,17 @@ internal object RecentTaskParser {
             .filterKeys { it.length >= 2 }
             .filterValues { it.size == 1 }
             .mapValues { it.value.first().key }
+        val uniquePackageAliases = candidates
+            .flatMap { pkg -> packageAliases(pkg).map { alias -> alias to pkg } }
+            .groupBy({ it.first }, { it.second })
+            .filterValues { it.distinct().size == 1 }
+            .mapValues { it.value.first() }
         val packages = linkedSetOf<String>()
         val values = ArrayList<String>(64)
         val nodes = ArrayDeque<AccessibilityNodeInfo>()
         nodes.add(root)
         var visited = 0
+        var hasRecentResource = false
 
         fun addValue(value: CharSequence?) {
             val text = value?.toString()?.trim().orEmpty()
@@ -66,6 +72,12 @@ internal object RecentTaskParser {
                 addValue(node.text)
                 addValue(node.contentDescription)
                 node.viewIdResourceName?.let { id ->
+                    if (id.contains("recent_container") ||
+                        id.contains("overview_panel") ||
+                        id.contains("overview_actions_view")
+                    ) {
+                        hasRecentResource = true
+                    }
                     candidates.firstOrNull { id.contains(it) }?.let(packages::add)
                 }
                 for (index in 0 until node.childCount) {
@@ -81,6 +93,7 @@ internal object RecentTaskParser {
 
         values.forEach { value ->
             val normalized = normalize(value)
+            uniquePackageAliases[normalized]?.let(packages::add)
             uniqueLabels[normalized]?.let(packages::add)
             if (normalized.length >= 2) {
                 val fuzzy = uniqueLabels.entries.filter { (label, _) ->
@@ -104,7 +117,8 @@ internal object RecentTaskParser {
             lowerClass.contains("overview") ||
             lowerClass.contains("task")
         val isSystemUiRecent = rootPackage == "com.android.systemui" && hasRecentClass
-        val isLauncherRecent = rootPackage == launcherPackage && (hasRecentHint || hasRecentClass)
+        val isLauncherRecent = rootPackage == launcherPackage &&
+            (hasRecentHint || hasRecentClass || hasRecentResource)
         val knownClassMatches = knownWindowClass.isNullOrBlank() ||
             rootClass == knownWindowClass ||
             lowerClass.contains("recent") ||
@@ -135,7 +149,28 @@ internal object RecentTaskParser {
     private fun normalize(value: String): String =
         value.trim().replace(WHITESPACE, "").lowercase(Locale.ROOT)
 
+    /** Recent 卡片常显示品牌英文名，系统应用标签却可能是中文，使用包名稳定词补齐映射。 */
+    private fun packageAliases(pkg: String): List<String> = pkg
+        .split('.', '_', '-')
+        .asSequence()
+        .map { it.lowercase(Locale.ROOT) }
+        .filter { it.length >= 3 && it !in GENERIC_PACKAGE_PARTS }
+        .distinct()
+        .toList()
+
     private val WHITESPACE = Regex("\\s+")
+    private val GENERIC_PACKAGE_PARTS = setOf(
+        "android",
+        "app",
+        "client",
+        "com",
+        "in",
+        "main",
+        "mobile",
+        "net",
+        "org",
+        "service",
+    )
     private const val MAX_NODES = 300
     private const val MAX_VALUES = 600
     private const val RECENT_CONTINUATION_MS = 1_500L
