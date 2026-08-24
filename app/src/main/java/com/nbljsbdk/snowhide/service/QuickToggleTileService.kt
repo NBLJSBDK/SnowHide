@@ -83,9 +83,8 @@ class QuickToggleTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         // 服务重启后按持久化的 opened 恢复磁贴点亮状态
-        val opened = loadOpened()
         val tile = qsTile ?: return
-        setTileActive(tile, opened.isNotEmpty())
+        setTileActive(tile, useCase.opened.value.isNotEmpty())
     }
 
     private fun setTileActive(tile: Tile, active: Boolean) {
@@ -95,16 +94,6 @@ class QuickToggleTileService : TileService() {
             if (active) R.drawable.ic_toggle_on else R.drawable.ic_toggle_off,
         )
         tile.updateTile()
-    }
-
-    private fun loadOpened(): List<String> {
-        val prefs = applicationContext.getSharedPreferences("snowhide_settings", android.content.Context.MODE_PRIVATE)
-        val json = prefs.getString("quick_toggle_opened", "[]") ?: "[]"
-        return runCatching {
-            org.json.JSONArray(json).let { arr ->
-                (0 until arr.length()).map { arr.getString(it) }
-            }
-        }.getOrDefault(emptyList())
     }
 
     private fun toast(msg: String) {

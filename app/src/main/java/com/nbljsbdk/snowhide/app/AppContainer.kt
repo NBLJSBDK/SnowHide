@@ -4,6 +4,7 @@ import android.content.Context
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.repo.GridRepository
+import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
 
@@ -25,7 +26,7 @@ class AppContainer(private val context: Context) {
         QuickToggleUseCase(
             GridRepository,
             EngineManager,
-            context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE),
+            QuickToggleRepository,
         )
     }
 }

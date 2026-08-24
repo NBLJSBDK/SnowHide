@@ -1,12 +1,12 @@
 package com.nbljsbdk.snowhide.feature.quicktoggle
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
+import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * - **数据一致性**：应用从「已添加」被移出（增删界面操作）→ 成员自动同步移出
  * - 排序 5 档与增删应用一致；排序档位不持久化，滑动进入顺序持久化
  *
- * 成员持久化：SharedPreferences（JSON 数组）。
+ * 成员持久化由 QuickToggleRepository 负责（SharedPreferences + JSON 数组）。
  * 触发（点亮/熄灭）走下拉磁贴，P1 实现。
  */
 class QuickToggleViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,11 +47,9 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     )
 
     private val context get() = getApplication<Application>()
-    private val prefs = context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
 
-    /** 快速启停成员（包名列表，持久化） */
-    private val _members = MutableStateFlow(loadMembers())
-    val members: StateFlow<List<String>> = _members.asStateFlow()
+    /** 快速启停成员（仓库唯一数据源） */
+    val members: StateFlow<List<String>> = QuickToggleRepository.members
 
     private val _filter = MutableStateFlow(
         Filter(
@@ -73,7 +71,7 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
-        _members,
+        QuickToggleRepository.members,
         _filter,
     ) { apps, items, folderApps, members, filter ->
         val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
@@ -92,7 +90,7 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
-        _members,
+        QuickToggleRepository.members,
         _filter,
     ) { apps, items, folderApps, members, filter ->
         val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
@@ -107,7 +105,7 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
-        ListOrderRepository.seedQuickToggleAdded(_members.value)
+        ListOrderRepository.seedQuickToggleAdded(QuickToggleRepository.members.value)
         // 数据一致性：宫格数据变化时同步剔除已移出成员并持久化
         viewModelScope.launch {
             GridRepository.gridItems.collect { _ -> syncMembers() }
@@ -120,12 +118,12 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     /** 剔除已不在「已添加」里的成员 */
     private fun syncMembers() {
         val added = GridRepository.allAddedPackages().toSet()
-        val cleaned = _members.value.filter { it in added }.distinct()
-        if (cleaned.size != _members.value.size) {
-            _members.value.filter { it !in cleaned }
+        val current = QuickToggleRepository.members.value
+        val cleaned = current.filter { it in added }.distinct()
+        if (cleaned.size != current.size) {
+            current.filter { it !in cleaned }
                 .forEach { ListOrderRepository.recordQuickToggleRemoved(it) }
-            _members.value = cleaned
-            persist()
+            QuickToggleRepository.replaceMembers(cleaned)
         }
     }
 
@@ -201,18 +199,16 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 加入快速启停（左栏右滑） */
     fun addMember(pkg: String) {
-        if (pkg !in _members.value) {
+        if (QuickToggleRepository.addMember(pkg)) {
             ListOrderRepository.recordQuickToggleAdded(pkg)
-            _members.value = _members.value + pkg
-            persist()
         }
     }
 
     /** 移出快速启停（右栏左滑） */
     fun removeMember(pkg: String) {
-        if (pkg in _members.value) ListOrderRepository.recordQuickToggleRemoved(pkg)
-        _members.value = _members.value.filterNot { it == pkg }
-        persist()
+        if (QuickToggleRepository.removeMember(pkg)) {
+            ListOrderRepository.recordQuickToggleRemoved(pkg)
+        }
     }
 
     /** 应用显示名（包名由 UI 追加显示在名称下方，不再二选一） */
@@ -224,22 +220,4 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
         }.getOrDefault(pkg)
     }
 
-    private fun loadMembers(): List<String> {
-        val json = prefs.getString(KEY_MEMBERS, "[]") ?: "[]"
-        return runCatching {
-            org.json.JSONArray(json).let { arr ->
-                (0 until arr.length()).map { arr.getString(it) }.distinct()
-            }
-        }.getOrDefault(emptyList())
-    }
-
-    private fun persist() {
-        val arr = org.json.JSONArray()
-        _members.value.forEach { arr.put(it) }
-        prefs.edit().putString(KEY_MEMBERS, arr.toString()).apply()
-    }
-
-    companion object {
-        private const val KEY_MEMBERS = "quick_toggle_members"
-    }
 }
