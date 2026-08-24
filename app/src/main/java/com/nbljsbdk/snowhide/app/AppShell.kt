@@ -33,13 +33,15 @@ fun AppShell(
     backupUseCase: BackupUseCase,
     freezeUseCase: FreezeUseCase,
     homeViewModel: HomeViewModel = viewModel(
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application
+        factory = HomeViewModel.Factory(
+            LocalContext.current.applicationContext as Application,
+            freezeUseCase,
         )
     ),
     appManageViewModel: AppManageViewModel = viewModel(
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application
+        factory = AppManageViewModel.Factory(
+            LocalContext.current.applicationContext as Application,
+            freezeUseCase,
         )
     ),
 ) {

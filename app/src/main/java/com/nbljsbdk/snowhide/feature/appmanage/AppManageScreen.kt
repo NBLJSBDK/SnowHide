@@ -2,7 +2,6 @@
 
 package com.nbljsbdk.snowhide.feature.appmanage
 
-import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -48,8 +47,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.core.feedback.HapticType
@@ -70,11 +67,7 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
 @Composable
 fun AppManageScreen(
     onClose: () -> Unit,
-    viewModel: AppManageViewModel = viewModel(
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application
-        )
-    ),
+    viewModel: AppManageViewModel,
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showPackageName by viewModel.showPackageName.collectAsState()

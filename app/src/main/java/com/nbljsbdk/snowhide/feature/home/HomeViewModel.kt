@@ -4,10 +4,11 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
@@ -33,14 +34,30 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 组合引擎状态、宫格数据、冻结状态、图标加载，
  * 是 feature/home 的唯一状态中枢（UI 无逻辑）。
  */
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
+class HomeViewModel(
+    application: Application,
+    private val freezeUseCase: FreezeUseCase,
+) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
 
     val engineManager = EngineManager
     val gridRepository = GridRepository
     val settingsRepository = SettingsRepository
-    private val freezeUseCase = FreezeUseCase(FreezeExecutor(engineManager), gridRepository, engineManager)
+
+    /** 由组合根注入业务用例，避免页面 ViewModel 自行装配依赖。 */
+    class Factory(
+        private val application: Application,
+        private val freezeUseCase: FreezeUseCase,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
+                return HomeViewModel(application, freezeUseCase) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
+    }
 
     // ═══════════════════════════════════════
     // 状态

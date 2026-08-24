@@ -5,9 +5,9 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.nbljsbdk.snowhide.core.engine.EngineManager
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
@@ -34,19 +34,28 @@ import kotlinx.coroutines.launch
  * 列表用 combine 派生 StateFlow 直接驱动 UI（滑动后立即刷新；
  * 触发器方案被 Compose 强跳过优化掉，不可用）。
  */
-class AppManageViewModel(application: Application) : AndroidViewModel(application) {
+class AppManageViewModel(
+    application: Application,
+    private val freezeUseCase: FreezeUseCase,
+) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
 
-    /** 移出应用时先解冻（设计文档 §3.4「解冻并移出」） */
-    private val freezeUseCase =
-        com.nbljsbdk.snowhide.domain.FreezeUseCase(
-            com.nbljsbdk.snowhide.core.mode.FreezeExecutor(
-                com.nbljsbdk.snowhide.core.engine.EngineManager
-            ),
-            GridRepository,
-            com.nbljsbdk.snowhide.core.engine.EngineManager,
-        )
+    /**
+     * ViewModel 工厂由组合根持有业务用例，页面只负责传入依赖。
+     */
+    class Factory(
+        private val application: Application,
+        private val freezeUseCase: FreezeUseCase,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(AppManageViewModel::class.java)) {
+                return AppManageViewModel(application, freezeUseCase) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
+    }
 
     /** 排序方式（左右栏各自独立，不持久化） */
     enum class SortMode {

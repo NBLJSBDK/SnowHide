@@ -2,7 +2,6 @@
 
 package com.nbljsbdk.snowhide.feature.home
 
-import android.app.Application
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -89,7 +88,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
-import androidx.lifecycle.ViewModelProvider
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.GridItem
@@ -121,11 +119,7 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onRequestShizuku: () -> Unit = {},
-    viewModel: HomeViewModel = viewModel(
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application
-        )
-    ),
+    viewModel: HomeViewModel,
 ) {
     val gridItems by viewModel.gridRepository.gridItems.collectAsState()
     val folders by viewModel.gridRepository.folders.collectAsState()
