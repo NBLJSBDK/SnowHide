@@ -15,6 +15,8 @@ import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
 import com.nbljsbdk.snowhide.data.repo.RecentFreezeQueueRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
+import com.nbljsbdk.snowhide.domain.recent.RecentAccessibilitySnapshot
+import com.nbljsbdk.snowhide.domain.recent.RecentSessionState
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,14 +47,13 @@ internal class RecentSwipeController(
     private var pendingExitToken: Any? = null
     private var manualCalibrationToken: Any? = null
 
-    private var recentSessionActive = false
-    private var recentPackages = emptySet<String>()
-    private var recentWindowPackage: String? = null
-    private var recentWindowClass: String? = null
-    private var lastRecentAt = 0L
-    private var emptySnapshotStreak = 0
-
-    private var calibrationMode = false
+    private var sessionState = RecentSessionState()
+    private val recentSessionActive: Boolean get() = sessionState.active
+    private val recentPackages: Set<String> get() = sessionState.recentPackages
+    private val recentWindowPackage: String? get() = sessionState.recentWindowPackage
+    private val recentWindowClass: String? get() = sessionState.recentWindowClass
+    private val lastRecentAt: Long get() = sessionState.lastRecentAt
+    private val calibrationMode: Boolean get() = sessionState.calibrationMode
     private var manualCalibrationRequested = false
     private var manualToastPending = false
 
@@ -62,13 +63,12 @@ internal class RecentSwipeController(
     private var launcherPackage: String? = null
     private var knownWindowPackage: String? = null
     private var knownWindowClass: String? = null
-    private var taskSnapshot = emptySet<String>()
-    private var taskSnapshotInitialized = false
+    private val taskSnapshotInitialized: Boolean get() = sessionState.taskSnapshotInitialized
     private var taskSnapshotRequestedAt = 0L
     private var taskSnapshotInFlight = false
     private var taskSnapshotRefreshPending = false
     private var waitingToFinishForTaskSnapshot = false
-    private var sessionGeneration = 0L
+    private val sessionGeneration: Long get() = sessionState.generation
     private var queueDrainInFlight = false
     private var queueDrainAttemptedAt = 0L
     private lateinit var freezeUseCase: FreezeUseCase
@@ -217,18 +217,17 @@ internal class RecentSwipeController(
         now: Long,
         noCalibrationData: Boolean,
     ) {
-        recentSessionActive = true
-        sessionGeneration++
-        recentPackages = snapshot.packages
-        recentWindowPackage = snapshot.windowPackage
-        recentWindowClass = snapshot.windowClass
-        lastRecentAt = now
-        emptySnapshotStreak = if (snapshot.packages.isEmpty()) 1 else 0
-        calibrationMode = manualCalibrationRequested || noCalibrationData
+        sessionState = sessionState.begin(
+            snapshot = RecentAccessibilitySnapshot(
+                packages = snapshot.packages,
+                windowPackage = snapshot.windowPackage,
+                windowClass = snapshot.windowClass,
+            ),
+            now = now,
+            calibration = manualCalibrationRequested || noCalibrationData,
+        )
         // 进入 Recent 的首轮无障碍事件仍在布局稳定过程中，必须等 Shizuku
         // 返回第一份任务列表后再建立基线，不能把首轮差异当成用户划卡。
-        taskSnapshot = emptySet()
-        taskSnapshotInitialized = false
         taskSnapshotRequestedAt = 0L
         taskSnapshotRefreshPending = false
         waitingToFinishForTaskSnapshot = false
@@ -244,22 +243,19 @@ internal class RecentSwipeController(
         event: AccessibilityEvent,
         now: Long,
     ) {
-        val previous = recentPackages
         val current = snapshot.packages
-        if (current.isEmpty() && previous.isNotEmpty()) {
-            emptySnapshotStreak++
-            val trustedEmpty = (previous.size == 1 &&
-                event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) ||
-                emptySnapshotStreak >= EMPTY_SNAPSHOT_CONFIRMATIONS
-            if (!trustedEmpty) return
-        } else {
-            emptySnapshotStreak = 0
-        }
-
-        recentPackages = current
-        recentWindowPackage = snapshot.windowPackage
-        recentWindowClass = snapshot.windowClass
-        lastRecentAt = now
+        val update = sessionState.acceptAccessibilitySnapshot(
+            snapshot = RecentAccessibilitySnapshot(
+                packages = current,
+                windowPackage = snapshot.windowPackage,
+                windowClass = snapshot.windowClass,
+            ),
+            now = now,
+            scrolled = event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            emptyConfirmationCount = EMPTY_SNAPSHOT_CONFIRMATIONS,
+        )
+        sessionState = update.state
+        if (!update.accepted) return
         if (calibrationMode && !taskSnapshotInitialized && current.isNotEmpty()) {
             completeCalibration(snapshot)
         }
@@ -273,7 +269,7 @@ internal class RecentSwipeController(
         )
         knownWindowPackage = snapshot.windowPackage
         knownWindowClass = snapshot.windowClass
-        calibrationMode = false
+        sessionState = sessionState.copy(calibrationMode = false)
         if (manualToastPending) {
             manualToastPending = false
             manualCalibrationToken = null
@@ -296,17 +292,8 @@ internal class RecentSwipeController(
         waitingToFinishForTaskSnapshot = false
         handler.removeCallbacks(taskFinishTimeoutRunnable)
         handler.removeCallbacks(sessionWatchdogRunnable)
-        recentSessionActive = false
-        sessionGeneration++
+        sessionState = sessionState.finish()
         pendingExitToken = null
-        recentPackages = emptySet()
-        recentWindowPackage = null
-        recentWindowClass = null
-        lastRecentAt = 0L
-        emptySnapshotStreak = 0
-        taskSnapshot = emptySet()
-        taskSnapshotInitialized = false
-        calibrationMode = false
         manualCalibrationToken = null
         manualCalibrationRequested = false
         manualToastPending = false
@@ -349,9 +336,9 @@ internal class RecentSwipeController(
 
     private fun applyTaskSnapshot(packages: Set<String>) {
         val now = SystemClock.elapsedRealtime()
-        if (!taskSnapshotInitialized) {
-            taskSnapshot = packages
-            taskSnapshotInitialized = true
+        val update = sessionState.initializeOrDiffTaskSnapshot(packages, now)
+        sessionState = update.state
+        if (update.baselineEstablished) {
             if (calibrationMode && packages.isNotEmpty()) {
                 completeCalibration(
                     RecentTaskParser.Snapshot(
@@ -364,15 +351,11 @@ internal class RecentSwipeController(
             return
         }
 
-        val removed = taskSnapshot - packages
         if (!calibrationMode) {
-            freezePackagesImmediately(removed)
+            freezePackagesImmediately(update.removed)
         } else {
             // 校准期间只更新基线，不执行任何停用。
         }
-        taskSnapshot = packages
-        recentPackages = packages
-        lastRecentAt = now
     }
 
     /** 划卡确认后立即入队，避免依赖离开 Recent 的时序。 */
