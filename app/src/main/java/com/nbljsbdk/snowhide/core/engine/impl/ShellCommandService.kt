@@ -3,6 +3,11 @@ package com.nbljsbdk.snowhide.core.engine.impl
 import android.content.Context
 import android.os.Binder
 import android.os.Parcel
+import java.io.InputStream
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 
 /**
  * Shizuku UserService——命令执行服务（shell 身份进程）
@@ -49,19 +54,90 @@ class ShellCommandService : Binder {
 
     /** shell 身份执行命令（本进程已是 shell 权限） */
     private fun execSh(cmd: String): String {
+        check(isAllowedCommand(cmd)) { "命令不在 Shizuku P0 允许列表中" }
         val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-        // 并发读 stdout/stderr 防止管道写满死锁
-        val stdout = process.inputStream.bufferedReader().use { it.readText() }
-        val stderr = process.errorStream.bufferedReader().use { it.readText() }
-        val exit = process.waitFor()
-        if (exit != 0) {
-            throw IllegalStateException("exit=$exit：${stderr.ifBlank { stdout }}")
+        val stdoutTask = streamExecutor.submit(Callable { readLimited(process.inputStream) })
+        val stderrTask = streamExecutor.submit(Callable { readLimited(process.errorStream) })
+        try {
+            if (!process.waitFor(PROCESS_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                destroyProcess(process)
+                throw IllegalStateException("命令执行超时（${PROCESS_TIMEOUT_MS}ms）")
+            }
+            val stdout = readTask(stdoutTask)
+            val stderr = readTask(stderrTask)
+            val exit = process.exitValue()
+            if (exit != 0) {
+                throw IllegalStateException("exit=$exit：${stderr.ifBlank { stdout }}")
+            }
+            return stdout.trim()
+        } finally {
+            stdoutTask.cancel(true)
+            stderrTask.cancel(true)
+            runCatching { process.inputStream.close() }
+            runCatching { process.errorStream.close() }
+            runCatching { process.outputStream.close() }
+            if (process.isAlive) destroyProcess(process)
         }
-        return stdout.trim()
+    }
+
+    /** 只允许当前 P0 已验证的固定查询和受控 PM 命令。 */
+    private fun isAllowedCommand(command: String): Boolean {
+        if (command == "pm list packages -d" || command == "dumpsys activity recents") return true
+        return command.matches(pmPackageCommand) || command.matches(pmUserPackageCommand)
+    }
+
+    private fun readTask(task: Future<String>): String =
+        task.get(STREAM_DRAIN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+
+    /** 并发读取管道，避免 stdout/stderr 任一缓冲区写满后让子进程死锁。 */
+    private fun readLimited(stream: InputStream): String {
+        stream.bufferedReader().use { reader ->
+            val buffer = CharArray(STREAM_BUFFER_SIZE)
+            val result = StringBuilder()
+            var truncated = false
+            while (true) {
+                val count = reader.read(buffer)
+                if (count < 0) break
+                if (result.length < MAX_OUTPUT_CHARS) {
+                    val remaining = MAX_OUTPUT_CHARS - result.length
+                    result.append(buffer, 0, minOf(count, remaining))
+                    if (count > remaining) truncated = true
+                } else {
+                    truncated = true
+                }
+            }
+            if (truncated) result.append("\n[输出已截断]")
+            return result.toString()
+        }
+    }
+
+    private fun destroyProcess(process: Process) {
+        runCatching { process.destroy() }
+        runCatching {
+            if (!process.waitFor(PROCESS_DESTROY_GRACE_MS, TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly()
+            }
+        }
     }
 
     companion object {
         const val TRANSACTION_EXEC = 1
         const val DESCRIPTOR = "com.nbljsbdk.snowhide.IShellService"
+
+        private const val PROCESS_TIMEOUT_MS = 30_000L
+        private const val PROCESS_DESTROY_GRACE_MS = 500L
+        private const val STREAM_DRAIN_TIMEOUT_MS = 2_000L
+        private const val STREAM_BUFFER_SIZE = 4 * 1024
+        private const val MAX_OUTPUT_CHARS = 64 * 1024
+        private const val PACKAGE_NAME_PATTERN =
+            "[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*"
+        private val pmPackageCommand =
+            Regex("^pm (enable|disable) ($PACKAGE_NAME_PATTERN)\\z")
+        private val pmUserPackageCommand =
+            Regex("^pm (disable-user|uninstall) --user ([0-9]+) ($PACKAGE_NAME_PATTERN)\\z")
+
+        private val streamExecutor = Executors.newCachedThreadPool { runnable ->
+            Thread(runnable, "snowhide-shell-stream").apply { isDaemon = true }
+        }
     }
 }
