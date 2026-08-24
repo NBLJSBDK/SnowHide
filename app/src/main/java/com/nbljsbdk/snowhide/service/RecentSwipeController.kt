@@ -16,6 +16,7 @@ import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
 import com.nbljsbdk.snowhide.data.repo.RecentFreezeQueueRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentAccessibilitySnapshot
+import com.nbljsbdk.snowhide.domain.recent.RecentFreezePolicy
 import com.nbljsbdk.snowhide.domain.recent.RecentSessionState
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import kotlinx.coroutines.CoroutineScope
@@ -360,11 +361,12 @@ internal class RecentSwipeController(
 
     /** 划卡确认后立即入队，避免依赖离开 Recent 的时序。 */
     private fun freezePackagesImmediately(packages: Collection<String>) {
-        val targets = packages
-            .asSequence()
-            .filter { it.isNotBlank() && it != service.packageName }
-            .distinct()
-            .toList()
+        val targets = RecentFreezePolicy.eligiblePackages(
+            packages = packages,
+            addedPackages = GridRepository.allAddedPackages().toSet(),
+            lockedPackages = GridRepository.lockedPackages.value,
+            ownPackage = service.packageName,
+        )
         if (targets.isEmpty()) return
         scope.launch {
             RecentFreezeQueueRepository.enqueue(targets)
@@ -416,11 +418,14 @@ internal class RecentSwipeController(
         val handled = mutableListOf<String>()
         val successful = mutableListOf<String>()
         val failures = mutableListOf<String>()
+        val eligible = RecentFreezePolicy.eligiblePackages(
+            packages = packages,
+            addedPackages = GridRepository.allAddedPackages().toSet(),
+            lockedPackages = GridRepository.lockedPackages.value,
+            ownPackage = service.packageName,
+        ).toSet()
         packages.forEach { pkg ->
-            if (pkg == service.packageName ||
-                !GridRepository.isAppAdded(pkg) ||
-                GridRepository.isLocked(pkg)
-            ) {
+            if (pkg !in eligible || !GridRepository.isAppAdded(pkg) || GridRepository.isLocked(pkg)) {
                 handled += pkg
                 return@forEach
             }
