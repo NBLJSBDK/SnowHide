@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
-package com.nbljsbdk.snowhide.feature.folder
+package com.nbljsbdk.snowhide.feature.home.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background

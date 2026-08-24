@@ -1,4 +1,4 @@
-package com.nbljsbdk.snowhide.feature.organize
+package com.nbljsbdk.snowhide.feature.home.organize
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background

@@ -94,10 +94,10 @@ import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.feature.folder.FolderScreen
+import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
-import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
-import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
+import com.nbljsbdk.snowhide.feature.home.organize.OrganizeOverlay
+import com.nbljsbdk.snowhide.feature.home.organize.OrganizeViewModel
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
 import com.nbljsbdk.snowhide.ui.theme.OrganizeAppHighlight
 import com.nbljsbdk.snowhide.ui.theme.OrganizeFolderHighlight
