@@ -18,7 +18,7 @@ import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentAccessibilitySnapshot
 import com.nbljsbdk.snowhide.domain.recent.RecentFreezePolicy
 import com.nbljsbdk.snowhide.domain.recent.RecentSessionState
-import com.nbljsbdk.snowhide.ui.util.FeedbackController
+import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -134,7 +134,7 @@ internal class RecentSwipeController(
         knownWindowClass = null
         manualCalibrationRequested = true
         manualToastPending = true
-        FeedbackController.toast(context, "校准已开始：请手动打开 Recent")
+        FeedbackRegistry.toast("校准已开始：请手动打开 Recent")
         val token = Any()
         manualCalibrationToken = token
         handler.postDelayed({
@@ -142,7 +142,7 @@ internal class RecentSwipeController(
                 manualCalibrationToken = null
                 manualCalibrationRequested = false
                 manualToastPending = false
-                FeedbackController.toast(context, "校准失败：未识别到 Recent 应用")
+                FeedbackRegistry.toast("校准失败：未识别到 Recent 应用")
             }
         }, MANUAL_CALIBRATION_TIMEOUT_MS)
     }
@@ -274,8 +274,7 @@ internal class RecentSwipeController(
         if (manualToastPending) {
             manualToastPending = false
             manualCalibrationToken = null
-            FeedbackController.toast(
-                context,
+            FeedbackRegistry.toast(
                 "校准成功：已识别 ${snapshot.packages.size} 个应用",
             )
         }
@@ -396,11 +395,10 @@ internal class RecentSwipeController(
             handler.post {
                 queueDrainInFlight = false
                 outcome.successful.forEach { pkg ->
-                    FeedbackController.toast(context, "已停用：${appLabel(pkg)}")
+                    FeedbackRegistry.toast("已停用：${appLabel(pkg)}")
                 }
                 if (outcome.failures.isNotEmpty()) {
-                    FeedbackController.notifyFailure(
-                        context,
+                    FeedbackRegistry.notifyFailure(
                         "划卡停用",
                         outcome.failures.take(5).joinToString("；"),
                     )

@@ -25,11 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.nbljsbdk.snowhide.app.CompositionRoot
+import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
-import com.nbljsbdk.snowhide.ui.util.FeedbackController
-import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -151,11 +150,10 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
             val successMsg = result.second
             runOnUiThread {
                 if (successMsg != null) {
-                    HapticController.vibrate(appContext, HapticType.BATCH)
-                    FeedbackController.toast(appContext, successMsg)
+                    FeedbackRegistry.vibrate(HapticType.BATCH)
+                    FeedbackRegistry.toast(successMsg)
                 } else {
-                    FeedbackController.notifyFailure(
-                        appContext,
+                    FeedbackRegistry.notifyFailure(
                         result.first,
                         result.third ?: "失败",
                     )

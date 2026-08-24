@@ -1,12 +1,8 @@
 package com.nbljsbdk.snowhide.ui.util
 
-import android.app.NotificationManager
 import android.content.Context
-import android.media.AudioManager
-import android.os.VibrationEffect
-import android.os.Vibrator
+import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 
 /**
  * 统一震动入口。
@@ -17,32 +13,7 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 object HapticController {
 
     fun vibrate(context: Context, type: HapticType) {
-        val appContext = context.applicationContext
-        SettingsRepository.init(appContext)
-        if (!SettingsRepository.hapticEnabled.value) return
-
-        val level = SettingsRepository.hapticLevel(type)
-        if (level <= 0) return
-
-        val audioManager = appContext.getSystemService(AudioManager::class.java)
-        if (audioManager?.ringerMode == AudioManager.RINGER_MODE_SILENT) return
-
-        val notificationManager = appContext.getSystemService(NotificationManager::class.java)
-        if (notificationManager?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
-            return
-        }
-
-        val vibrator = appContext.getSystemService(Vibrator::class.java) ?: return
-        if (!vibrator.hasVibrator()) return
-
-        val (duration, amplitude) = when (level.coerceIn(1, 4)) {
-            1 -> 60L to 192
-            2 -> 100L to 255
-            3 -> 140L to 255
-            else -> 180L to 255
-        }
-        runCatching {
-            vibrator.vibrate(VibrationEffect.createOneShot(duration, amplitude))
-        }
+        // Context 保留在 UI 调用协议中，实际硬件适配由 CompositionRoot 安装。
+        FeedbackRegistry.vibrate(type)
     }
 }

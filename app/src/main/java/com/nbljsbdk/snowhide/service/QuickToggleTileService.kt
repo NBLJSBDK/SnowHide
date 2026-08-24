@@ -5,12 +5,11 @@ import android.os.Handler
 import android.os.Looper
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import android.widget.Toast
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.app.CompositionRoot
+import com.nbljsbdk.snowhide.core.feedback.FeedbackDuration
+import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.ui.util.FeedbackController
-import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -49,9 +48,9 @@ class QuickToggleTileService : TileService() {
                 val failureMessage = result?.exceptionOrNull()?.message
                     ?: resultData?.failures?.takeIf { it.isNotEmpty() }?.joinToString("；")
                 if (failureMessage != null) {
-                    FeedbackController.notifyFailure(applicationContext, "快速启停", failureMessage)
+                    FeedbackRegistry.notifyFailure("快速启停", failureMessage)
                 } else {
-                    HapticController.vibrate(applicationContext, HapticType.BATCH)
+                    FeedbackRegistry.vibrate(HapticType.BATCH)
                     toast(msg)
                 }
             } else {
@@ -67,13 +66,12 @@ class QuickToggleTileService : TileService() {
                 val failureMessage = result.exceptionOrNull()?.message
                     ?: result.getOrNull()?.exceptionOrNull()?.message
                 if (failureMessage != null || n == null) {
-                    FeedbackController.notifyFailure(
-                        applicationContext,
+                    FeedbackRegistry.notifyFailure(
                         "快速启停",
                         failureMessage ?: msg,
                     )
                 } else {
-                    HapticController.vibrate(applicationContext, HapticType.BATCH)
+                    FeedbackRegistry.vibrate(HapticType.BATCH)
                     toast(msg)
                 }
             }
@@ -98,7 +96,7 @@ class QuickToggleTileService : TileService() {
 
     private fun toast(msg: String) {
         Handler(Looper.getMainLooper()).post {
-            FeedbackController.toast(applicationContext, msg, Toast.LENGTH_LONG)
+            FeedbackRegistry.toast(msg, FeedbackDuration.LONG)
         }
     }
 }

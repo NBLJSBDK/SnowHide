@@ -2,6 +2,7 @@ package com.nbljsbdk.snowhide.app
 
 import android.content.Context
 import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
+import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
@@ -12,6 +13,8 @@ import com.nbljsbdk.snowhide.data.repo.RecentFreezeQueueRepository
 import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
 import com.nbljsbdk.snowhide.data.repo.BackupRepository
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
+import com.nbljsbdk.snowhide.platform.feedback.AndroidFeedbackAdapter
+import com.nbljsbdk.snowhide.platform.feedback.AndroidHapticAdapter
 
 /**
  * 组合根——全工程唯一依赖装配点（轻量手写 DI，不引入框架）
@@ -47,6 +50,7 @@ object CompositionRoot {
         RecentFreezeQueueRepository.init(app)
         QuickToggleRepository.init(app)
         BackupRepository.init(app)
+        FeedbackRegistry.install(AndroidFeedbackAdapter(app), AndroidHapticAdapter(app))
         container = AppContainer()
         initialized = true
     }
