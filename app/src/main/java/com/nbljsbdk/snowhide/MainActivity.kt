@@ -10,7 +10,7 @@ import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
-import com.nbljsbdk.snowhide.feature.home.HomeScreen
+import com.nbljsbdk.snowhide.app.AppShell
 import com.nbljsbdk.snowhide.ui.theme.SnowHideTheme
 import rikka.shizuku.Shizuku
 
@@ -41,13 +41,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CompositionRoot.initActivity(applicationContext)
+        val appContainer = CompositionRoot.appContainer(applicationContext)
         registerDynamicShortcuts()
         requestNotificationPermissionIfNeeded()
         applyTransparentWallpaper()
         enableEdgeToEdge()
         setContent {
             SnowHideTheme {
-                HomeScreen(
+                AppShell(
                     modifier = Modifier.fillMaxSize(),
                     onRequestShizuku = {
                         // 请求前检查 binder 是否已连接（未连接时 requestPermission 会抛
@@ -64,7 +65,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     },
-                    backupUseCase = CompositionRoot.appContainer(applicationContext).backupUseCase,
+                    backupUseCase = appContainer.backupUseCase,
+                    freezeUseCase = appContainer.freezeUseCase,
                 )
             }
         }

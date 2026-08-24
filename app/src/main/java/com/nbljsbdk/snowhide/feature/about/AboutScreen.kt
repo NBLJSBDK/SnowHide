@@ -1,6 +1,5 @@
 package com.nbljsbdk.snowhide.feature.about
 
-import android.app.Application
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
@@ -38,27 +37,24 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
-import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
+import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 
 /**
  * 关于页（极简）
  *
  * 彩蛋：连续点击版本号 7 次 → 解锁「系统应用」按钮（警告后持久显示）；
- * 再次 7 次关闭。解锁状态存 AppManageViewModel（与增删界面共享实例）。
+ * 再次 7 次关闭。解锁状态由 AppShell 通过回调提供，与增删界面共享实例。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
     onClose: () -> Unit,
-    appManageViewModel: AppManageViewModel = viewModel(
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application
-        )
-    ),
+    systemUnlocked: Boolean,
+    onUnlockSystemApps: () -> Unit,
+    onRelockSystemApps: () -> Unit,
+    freezeUseCase: FreezeUseCase,
 ) {
     val context = LocalContext.current
     val versionName = remember {
@@ -67,8 +63,6 @@ fun AboutScreen(
         }.getOrDefault("1.0")
     }
     var showVersionHistory by remember { mutableStateOf(false) }
-
-    val systemUnlocked by appManageViewModel.systemUnlocked.collectAsState()
 
     // 彩蛋点击计数 + 警告弹窗
     var tapCount by remember { mutableIntStateOf(0) }
@@ -100,15 +94,6 @@ fun AboutScreen(
 
     // 神之一手（临时调试）：解冻设备上全部已冻结应用
     val godHandScope = rememberCoroutineScope()
-    val godHandUseCase = remember {
-        com.nbljsbdk.snowhide.domain.FreezeUseCase(
-            com.nbljsbdk.snowhide.core.mode.FreezeExecutor(
-                com.nbljsbdk.snowhide.core.engine.EngineManager
-            ),
-            com.nbljsbdk.snowhide.data.repo.GridRepository,
-            com.nbljsbdk.snowhide.core.engine.EngineManager,
-        )
-    }
     var godHandMessage by remember { mutableStateOf<String?>(null) }
 
     BackHandler(onBack = onClose)
@@ -174,7 +159,7 @@ fun AboutScreen(
                             if (!systemUnlocked) {
                                 showWarning = true // 未解锁 → 警告后解锁
                             } else {
-                                appManageViewModel.relockSystemApps() // 已解锁 → 关闭
+                                onRelockSystemApps() // 已解锁 → 关闭
                             }
                         }
                     }
@@ -254,7 +239,7 @@ fun AboutScreen(
                 enabled = !com.nbljsbdk.snowhide.data.repo.BatchProgress.active,
                 onClick = {
                     godHandScope.launch {
-                        godHandMessage = godHandUseCase.unfreezeEverything().fold(
+                        godHandMessage = freezeUseCase.unfreezeEverything().fold(
                             onSuccess = { "神之一手：已解冻 $it 个应用" },
                             onFailure = { "神之一手失败：${it.message}" },
                         )
@@ -302,7 +287,7 @@ fun AboutScreen(
             text = { Text("冻结系统应用可能影响系统功能（如电话、系统组件），请务必谨慎操作。解锁后增删应用界面将出现「系统应用」切换按钮。") },
             confirmButton = {
                 TextButton(onClick = {
-                    appManageViewModel.unlockSystemApps()
+                    onUnlockSystemApps()
                     showWarning = false
                 }) { Text("我知道了") }
             },

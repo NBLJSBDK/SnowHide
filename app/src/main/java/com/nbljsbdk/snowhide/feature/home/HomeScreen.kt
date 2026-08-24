@@ -94,15 +94,10 @@ import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.feature.about.AboutScreen
-import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.folder.FolderScreen
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
-import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
-import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
-import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
 import com.nbljsbdk.snowhide.ui.theme.OrganizeAppHighlight
 import com.nbljsbdk.snowhide.ui.theme.OrganizeFolderHighlight
@@ -123,7 +118,6 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onRequestShizuku: () -> Unit = {},
-    backupUseCase: BackupUseCase,
     viewModel: HomeViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application
@@ -703,34 +697,6 @@ fun HomeScreen(
         }
         }
     }
-    }
-
-    // 增加/移除应用界面（全屏覆盖，设计文档 §3.8）
-    val appManageOpen by viewModel.appManageOpen.collectAsState()
-    if (appManageOpen) {
-        AppManageScreen(onClose = { viewModel.closeAppManage() })
-    }
-
-    // 设置页（全屏覆盖，设计文档 §3.11）
-    val settingsOpen by viewModel.settingsOpen.collectAsState()
-    if (settingsOpen) {
-        SettingsScreen(
-            onClose = { viewModel.closeSettings() },
-            onSyncStatus = { viewModel.syncActualStatus() },
-            backupUseCase = backupUseCase,
-        )
-    }
-
-    // 快速启停管理（全屏覆盖，设计文档 §3.9）
-    val quickToggleOpen by viewModel.quickToggleOpen.collectAsState()
-    if (quickToggleOpen) {
-        QuickToggleScreen(onClose = { viewModel.closeQuickToggle() })
-    }
-
-    // 关于页（全屏覆盖，含版本号彩蛋）
-    val aboutOpen by viewModel.aboutOpen.collectAsState()
-    if (aboutOpen) {
-        AboutScreen(onClose = { viewModel.closeAbout() })
     }
 
     // 文件夹重命名对话框（自动聚焦+全选原名，用户拍板）
