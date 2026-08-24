@@ -96,6 +96,8 @@ import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
+import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
+import com.nbljsbdk.snowhide.domain.folder.FolderPageInput
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeViewModel
@@ -259,13 +261,16 @@ fun HomeScreen(
         // 循环滑动（设计文档 §3.2）：
         // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按 sortOrder）
         // 左右滑动循环切换；从哪个文件夹进入就从哪里开始
-        val sortedFolders = folders.sortedBy { it.sortOrder }
-        val actualCount = sortedFolders.size + 1 // 主屏 + N 文件夹
+        val pagePlan = FolderPagePlanner.plan(
+            folders.map { FolderPageInput(it.id, it.sortOrder) },
+        )
+        val sortedFolders = pagePlan.folderIds.mapNotNull { id -> folders.firstOrNull { it.id == id } }
+        val actualCount = pagePlan.pageCount
         val pagerState = rememberPagerState(
             initialPage = LOOP_BASE * actualCount,
         ) { LOOP_TOTAL * actualCount }
         // 当前页索引（0=主屏）：顶栏动态显示主屏「雪藏」/ 文件夹名
-        val pageIdx = pagerState.currentPage % actualCount
+        val pageIdx = pagePlan.logicalIndex(pagerState.currentPage)
         val inFolder = !organizing && pageIdx != 0
         val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
         DisposableEffect(
