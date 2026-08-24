@@ -1,6 +1,8 @@
 package com.nbljsbdk.snowhide.domain
 
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
+import com.nbljsbdk.snowhide.core.operation.PmCommand
+import com.nbljsbdk.snowhide.core.operation.PmOperation
 import com.nbljsbdk.snowhide.data.repo.BatchProgress
 
 /**
@@ -15,7 +17,7 @@ import com.nbljsbdk.snowhide.data.repo.BatchProgress
  */
 suspend fun PowerEngine.execBatched(
     pkgs: List<String>,
-    pmPrefix: String,
+    operation: PmOperation,
     verb: String,
 ): Result<Int> {
     if (pkgs.isEmpty()) return Result.success(0)
@@ -25,9 +27,14 @@ suspend fun PowerEngine.execBatched(
     val failures = mutableListOf<String>()
     try {
         pkgs.forEachIndexed { i, pkg ->
-            exec("$pmPrefix $pkg")
-                .onSuccess { success++ }
-                .onFailure { failures.add("$pkg: ${it.message}") }
+            PmCommand.build(operation, pkg).fold(
+                onSuccess = { command ->
+                    exec(command)
+                        .onSuccess { success++ }
+                        .onFailure { failures.add("$pkg: ${it.message}") }
+                },
+                onFailure = { failures.add("$pkg: ${it.message}") },
+            )
             BatchProgress.update(i + 1, total)
         }
     } finally {

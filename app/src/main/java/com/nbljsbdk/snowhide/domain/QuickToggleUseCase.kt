@@ -2,6 +2,7 @@ package com.nbljsbdk.snowhide.domain
 
 import android.content.SharedPreferences
 import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.operation.PmOperation
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 
@@ -37,7 +38,7 @@ class QuickToggleUseCase(
         val targets = loadList(KEY_MEMBERS).filter { it in added && it in frozen }
 
         // 批量解冻（<20 逐个 / ≥20 串联分块，统一进度）
-        val result = engine.execBatched(targets, "pm enable", "解冻")
+        val result = engine.execBatched(targets, PmOperation.ENABLE, "解冻")
         val success = result.getOrNull() ?: 0
         val failedPkgs = if (result.isFailure) {
             // 从失败消息里不好还原明细，保守处理：失败的都记为未打开
@@ -58,7 +59,7 @@ class QuickToggleUseCase(
         val engine = engineManager.primaryEngine.value
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         // 批量冻结（统一进度）
-        val result = engine.execBatched(unlocked, "pm disable-user --user 0", "停用")
+        val result = engine.execBatched(unlocked, PmOperation.DISABLE_USER, "停用")
         saveList(KEY_OPENED, emptyList())
         // 同步共享冻结状态（主屏霜化/dock 立即更新）
         FrozenStateStore.refresh()

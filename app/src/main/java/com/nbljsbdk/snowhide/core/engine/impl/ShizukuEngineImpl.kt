@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.Parcel
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
+import com.nbljsbdk.snowhide.core.model.PackageName
+import com.nbljsbdk.snowhide.core.operation.PmCommand
+import com.nbljsbdk.snowhide.core.operation.PmOperation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -43,17 +46,29 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
     }
 
     override suspend fun disableApp(pkg: String): Result<Unit> =
-        runPm("disable-user", "--user", "0", pkg)
+        PmCommand.build(PmOperation.DISABLE_USER, pkg).fold(
+            onSuccess = { command -> exec(command).map { } },
+            onFailure = { Result.failure(it) },
+        )
 
     override suspend fun enableApp(pkg: String): Result<Unit> =
-        runPm("enable", pkg)
+        PmCommand.build(PmOperation.ENABLE, pkg).fold(
+            onSuccess = { command -> exec(command).map { } },
+            onFailure = { Result.failure(it) },
+        )
 
-    override suspend fun isFrozen(pkg: String): Result<Boolean> = runCatching {
-        exec("pm list packages -d").getOrThrow()
-            .lineSequence()
-            .mapNotNull { line -> line.removePrefix("package:").trim() }
-            .any { it == pkg }
-    }
+    override suspend fun isFrozen(pkg: String): Result<Boolean> =
+        PackageName.parse(pkg).fold(
+            onSuccess = {
+                runCatching {
+                    exec("pm list packages -d").getOrThrow()
+                        .lineSequence()
+                        .mapNotNull { line -> line.removePrefix("package:").trim() }
+                        .any { it == pkg }
+                }
+            },
+            onFailure = { Result.failure(it) },
+        )
 
     override suspend fun listFrozenPackages(): Result<List<String>> = runCatching {
         exec("pm list packages -d").getOrThrow()
@@ -61,11 +76,6 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
             .mapNotNull { line -> line.removePrefix("package:").trim() }
             .filter { it.isNotEmpty() }
             .toList()
-    }
-
-    /** 执行 pm 命令并校验退出码 */
-    private suspend fun runPm(vararg args: String): Result<Unit> {
-        return exec(listOf("pm", *args).joinToString(" ")).map { }
     }
 
     /**

@@ -1,6 +1,8 @@
 package com.nbljsbdk.snowhide.core.mode
 
 import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.operation.PmCommand
+import com.nbljsbdk.snowhide.core.operation.PmOperation
 
 /**
  * 冻结执行器——引擎 × 模式分发（扩展点）
@@ -27,7 +29,8 @@ class FreezeExecutor(private val engineManager: EngineManager) {
             FreezeMode.SUSPEND -> engine.suspendApp(pkg, true)
             FreezeMode.HIDE -> engine.hideApp(pkg, true)
             // DISABLE：root 下用 pm disable（全局禁用），shizuku 不支持
-            FreezeMode.DISABLE -> engine.exec("pm disable $pkg").map { }
+            FreezeMode.DISABLE -> PmCommand.build(PmOperation.DISABLE, pkg)
+                .fold({ command -> engine.exec(command).map { } }, { Result.failure(it) })
         }
     }
 
@@ -41,7 +44,8 @@ class FreezeExecutor(private val engineManager: EngineManager) {
             FreezeMode.FREEZE -> engine.enableApp(pkg)
             FreezeMode.SUSPEND -> engine.suspendApp(pkg, false)
             FreezeMode.HIDE -> engine.hideApp(pkg, false)
-            FreezeMode.DISABLE -> engine.exec("pm enable $pkg").map { }
+            FreezeMode.DISABLE -> PmCommand.build(PmOperation.ENABLE, pkg)
+                .fold({ command -> engine.exec(command).map { } }, { Result.failure(it) })
         }
     }
 
@@ -50,7 +54,7 @@ class FreezeExecutor(private val engineManager: EngineManager) {
      */
     suspend fun isFrozen(mode: FreezeMode, pkg: String): Result<Boolean> {
         val engine = engineManager.primaryEngine.value
-            ?: return Result.success(false)
+            ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         return engine.isFrozen(pkg)
     }
 }

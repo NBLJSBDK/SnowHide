@@ -3,6 +3,8 @@ package com.nbljsbdk.snowhide.domain
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.core.mode.FreezeMode
+import com.nbljsbdk.snowhide.core.operation.PmCommand
+import com.nbljsbdk.snowhide.core.operation.PmOperation
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 
 /**
@@ -23,7 +25,10 @@ class FreezeUseCase(
      */
     suspend fun uninstallApp(pkg: String): Result<Unit> {
         val engine = executorEngine() ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
-        return engine.exec("pm uninstall --user 0 $pkg").map { }
+        return PmCommand.build(PmOperation.UNINSTALL, pkg).fold(
+            onSuccess = { command -> engine.exec(command).map { } },
+            onFailure = { Result.failure(it) },
+        )
     }
 
     private fun executorEngine() =
@@ -53,7 +58,7 @@ class FreezeUseCase(
         if (targets.isEmpty()) return Result.success(0)
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
-        return engine.execBatched(targets, "pm disable-user --user 0", "划卡停用")
+        return engine.execBatched(targets, PmOperation.DISABLE_USER, "划卡停用")
     }
 
     /** 查询冻结状态（引擎不可用时返回 false，不报错） */
@@ -85,7 +90,7 @@ class FreezeUseCase(
             targets.filterNot { gridRepository.isLocked(it) }
         } else targets
         if (filtered.isEmpty()) return Result.success(0)
-        return engine.execBatched(filtered, "pm disable-user --user 0", "停用")
+        return engine.execBatched(filtered, PmOperation.DISABLE_USER, "停用")
     }
 
     /** 一键解冻全部已添加应用（齿轮菜单「启用全部」，全部解冻兜底） */
@@ -94,7 +99,7 @@ class FreezeUseCase(
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         val targets = gridRepository.allAddedPackages()
         if (targets.isEmpty()) return Result.success(0)
-        return engine.execBatched(targets, "pm enable", "启用")
+        return engine.execBatched(targets, PmOperation.ENABLE, "启用")
     }
 
     /**
@@ -112,7 +117,7 @@ class FreezeUseCase(
         val targets = gridRepository.allAddedPackages()
             .filter { !gridRepository.isLocked(it) && it !in frozenSet }
         if (targets.isEmpty()) return Result.success(emptyList())
-        return engine.execBatched(targets, "pm disable-user --user 0", "停用")
+        return engine.execBatched(targets, PmOperation.DISABLE_USER, "停用")
             .map { targets }
     }
 
@@ -129,6 +134,6 @@ class FreezeUseCase(
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         val frozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }
         if (frozen.isEmpty()) return Result.success(0)
-        return engine.execBatched(frozen, "pm enable", "解冻")
+        return engine.execBatched(frozen, PmOperation.ENABLE, "解冻")
     }
 }
