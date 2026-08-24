@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     },
+                    backupUseCase = CompositionRoot.appContainer(applicationContext).backupUseCase,
                 )
             }
         }

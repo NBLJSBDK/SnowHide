@@ -1,10 +1,11 @@
 package com.nbljsbdk.snowhide.app
 
-import android.content.Context
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
+import com.nbljsbdk.snowhide.data.repo.BackupRepository
+import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
 
@@ -14,7 +15,7 @@ import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
  * 由 [CompositionRoot] 创建并持有；Activity / Service / Receiver /
  * Tile 等 Android 入口只从容器取依赖，禁止在各入口内直接 new UseCase。
  */
-class AppContainer(private val context: Context) {
+class AppContainer {
 
     /** 冻结业务入口（主界面、快捷方式、Recent、锁屏清理共用） */
     val freezeUseCase: FreezeUseCase by lazy {
@@ -28,5 +29,10 @@ class AppContainer(private val context: Context) {
             EngineManager,
             QuickToggleRepository,
         )
+    }
+
+    /** 备份业务入口（SAF 由 SettingsScreen 适配） */
+    val backupUseCase: BackupUseCase by lazy {
+        BackupUseCase(BackupRepository)
     }
 }

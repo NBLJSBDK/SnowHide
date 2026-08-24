@@ -10,6 +10,7 @@ import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
 import com.nbljsbdk.snowhide.data.repo.RecentFreezeQueueRepository
 import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
+import com.nbljsbdk.snowhide.data.repo.BackupRepository
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 
 /**
@@ -45,7 +46,8 @@ object CompositionRoot {
         RecentCalibrationRepository.init(app)
         RecentFreezeQueueRepository.init(app)
         QuickToggleRepository.init(app)
-        container = AppContainer(app)
+        BackupRepository.init(app)
+        container = AppContainer()
         initialized = true
     }
 

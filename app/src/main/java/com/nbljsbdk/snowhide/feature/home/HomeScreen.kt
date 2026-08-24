@@ -102,6 +102,7 @@ import com.nbljsbdk.snowhide.feature.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
 import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
 import com.nbljsbdk.snowhide.feature.organize.OrganizeViewModel
+import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.ui.theme.FrostCard
 import com.nbljsbdk.snowhide.ui.theme.OrganizeAppHighlight
 import com.nbljsbdk.snowhide.ui.theme.OrganizeFolderHighlight
@@ -122,6 +123,7 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onRequestShizuku: () -> Unit = {},
+    backupUseCase: BackupUseCase,
     viewModel: HomeViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application
@@ -715,6 +717,7 @@ fun HomeScreen(
         SettingsScreen(
             onClose = { viewModel.closeSettings() },
             onSyncStatus = { viewModel.syncActualStatus() },
+            backupUseCase = backupUseCase,
         )
     }
 

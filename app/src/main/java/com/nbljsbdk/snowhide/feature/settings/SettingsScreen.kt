@@ -52,6 +52,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 
 /**
@@ -66,11 +67,15 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 @Composable
 fun SettingsScreen(
     onClose: () -> Unit,
+    backupUseCase: BackupUseCase,
     onSyncStatus: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application
         )
+    ),
+    backupViewModel: BackupViewModel = viewModel(
+        factory = BackupViewModel.Factory(backupUseCase),
     ),
 ) {
     val settings = viewModel.settings
@@ -105,18 +110,14 @@ fun SettingsScreen(
     }
 
     // 导出：SAF 创建文档（无需存储权限）；类型 all/grid/settings 区分内容
-    var exportType by remember { mutableStateOf("all") }
+    var exportType by remember { mutableStateOf(BackupUseCase.Scope.ALL) }
     var exportMenuOpen by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri != null) {
             val ok = runCatching {
-                val json = when (exportType) {
-                    "grid" -> com.nbljsbdk.snowhide.data.repo.BackupRepository.exportGrid(context)
-                    "settings" -> com.nbljsbdk.snowhide.data.repo.BackupRepository.exportSettings(context)
-                    else -> com.nbljsbdk.snowhide.data.repo.BackupRepository.exportBackup(context)
-                }
+                val json = backupViewModel.export(exportType).getOrThrow()
                 context.contentResolver.openOutputStream(uri)?.use { out ->
                     out.write(json.toByteArray())
                 } ?: error("无法打开输出流")
@@ -139,7 +140,7 @@ fun SettingsScreen(
                 val json = context.contentResolver.openInputStream(uri)?.use {
                     it.readBytes().toString(Charsets.UTF_8)
                 } ?: error("无法读取文件")
-                com.nbljsbdk.snowhide.data.repo.BackupRepository.importBackup(context, json)
+                backupViewModel.import(json).getOrThrow().importedKeys
             }
             ok.onSuccess { n ->
                 importedCount = n
@@ -410,7 +411,7 @@ fun SettingsScreen(
                         text = { Text("导出全部") },
                         onClick = {
                             exportMenuOpen = false
-                            exportType = "all"
+                            exportType = BackupUseCase.Scope.ALL
                             val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
                                 .format(java.util.Date())
                             exportLauncher.launch("雪藏备份$stamp.json")
@@ -420,7 +421,7 @@ fun SettingsScreen(
                         text = { Text("导出目录") },
                         onClick = {
                             exportMenuOpen = false
-                            exportType = "grid"
+                            exportType = BackupUseCase.Scope.GRID
                             val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
                                 .format(java.util.Date())
                             exportLauncher.launch("雪藏目录$stamp.json")
@@ -430,7 +431,7 @@ fun SettingsScreen(
                         text = { Text("导出设置") },
                         onClick = {
                             exportMenuOpen = false
-                            exportType = "settings"
+                            exportType = BackupUseCase.Scope.SETTINGS
                             val stamp = java.text.SimpleDateFormat("yyMMddHHmmss", java.util.Locale.US)
                                 .format(java.util.Date())
                             exportLauncher.launch("雪藏设置$stamp.json")
