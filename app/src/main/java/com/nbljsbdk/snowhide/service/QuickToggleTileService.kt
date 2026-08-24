@@ -1,6 +1,5 @@
 package com.nbljsbdk.snowhide.service
 
-import android.content.SharedPreferences
 import android.graphics.drawable.Icon
 import android.os.Handler
 import android.os.Looper
@@ -8,10 +7,8 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
 import com.nbljsbdk.snowhide.R
-import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.data.repo.GridRepository
-import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.runBlocking
@@ -27,11 +24,7 @@ import kotlinx.coroutines.runBlocking
 class QuickToggleTileService : TileService() {
 
     private val useCase by lazy {
-        QuickToggleUseCase(
-            GridRepository,
-            EngineManager,
-            applicationContext.getSharedPreferences("snowhide_settings", android.content.Context.MODE_PRIVATE),
-        )
+        CompositionRoot.appContainer(applicationContext).quickToggleUseCase
     }
 
     override fun onClick() {

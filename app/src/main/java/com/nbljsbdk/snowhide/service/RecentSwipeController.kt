@@ -8,9 +8,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
-import com.nbljsbdk.snowhide.core.engine.EngineManager
-import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
+import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
@@ -83,19 +81,10 @@ internal class RecentSwipeController(
 
     fun onServiceConnected() {
         current = this
-        EngineRegistry.init(context)
-        GridRepository.init(context)
-        FrozenStateStore.init(context)
-        SettingsRepository.init(context)
-        RecentCalibrationRepository.init(context)
-        RecentFreezeQueueRepository.init(context)
+        CompositionRoot.init(context)
         knownWindowPackage = RecentCalibrationRepository.windowPackage
         knownWindowClass = RecentCalibrationRepository.windowClass
-        freezeUseCase = FreezeUseCase(
-            FreezeExecutor(EngineManager),
-            GridRepository,
-            EngineManager,
-        )
+        freezeUseCase = CompositionRoot.appContainer(context).freezeUseCase
         launcherPackage = service.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
             0,

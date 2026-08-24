@@ -12,13 +12,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.SystemClock
 import com.nbljsbdk.snowhide.R
-import com.nbljsbdk.snowhide.core.engine.EngineManager
-import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
-import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
-import com.nbljsbdk.snowhide.data.repo.GridRepository
-import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -29,7 +24,7 @@ import kotlinx.coroutines.runBlocking
  * - 闹钟触发 → 若仍处于锁屏 → 执行一次智能清理（豁免锁定）→ 通知（开关控制）
  *
  * 生命周期设计：
- * - SCREEN_OFF/USER_PRESENT 动态注册（MainActivity，进程存活期间生效）
+ * - SCREEN_OFF/USER_PRESENT 动态注册（无障碍服务，进程存活期间生效）
  * - 闹钟触发静态注册（进程被杀后闹钟仍能唤醒执行清理）
  * - 进程死后闹钟无法被解锁取消 → 触发时检查 Keyguard 兜底
  */
@@ -41,8 +36,7 @@ class LockCleanReceiver : BroadcastReceiver() {
             Intent.ACTION_USER_PRESENT -> cancelAlarm(context)
             ACTION_LOCK_CLEAN -> onAlarm(context)
             Intent.ACTION_BOOT_COMPLETED -> {
-                // 开机自启动：注册息屏/解锁广播（进程存活期间锁屏清理生效）
-                register(context)
+                // 无障碍服务开机后会自动连接并负责动态注册，此处不重复注册。
             }
         }
     }
@@ -102,11 +96,8 @@ class LockCleanReceiver : BroadcastReceiver() {
     /** 执行一次智能清理（豁免锁定），完成后按开关通知 */
     private fun executeClean(context: Context) {
         // 冷启动初始化（闹钟可能拉起新进程，不经过 MainActivity）
-        EngineRegistry.init(context)
-        GridRepository.init(context)
-        FrozenStateStore.init(context)
-        SettingsRepository.init(context)
-        val useCase = FreezeUseCase(FreezeExecutor(EngineManager), GridRepository, EngineManager)
+        CompositionRoot.init(context)
+        val useCase = CompositionRoot.appContainer(context).freezeUseCase
         Thread {
             val cleanedPackages = runCatching { runBlocking { useCase.quickCleanPackages() } }
                 .getOrNull()?.getOrNull()
@@ -160,13 +151,29 @@ class LockCleanReceiver : BroadcastReceiver() {
         private const val ACTION_NOTIFICATION_CLICK =
             "com.nbljsbdk.snowhide.action.LOCK_CLEAN_NOTIFICATION_CLICK"
 
-        /** 动态注册 SCREEN_OFF/USER_PRESENT（MainActivity 调用） */
+        /** 动态接收器唯一实例，避免 Activity/Service 重复注册和泄漏。 */
+        @Volatile
+        private var dynamicReceiver: LockCleanReceiver? = null
+
+        /** 动态注册 SCREEN_OFF/USER_PRESENT（由无障碍服务唯一调用） */
+        @Synchronized
         fun register(context: Context) {
+            if (dynamicReceiver != null) return
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_USER_PRESENT)
             }
-            context.registerReceiver(LockCleanReceiver(), filter)
+            val receiver = LockCleanReceiver()
+            context.applicationContext.registerReceiver(receiver, filter)
+            dynamicReceiver = receiver
+        }
+
+        /** 无障碍服务销毁时注销动态接收器。 */
+        @Synchronized
+        fun unregister(context: Context) {
+            val receiver = dynamicReceiver ?: return
+            dynamicReceiver = null
+            runCatching { context.applicationContext.unregisterReceiver(receiver) }
         }
 
         private fun prefs(context: Context) =

@@ -1,7 +1,5 @@
 package com.nbljsbdk.snowhide.feature.shortcut
 
-import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -26,16 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.nbljsbdk.snowhide.core.engine.EngineManager
-import com.nbljsbdk.snowhide.core.engine.registry.EngineRegistry
+import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
-import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
-import com.nbljsbdk.snowhide.data.repo.GridRepository
-import com.nbljsbdk.snowhide.domain.FreezeUseCase
-import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.runBlocking
@@ -51,20 +43,13 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 冷启动初始化（与 MainActivity 同批）
-        EngineRegistry.init(applicationContext)
-        GridRepository.init(applicationContext)
-        FrozenStateStore.init(applicationContext)
-        SettingsRepository.init(applicationContext)
+        CompositionRoot.init(applicationContext)
 
         val action = intent.action
         val appContext = applicationContext
-        val freezeUseCase = FreezeUseCase(FreezeExecutor(EngineManager), GridRepository, EngineManager)
-        val quickToggle = QuickToggleUseCase(
-            GridRepository,
-            EngineManager,
-            getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE),
-        )
+        val container = CompositionRoot.appContainer(appContext)
+        val freezeUseCase = container.freezeUseCase
+        val quickToggle = container.quickToggleUseCase
 
         // 长条冒泡弹窗：标题 + 进度条（逐个平滑 +1）
         setContent {
