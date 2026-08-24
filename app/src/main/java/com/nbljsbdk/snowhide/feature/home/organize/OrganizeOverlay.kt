@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.ImeAction
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.domain.organize.OrganizeState
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.ui.theme.OrganizeMemberHighlight
 
@@ -56,12 +57,12 @@ import com.nbljsbdk.snowhide.ui.theme.OrganizeMemberHighlight
  *   ② 文件夹内应用图标横排（选中文件夹时显示）
  *   ③ 键位行（固定最底）：[上][下][左][右][+][−]
  *
- * 键位灰显规则按状态机推导（OrganizeViewModel.OrganizeState）：
+ * 键位灰显规则按状态机推导（domain.organize.OrganizeState）：
  * 减号仅在选中文件夹时可点，其余按选中目标启用。
  */
 @Composable
 fun OrganizeOverlay(
-    state: OrganizeViewModel.OrganizeState,
+    state: OrganizeState,
     folders: List<Folder>,
     folderApps: List<String>,
     icons: Map<String, ImageBitmap>,
@@ -80,8 +81,8 @@ fun OrganizeOverlay(
     onAppLabel: (String) -> String,
 ) {
     // 状态机 → 键位可用性（设计文档 §3.10）
-    val homeAppSelected = state is OrganizeViewModel.OrganizeState.HomeAppSelected
-    val folderSelected = state as? OrganizeViewModel.OrganizeState.FolderSelected
+    val homeAppSelected = state is OrganizeState.HomeAppSelected
+    val folderSelected = state as? OrganizeState.FolderSelected
     val canLeftRight = homeAppSelected || folderSelected != null
     val canUp = folderSelected?.subFolderAppPkg != null
     val canDown = folderSelected?.subHomeApp != null

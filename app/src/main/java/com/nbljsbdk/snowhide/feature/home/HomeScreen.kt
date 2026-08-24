@@ -95,6 +95,7 @@ import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
+import com.nbljsbdk.snowhide.domain.organize.OrganizeState
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeViewModel
@@ -528,8 +529,8 @@ fun HomeScreen(
                                             iconShape = iconShape,
                                             showName = showAppName,
                                             selectionColor = if (organizing &&
-                                                organizeState is OrganizeViewModel.OrganizeState.FolderSelected &&
-                                                (organizeState as OrganizeViewModel.OrganizeState.FolderSelected).folderId == folder.id
+                                                 organizeState is OrganizeState.FolderSelected &&
+                                                 (organizeState as OrganizeState.FolderSelected).folderId == folder.id
                                             ) OrganizeFolderHighlight else null,
                                             onClick = {
                                                 if (organizing) {
@@ -561,10 +562,10 @@ fun HomeScreen(
                                         freezeStyle = freezeStyle,
                                         iconShape = iconShape,
                                         selectionColor = if (organizing) when (val s = organizeState) {
-                                            is OrganizeViewModel.OrganizeState.HomeAppSelected ->
-                                                if (s.app.id == item.id) OrganizeAppHighlight else null
-                                            is OrganizeViewModel.OrganizeState.FolderSelected ->
-                                                if (s.subHomeApp?.id == item.id) OrganizeAppHighlight else null
+                                             is OrganizeState.HomeAppSelected ->
+                                                 if (s.app.id == item.id) OrganizeAppHighlight else null
+                                             is OrganizeState.FolderSelected ->
+                                                 if (s.subHomeApp?.id == item.id) OrganizeAppHighlight else null
                                             else -> null
                                         } else null,
                                         onClick = {
