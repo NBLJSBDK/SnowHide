@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nbljsbdk.snowhide.data.repo.BackupRepository
+import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,5 +72,18 @@ class BackupRepositoryInstrumentedTest {
         }
         assertEquals("[\"before\"]", grid.getString("grid_items", null))
         assertEquals(true, settings.getBoolean("show_toast", false))
+    }
+
+    @Test
+    fun useCaseExportsRequestedScopesAndWrapsInvalidImport() {
+        val grid = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
+        val settings = context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
+        grid.edit().clear().putString("grid_items", "[]").commit()
+        settings.edit().clear().putBoolean("show_toast", false).commit()
+
+        val useCase = BackupUseCase(BackupRepository)
+        assertTrue(JSONObject(useCase.export(BackupUseCase.Scope.GRID).getOrThrow()).has("grid"))
+        assertTrue(JSONObject(useCase.export(BackupUseCase.Scope.SETTINGS).getOrThrow()).has("settings"))
+        assertTrue(useCase.import("{\"version\":99,\"grid\":{}} ").isFailure)
     }
 }

@@ -11,22 +11,21 @@ import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.Folder
+import com.nbljsbdk.snowhide.data.model.FolderApp
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
+import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 主屏幕 ViewModel（P0）
@@ -41,9 +40,31 @@ class HomeViewModel(
 
     private val context get() = getApplication<Application>()
 
-    val engineManager = EngineManager
-    val gridRepository = GridRepository
-    val settingsRepository = SettingsRepository
+    private val engineManager = EngineManager
+    private val gridRepository = GridRepository
+    private val settingsRepository = SettingsRepository
+
+    val gridItems: StateFlow<List<GridItem>> = gridRepository.gridItems
+    val folders: StateFlow<List<Folder>> = gridRepository.folders
+    val folderApps: StateFlow<List<FolderApp>> = gridRepository.folderApps
+    val lockedPackages: StateFlow<Set<String>> = gridRepository.lockedPackages
+
+    val columns: StateFlow<Int> = settingsRepository.columns
+    val iconSize: StateFlow<Int> = settingsRepository.iconSize
+    val verticalSpace: StateFlow<Int> = settingsRepository.verticalSpace
+    val dockIconSize: StateFlow<Int> = settingsRepository.dockIconSize
+    val folderPreview: StateFlow<Int> = settingsRepository.folderPreview
+    val showAppName: StateFlow<Boolean> = settingsRepository.showAppName
+    val showReturnHomeButton: StateFlow<Boolean> = settingsRepository.showReturnHomeButton
+    val resetHomeOnReentry: StateFlow<Boolean> = settingsRepository.resetHomeOnReentry
+    val showReentryToast: StateFlow<Boolean> = settingsRepository.showReentryToast
+    val autoSyncStatus: StateFlow<Boolean> = settingsRepository.autoSyncStatus
+    val iconPack: StateFlow<String> = settingsRepository.iconPack
+    val transparentBg: StateFlow<Boolean> = settingsRepository.transparentBg
+    val wallpaperOverlay: StateFlow<Float> = settingsRepository.wallpaperOverlay
+    val iconShape: StateFlow<String> = settingsRepository.iconShape
+    val animationsEnabled: StateFlow<Boolean> = settingsRepository.animationsEnabled
+    val freezeStyle: StateFlow<String> = settingsRepository.freezeStyle
 
     /** 由组合根注入业务用例，避免页面 ViewModel 自行装配依赖。 */
     class Factory(
@@ -70,19 +91,6 @@ class HomeViewModel(
     /** 应用系统实际状态（冻结/正常/已删除/无法确认） */
     val appStates: StateFlow<Map<String, AppRuntimeState>> = FrozenStateStore.appStates
 
-    /** 图标缓存（pkg → 图标） */
-    private val _icons = MutableStateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>>(emptyMap())
-    val icons: StateFlow<Map<String, androidx.compose.ui.graphics.ImageBitmap>> = _icons.asStateFlow()
-
-    /**
-     * 图标加载完成队列（性能：100+ 应用逐个更新 _icons 会触发
-     * 100 次全屏重组导致卡死/ANR——合并成批提交，每批至多隔 100ms）。
-     * 必须声明在 init 之前（init 里 startIconFlusher 引用它）。
-     */
-    private val iconQueue = kotlinx.coroutines.channels.Channel<Pair<String, androidx.compose.ui.graphics.ImageBitmap>>(
-        kotlinx.coroutines.channels.Channel.UNLIMITED
-    )
-
     /** 应用显示名映射（pkg → 中文名，来自全局预加载列表） */
     private val _labels = MutableStateFlow<Map<String, String>>(emptyMap())
     val labels: StateFlow<Map<String, String>> = _labels.asStateFlow()
@@ -90,6 +98,8 @@ class HomeViewModel(
     /** 操作提示（Snackbar 文案） */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    val batchProgress: StateFlow<Float?> = BatchProgress.progress
+    val batchLabel: StateFlow<String?> = BatchProgress.label
 
     /** 当前整理目录模式开关 */
     private val _organizing = MutableStateFlow(false)
@@ -172,23 +182,16 @@ class HomeViewModel(
     val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
 
     init {
-        startIconFlusher()
         AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
         // 启动预热图标包 appfilter 解析（否则首图标触发时阻塞 2 秒）
         viewModelScope.launch { AppIconLoader.prewarm() }
-        // 订阅宫格数据变化：新加入的应用自动加载图标 + 刷新中文名
+        // 订阅宫格数据变化，刷新中文名；图标属于 Compose 绘制层，由 HomeScreen 加载。
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(
                 gridRepository.gridItems,
                 gridRepository.folderApps,
                 AppListRepository.installedApps,
             ) { items, folderApps, apps ->
-                val pkgs = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).distinct()
-                pkgs.forEach { pkg ->
-                    if (pkg !in _icons.value) {
-                        launch { loadIcon(pkg) }
-                    }
-                }
                 // 中文名映射（从预加载的全局应用列表取）
                 val labelMap = apps.associate { it.pkg to it.label }
                 _labels.value = labelMap
@@ -199,31 +202,6 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             EngineManager.shizukuBinderConnected.collect { _shizukuRunning.value = it }
-        }
-    }
-
-    private suspend fun loadIcon(pkg: String) {
-        runCatching {
-            AppIconLoader.loadIcon(pkg)
-        }.onSuccess { icon ->
-            iconQueue.send(pkg to icon)
-        }
-    }
-
-    /** 批量提交协程（在 init 里启动） */
-    private fun startIconFlusher() {
-        viewModelScope.launch {
-            while (true) {
-                val first = iconQueue.receive()
-                val batch = mutableListOf(first)
-                // 100ms 内到达的图标合并成一批，避免逐个重组
-                withTimeoutOrNull(100) {
-                    while (true) batch.add(iconQueue.receive())
-                }
-                if (batch.isNotEmpty()) {
-                    _icons.value = _icons.value + batch
-                }
-            }
         }
     }
 
@@ -263,12 +241,33 @@ class HomeViewModel(
         settingsRepository.setIconPack(pkg) // 持久化（之前缺失，重启丢失）
         AppIconLoader.iconPackPkg = pkg
         AppIconLoader.clearCache()
-        _icons.value = emptyMap()
-        // 重新加载全部已添加应用图标
-        gridRepository.allAddedPackages().forEach { p ->
-            viewModelScope.launch { loadIcon(p) }
-        }
     }
+
+    fun toggleLock(pkg: String) = gridRepository.toggleLock(pkg)
+
+    fun renameFolder(folderId: Long, name: String) = gridRepository.renameFolder(folderId, name)
+
+    fun deleteFolder(folderId: Long) = gridRepository.deleteFolder(folderId)
+
+    fun setTransparentBg(enabled: Boolean) = settingsRepository.setTransparentBg(enabled)
+
+    fun setWallpaperOverlay(alpha: Float) = settingsRepository.setWallpaperOverlay(alpha)
+
+    fun setAnimationsEnabled(enabled: Boolean) = settingsRepository.setAnimationsEnabled(enabled)
+
+    fun setFreezeStyle(style: String) = settingsRepository.setFreezeStyle(style)
+
+    fun setIconShape(shape: String) = settingsRepository.setIconShape(shape)
+
+    fun setColumns(value: Int) = settingsRepository.setColumns(value)
+
+    fun setIconSize(value: Int) = settingsRepository.setIconSize(value)
+
+    fun setVerticalSpace(value: Int) = settingsRepository.setVerticalSpace(value)
+
+    fun setDockIconSize(value: Int) = settingsRepository.setDockIconSize(value)
+
+    fun setFolderPreview(value: Int) = settingsRepository.setFolderPreview(value)
 
     // ═══════════════════════════════════════
     // 冻结操作
@@ -319,6 +318,12 @@ class HomeViewModel(
     /** 智能清理：停用底部栏所有打开应用（除锁定） */
     fun quickClean() {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
+        // 权限可能刚刚被用户撤销，先刷新而不是等待旧引擎状态进入 Binder 超时。
+        EngineManager.refresh()
+        if (!EngineManager.isEngineReady()) {
+            toast("智能清理失败：Shizuku 未运行或未授权")
+            return
+        }
         viewModelScope.launch {
             freezeUseCase.quickClean()
                 .onSuccess { n ->
@@ -327,7 +332,7 @@ class HomeViewModel(
                     // 批量结果用系统 Toast（Snackbar 在底部易被忽略）
                     toast("智能清理：已停用 $n 个应用")
                 }
-                .onFailure { showMessage("智能清理失败：${it.message}") }
+                .onFailure { toast("智能清理失败：${it.message ?: "Shizuku 未运行或未授权"}") }
         }
     }
 

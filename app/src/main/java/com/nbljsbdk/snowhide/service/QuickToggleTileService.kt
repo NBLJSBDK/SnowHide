@@ -34,7 +34,8 @@ class QuickToggleTileService : TileService() {
                 // 熄灭：冻回刚才打开的应用（有锁跳过）
                 val result = runCatching { runBlocking { useCase.turnOff() } }.getOrNull()
                 val resultData = result?.getOrNull()
-                setTileActive(tile, false)
+                // 失败时 opened 快照仍保留，磁贴保持点亮以便用户重试。
+                setTileActive(tile, resultData == null && useCase.opened.value.isNotEmpty())
                 val msg = buildString {
                     append("快速启停已关闭")
                     resultData?.let {

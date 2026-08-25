@@ -13,6 +13,8 @@ class CommandTest {
     @Test
     fun packageNameRejectsShellCharacters() {
         assertTrue(PackageName.isValid("com.example.app_2"))
+        assertFalse(PackageName.isValid(""))
+        assertFalse(PackageName.isValid("com.example.app\nwhoami"))
         assertFalse(PackageName.isValid("com.example;rm"))
         assertFalse(PackageName.isValid("com.example app"))
         assertTrue(PackageName.parse("com.example.app").isSuccess)
@@ -27,6 +29,10 @@ class CommandTest {
         assertEquals(
             "pm uninstall --user 10 com.example.app",
             PmCommand.build(PmOperation.UNINSTALL, "com.example.app", userId = 10).getOrThrow(),
+        )
+        assertEquals(
+            "pm disable com.example.app",
+            PmCommand.build(PmOperation.DISABLE, "com.example.app").getOrThrow(),
         )
         assertTrue(PmCommand.build(PmOperation.ENABLE, "bad;command").isFailure)
         assertTrue(PmCommand.build(PmOperation.DISABLE, "com.example.app", userId = -1).isFailure)

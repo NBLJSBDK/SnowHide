@@ -54,7 +54,7 @@ gradlew.bat assembleDebug / assembleRelease
 ## 4. Versioning (do NOT change casually)
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
-- `versionName` = 语义版本（如 `0.2.1`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
+- `versionName` = 语义版本（当前 v0.3 施工值 `0.3.0`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
 
@@ -207,7 +207,7 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 
 ---
 
-## 11. Recent features (current state — 2026-08-22)
+## 11. Recent features (current state — 2026-08-24)
 
 ```
 ee370b4 style: 调整设置页卡片层级
@@ -245,6 +245,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - v0.2.0：Recent 划卡停用（自动/手动校准、会话差异、退出后批量冻结）完成并通过真机验证；经 Shizuku 静默读取真实任务包名，支持 ColorOS 同名卡片并优化滑动时序
 - v0.2.0：关于应用显示语义版本、编译时间和版本历史
 - v0.2.1：修复 Recent 基线建立期间误停用全部应用；改为任务快照确认后逐包即时停用，不触发主界面批量进度条；增加持久化补执行队列、雪藏自身排除和应用名 Toast
+- v0.3.x 架构施工：组合根/AppShell、受控命令、QuickToggle/Backup 数据边界、Recent/整理/文件夹纯逻辑、反馈平台适配已落地；增加 JVM 回归测试和 Android Test 编译门，当前待真机验收
 
 **未完成（候选下一步）**：
 1. 应用分身（pm --user 分用户冻结）
@@ -262,7 +263,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 1. **debug 包比 release 卡**：debug 无 R8 优化 + debuggable，大列表渲染差异明显——日常使用 release（正常）。
 2. **图标包覆盖不全**：未收录的应用回退系统图标（可配合「图标形状=圆形」统一视觉）。
-3. **无自动化测试**：验证 = WSL 编译 + 用户真机测试。
+3. **Android instrumentation 尚未运行**：JVM 回归测试已建立并通过，Android Test APK 已编译，仍需连接设备执行。
 4. **应用桥**：功能已研究清楚（黑白门 3.3.3 反编译实证），优先级最后；快速启停一定程度替代它。
 5. **调试日志已清空**：以后加日志用 `BuildConfig.DEBUG` 门控。
 6. **应用分身规格尚未细化**：正式实施前需补充用户空间选择、状态查询、数据模型和跨用户安全规则。
@@ -276,6 +277,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 基线历史仍包含 `v0.1.6`（指向 `69df809`）及提示、震动、设置页卡片层级功能。
 - `v0.2.0` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
 - `v0.2.1` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
+- v0.3 代码当前在 `master` 本地施工，最近已提交至 `d1b5701`/`b58862b`，后续边界与测试补丁尚未提交；`v0.3.0` tag 尚未创建。
 - 未经用户明确允许，不执行 commit、amend、push 或创建 tag。
 
 ---

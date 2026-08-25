@@ -5,9 +5,11 @@ import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
 import com.nbljsbdk.snowhide.data.repo.BackupRepository
+import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
 import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
+import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
 
 /**
  * 进程级依赖容器——UseCase 的唯一构造点。
@@ -34,5 +36,10 @@ class AppContainer {
     /** 备份业务入口（SAF 由 SettingsScreen 适配） */
     val backupUseCase: BackupUseCase by lazy {
         BackupUseCase(BackupRepository)
+    }
+
+    /** Recent 校准数据门面（校准触发由 AppShell 注入系统回调）。 */
+    val recentCalibrationUseCase: RecentCalibrationUseCase by lazy {
+        RecentCalibrationUseCase(RecentCalibrationRepository)
     }
 }

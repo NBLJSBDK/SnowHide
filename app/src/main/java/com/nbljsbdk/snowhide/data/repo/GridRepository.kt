@@ -1,9 +1,11 @@
 package com.nbljsbdk.snowhide.data.repo
 
 import android.content.Context
+import com.nbljsbdk.snowhide.core.model.FreezeTargetStore
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.FolderApp
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.data.model.migrateLegacyLockedItems
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +23,7 @@ import org.json.JSONObject
  *
  * UI 永不直连本仓库——所有读写通过 domain 层用例。
  */
-object GridRepository {
+object GridRepository : FreezeTargetStore {
 
     private lateinit var prefs: android.content.SharedPreferences
 
@@ -46,9 +48,15 @@ object GridRepository {
             persistFolderApps()
         }
         // 锁定集：独立存储（覆盖文件夹内应用）；旧版 GridItem.locked=true 迁移进来
-        val migratedLocked = _gridItems.value.filter { it.locked }.mapNotNull { it.pkg }
-        _lockedPackages.value = loadLockedPackages() + migratedLocked
-        if (migratedLocked.isNotEmpty()) persistLocked()
+        val persistedLocked = loadLockedPackages()
+        val hadLegacyLockedField = _gridItems.value.any { it.locked }
+        val lockMigration = migrateLegacyLockedItems(_gridItems.value, persistedLocked)
+        _gridItems.value = lockMigration.items
+        _lockedPackages.value = lockMigration.lockedPackages
+        if (hadLegacyLockedField) {
+            persistLocked()
+            persist()
+        }
         // 关键：把 id 种子推进到已有数据最大 id 之上。
         // 种子默认=当前毫秒，但进程被系统杀掉重启后时间可能回拨
         // （手动调时间/网络校时），新 id 撞上旧数据 id 会导致
@@ -84,7 +92,7 @@ object GridRepository {
     // ═══════════════════════════════════════
 
     /** 应用是否已添加（主屏或任一文件夹） */
-    fun isAppAdded(pkg: String): Boolean =
+    override fun isAppAdded(pkg: String): Boolean =
         _gridItems.value.any { it.pkg == pkg } || _folderApps.value.any { it.pkg == pkg }
 
     /** 添加应用到主屏末尾 */
@@ -251,7 +259,7 @@ object GridRepository {
     }
 
     /** 查询应用锁定状态（主屏与文件夹成员通用） */
-    fun isLocked(pkg: String): Boolean = pkg in _lockedPackages.value
+    override fun isLocked(pkg: String): Boolean = pkg in _lockedPackages.value
 
     /** 锁定集持久化 */
     private fun persistLocked() {
@@ -276,8 +284,11 @@ object GridRepository {
     // ═══════════════════════════════════════
 
     /** 已添加的全部应用包名（底部图标栏数据源：已添加且解冻的应用） */
-    fun allAddedPackages(): List<String> =
+    override fun allAddedPackages(): List<String> =
         (_gridItems.value.mapNotNull { it.pkg } + _folderApps.value.map { it.pkg }).distinct()
+
+    override fun folderPackages(folderId: Long): List<String> =
+        _folderApps.value.filter { it.folderId == folderId }.map { it.pkg }
 
     // ═══════════════════════════════════════
     // 持久化（SharedPreferences + JSON）

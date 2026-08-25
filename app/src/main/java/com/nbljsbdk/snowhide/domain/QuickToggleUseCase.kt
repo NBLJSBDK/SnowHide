@@ -1,10 +1,10 @@
 package com.nbljsbdk.snowhide.domain
 
-import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.engine.EngineProvider
+import com.nbljsbdk.snowhide.core.model.FreezeTargetStore
+import com.nbljsbdk.snowhide.core.model.QuickToggleStore
 import com.nbljsbdk.snowhide.core.operation.PmOperation
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
-import com.nbljsbdk.snowhide.data.repo.GridRepository
-import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
 
 /**
  * 快速启停触发用例（下拉磁贴逻辑，§3.9 用户拍板简化版）
@@ -17,9 +17,9 @@ import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
  * - 批量走共享 execBatched（阈值 20，统一进度）
  */
 class QuickToggleUseCase(
-    private val gridRepository: GridRepository,
-    private val engineManager: EngineManager,
-    private val repository: QuickToggleRepository,
+    private val targetStore: FreezeTargetStore,
+    private val engineProvider: EngineProvider,
+    private val repository: QuickToggleStore,
 ) {
 
     /** 磁贴只需观察是否存在本次点亮快照，不接触 SP。 */
@@ -34,9 +34,9 @@ class QuickToggleUseCase(
 
     /** 点亮：解冻成员中「已添加且被冻结」的应用，并记录本批 opened */
     suspend fun lightUp(): Result<Int> {
-        val engine = engineManager.primaryEngine.value
+        val engine = engineProvider.primaryEngine.value
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
-        val added = gridRepository.allAddedPackages().toSet()
+        val added = targetStore.allAddedPackages().toSet()
         val frozen = engine.listFrozenPackages().getOrElse { return Result.failure(it) }.toSet()
         val targets = repository.members.value.filter { it in added && it in frozen }
 
@@ -57,12 +57,15 @@ class QuickToggleUseCase(
     /** 熄灭：冻回本批打开的应用；有锁的跳过 */
     suspend fun turnOff(): Result<TurnOffResult> {
         val opened = repository.opened.value
-        val unlocked = opened.filterNot { gridRepository.isLocked(it) }
-        val lockedSkipped = opened.filter { gridRepository.isLocked(it) }
-        val engine = engineManager.primaryEngine.value
+        val unlocked = opened.filterNot { targetStore.isLocked(it) }
+        val lockedSkipped = opened.filter { targetStore.isLocked(it) }
+        val engine = engineProvider.primaryEngine.value
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         // 批量冻结（统一进度）
         val result = engine.execBatched(unlocked, PmOperation.DISABLE_USER, "停用")
+        if (result.isFailure) {
+            return Result.failure(result.exceptionOrNull() ?: IllegalStateException("快速启停停用失败"))
+        }
         repository.clearOpened()
         // 同步共享冻结状态（主屏霜化/dock 立即更新）
         FrozenStateStore.refresh()

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
+import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 
 /**
@@ -68,6 +69,8 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 fun SettingsScreen(
     onClose: () -> Unit,
     backupUseCase: BackupUseCase,
+    recentCalibrationUseCase: RecentCalibrationUseCase,
+    onRequestRecentCalibration: () -> Unit,
     onSyncStatus: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
@@ -246,7 +249,11 @@ fun SettingsScreen(
         return
     }
     if (showSwipeDisableSettings) {
-        SwipeDisableSettingsScreen(onBack = { showSwipeDisableSettings = false })
+        SwipeDisableSettingsScreen(
+            onBack = { showSwipeDisableSettings = false },
+            calibrationUseCase = recentCalibrationUseCase,
+            onRequestCalibration = onRequestRecentCalibration,
+        )
         return
     }
 

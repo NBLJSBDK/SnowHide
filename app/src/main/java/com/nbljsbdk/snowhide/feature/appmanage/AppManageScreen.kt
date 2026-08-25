@@ -60,8 +60,8 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
  * 左栏：未添加应用（默认安装时间倒序，左下排序选项）
  * 右栏：已添加应用（默认名称正序，右下排序选项）
  * 滑动移动：左栏只允许右滑加入，右栏只允许左滑解冻并移出
- * 顶栏三按钮（长按=说明，点击=弹窗确认）：
- *   返回=丢弃改动并返回；确认=加入列表不冻结；应用=加入列表并立即冻结
+ * 顶栏按钮（长按=说明，点击=弹窗确认）：
+ *   确认=返回且不额外冻结；应用=只冻结本次新增应用并返回
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +80,10 @@ fun AppManageScreen(
     val rightApps by viewModel.rightApps.collectAsState()
     val loaded by AppListRepository.loaded.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.beginSession()
+    }
 
     // 顶栏弹窗：apply / help-confirm / help-apply
     var dialog by remember { mutableStateOf<String?>(null) }
@@ -103,7 +107,7 @@ fun AppManageScreen(
             TopAppBar(
                 title = { Text("增删应用", fontWeight = FontWeight.Bold) },
                 actions = {
-                    // 两按钮：确认=退出；应用=冻结已添加列表未冻结项并退出（长按=说明）
+                    // 两按钮：确认=退出；应用=只冻结本次新增且未冻结的应用并退出（长按=说明）
                     TopBarAction("确认", onClick = { onClose() },
                         onLongClick = { dialog = "help-confirm" })
                     TopBarAction("应用", onClick = { dialog = "apply" },
@@ -219,9 +223,9 @@ fun AppManageScreen(
     when (dialog) {
         "apply" -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("冻结已添加应用？") },
+            title = { Text("冻结本次新增应用？") },
             text = {
-                Text("将冻结「已添加应用」列表里所有未冻结的应用并退出。\n（移出是即时生效的，本按钮不管移出）")
+                Text("将冻结本次进入页面后新加入、且当前未冻结的应用并退出。\n（增删即时生效，已有应用不会被处理）")
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -233,7 +237,7 @@ fun AppManageScreen(
             },
         )
         "help-confirm" -> HelpDialog("确认", "加入/移出已即时生效，点击确认直接返回主界面。") { dialog = null }
-        "help-apply" -> HelpDialog("应用", "冻结「已添加应用」列表里所有未冻结的应用并返回主界面。") { dialog = null }
+        "help-apply" -> HelpDialog("应用", "只冻结本次进入页面后新加入、且当前未冻结的应用并返回主界面。") { dialog = null }
     }
 }
 

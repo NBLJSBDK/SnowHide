@@ -1,6 +1,6 @@
 package com.nbljsbdk.snowhide.core.mode
 
-import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.engine.EngineProvider
 import com.nbljsbdk.snowhide.core.operation.PmCommand
 import com.nbljsbdk.snowhide.core.operation.PmOperation
 
@@ -11,7 +11,7 @@ import com.nbljsbdk.snowhide.core.operation.PmOperation
  * Device Owner 是 suspend+hide 两步组合）。分发逻辑收在这里，
  * 新增模式/引擎时只需扩展本类，UI 与数据层零改动。
  */
-class FreezeExecutor(private val engineManager: EngineManager) {
+class FreezeExecutor(private val engineProvider: EngineProvider) {
 
     /**
      * 冻结指定应用
@@ -22,7 +22,7 @@ class FreezeExecutor(private val engineManager: EngineManager) {
         if (!mode.isImplemented) {
             return Result.failure(NotImplementedError("${mode.label} 模式未开放"))
         }
-        val engine = engineManager.primaryEngine.value
+        val engine = engineProvider.primaryEngine.value
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎（请先授权 Shizuku）"))
         return when (mode) {
             FreezeMode.FREEZE -> engine.disableApp(pkg)
@@ -38,7 +38,7 @@ class FreezeExecutor(private val engineManager: EngineManager) {
      * 解冻指定应用（按冻结时使用的模式反向操作）
      */
     suspend fun unfreeze(mode: FreezeMode, pkg: String): Result<Unit> {
-        val engine = engineManager.primaryEngine.value
+        val engine = engineProvider.primaryEngine.value
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎（请先授权 Shizuku）"))
         return when (mode) {
             FreezeMode.FREEZE -> engine.enableApp(pkg)
@@ -53,7 +53,7 @@ class FreezeExecutor(private val engineManager: EngineManager) {
      * 查询应用是否处于冻结状态
      */
     suspend fun isFrozen(mode: FreezeMode, pkg: String): Result<Boolean> {
-        val engine = engineManager.primaryEngine.value
+        val engine = engineProvider.primaryEngine.value
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         return engine.isFrozen(pkg)
     }

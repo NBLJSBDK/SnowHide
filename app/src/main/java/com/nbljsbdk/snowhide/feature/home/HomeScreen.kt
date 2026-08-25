@@ -87,6 +87,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
@@ -116,35 +118,40 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
  */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(
+fun HomeContent(
     modifier: Modifier = Modifier,
     onRequestShizuku: () -> Unit = {},
-    viewModel: HomeViewModel,
+    state: HomeUiState,
+    actions: HomeActions,
 ) {
-    val gridItems by viewModel.gridRepository.gridItems.collectAsState()
-    val folders by viewModel.gridRepository.folders.collectAsState()
-    val folderApps by viewModel.gridRepository.folderApps.collectAsState()
-    val frozenStates by viewModel.frozenStates.collectAsState()
-    val appStates by viewModel.appStates.collectAsState()
-    val lockedPackages by viewModel.gridRepository.lockedPackages.collectAsState()
-    val icons by viewModel.icons.collectAsState()
-    val labels by viewModel.labels.collectAsState()
-    val engineReady by viewModel.engineReady.collectAsState()
-    val shizukuRunning by viewModel.shizukuRunning.collectAsState()
-    val columns by viewModel.settingsRepository.columns.collectAsState()
-    val iconSize by viewModel.settingsRepository.iconSize.collectAsState()
-    val verticalSpace by viewModel.settingsRepository.verticalSpace.collectAsState()
-    val dockIconSize by viewModel.settingsRepository.dockIconSize.collectAsState()
-    val folderPreview by viewModel.settingsRepository.folderPreview.collectAsState()
-    val showAppName by viewModel.settingsRepository.showAppName.collectAsState()
-    val showReturnHomeButton by viewModel.settingsRepository.showReturnHomeButton.collectAsState()
-    val resetHomeOnReentry by viewModel.settingsRepository.resetHomeOnReentry.collectAsState()
-    val showReentryToast by viewModel.settingsRepository.showReentryToast.collectAsState()
-    val autoSyncStatus by viewModel.settingsRepository.autoSyncStatus.collectAsState()
-    val message by viewModel.message.collectAsState()
-    val menuOpen by viewModel.menuOpen.collectAsState()
-    val organizing by viewModel.organizing.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
+    val gridItems = state.gridItems
+    val folders = state.folders
+    val folderApps = state.folderApps
+    val frozenStates = state.frozenStates
+    val appStates = state.appStates
+    val lockedPackages = state.lockedPackages
+    var icons by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
+    var loadedIconPack by remember { mutableStateOf<String?>(null) }
+    val iconPackages = remember(gridItems, folderApps) {
+        (gridItems.mapNotNull { it.pkg } + folderApps.map { it.pkg }).distinct()
+    }
+    val labels = state.labels
+    val engineReady = state.engineReady
+    val shizukuRunning = state.shizukuRunning
+    val columns = state.columns
+    val iconSize = state.iconSize
+    val verticalSpace = state.verticalSpace
+    val dockIconSize = state.dockIconSize
+    val folderPreview = state.folderPreview
+    val showAppName = state.showAppName
+    val showReturnHomeButton = state.showReturnHomeButton
+    val resetHomeOnReentry = state.resetHomeOnReentry
+    val showReentryToast = state.showReentryToast
+    val autoSyncStatus = state.autoSyncStatus
+    val message = state.message
+    val menuOpen = state.menuOpen
+    val organizing = state.organizing
+    val searchQuery = state.searchQuery
     var searchOpen by remember { mutableStateOf(false) }
 
     // 搜索框展开时自动聚焦弹键盘（用户拍板）
@@ -175,7 +182,7 @@ fun HomeScreen(
     fun handleAppClick(pkg: String) {
         when (appStates[pkg]) {
             AppRuntimeState.MISSING, AppRuntimeState.UNKNOWN -> invalidAppTarget = pkg
-            else -> viewModel.openApp(pkg)
+            else -> actions.openApp(pkg)
         }
     }
     // 文件夹重命名/删除弹窗状态
@@ -191,16 +198,39 @@ fun HomeScreen(
     var beautyPanelOpen by remember { mutableStateOf(false) }
 
     // 美化浮框数据：当前图标包/透明开关 + 已装图标包列表
-    val iconPack by viewModel.settingsRepository.iconPack.collectAsState()
-    val transparentBg by viewModel.settingsRepository.transparentBg.collectAsState()
-    val wallpaperOverlay by viewModel.settingsRepository.wallpaperOverlay.collectAsState()
-    val iconShape by viewModel.settingsRepository.iconShape.collectAsState()
-    val animationsEnabled by viewModel.settingsRepository.animationsEnabled.collectAsState()
-    val freezeStyleName by viewModel.settingsRepository.freezeStyle.collectAsState()
+    val iconPack = state.iconPack
+    val transparentBg = state.transparentBg
+    val wallpaperOverlay = state.wallpaperOverlay
+    val iconShape = state.iconShape
+    val animationsEnabled = state.animationsEnabled
+    val freezeStyleName = state.freezeStyle
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
         .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
     var iconPacks by remember { mutableStateOf<List<com.nbljsbdk.snowhide.ui.util.AppIconLoader.IconPackInfo>>(emptyList()) }
     var iconPacksLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(iconPack, iconPackages) {
+        com.nbljsbdk.snowhide.ui.util.AppIconLoader.iconPackPkg = iconPack
+        if (loadedIconPack != iconPack) {
+            icons = emptyMap()
+            loadedIconPack = iconPack
+        }
+        com.nbljsbdk.snowhide.ui.util.AppIconLoader.prewarm()
+        val current = icons
+        val loaded = iconPackages
+            .filterNot { it in current }
+            .map { pkg ->
+                async {
+                    pkg to runCatching {
+                        com.nbljsbdk.snowhide.ui.util.AppIconLoader.loadIcon(pkg)
+                    }.getOrNull()
+                }
+            }
+            .awaitAll()
+        icons = current
+            .filterKeys { it in iconPackages }
+            .toMutableMap()
+            .apply { loaded.forEach { (pkg, icon) -> if (icon != null) put(pkg, icon) } }
+    }
     LaunchedEffect(beautyPanelOpen) {
         // 打开时若列表为空才扫描（AppIconLoader 内部有扫描缓存，秒回）
         if (beautyPanelOpen && iconPacks.isEmpty()) {
@@ -231,14 +261,14 @@ fun HomeScreen(
     LaunchedEffect(message) {
         message?.let {
             snackbarHostState.showSnackbar(it)
-            viewModel.consumeMessage()
+            actions.consumeMessage()
         }
     }
 
     LaunchedEffect(engineReady, autoSyncStatus) {
         if (engineReady) {
-            if (autoSyncStatus) viewModel.syncActualStatus(silent = true)
-            else viewModel.refreshFrozenStates()
+            if (autoSyncStatus) actions.syncActualStatus(silent = true)
+            else actions.refreshFrozenStates()
         }
     }
 
@@ -291,8 +321,8 @@ fun HomeScreen(
                         stoppedAt = 0L
                         if (resetHomeOnReentry && awayFor >= REENTRY_HOME_DELAY_MS) {
                             searchOpen = false
-                            viewModel.setSearchQuery("")
-                            viewModel.dismissMenu()
+                            actions.setSearchQuery("")
+                            actions.dismissMenu()
                             scope.launch { pagerState.scrollHome(actualCount) }
                             FeedbackController.toast(
                                 context,
@@ -301,7 +331,7 @@ fun HomeScreen(
                             )
                         }
                         if (hasStarted && autoSyncStatus && engineReady) {
-                            viewModel.syncActualStatus(silent = true)
+                            actions.syncActualStatus(silent = true)
                         }
                         hasStarted = true
                     }
@@ -336,7 +366,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .clickable {
                                     organizeViewModel.commitFolderName()
-                                    viewModel.setOrganizing(false)
+                                     actions.setOrganizing(false)
                                 }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
@@ -344,7 +374,7 @@ fun HomeScreen(
                         // 搜索框（过滤宫格；展开时自动聚焦弹键盘）
                         OutlinedTextField(
                             value = searchQuery,
-                            onValueChange = { viewModel.setSearchQuery(it) },
+                             onValueChange = { actions.setSearchQuery(it) },
                             placeholder = { Text("搜索应用") },
                             singleLine = true,
                             modifier = Modifier
@@ -354,7 +384,7 @@ fun HomeScreen(
                         )
                         TextButton(onClick = {
                             searchOpen = false
-                            viewModel.setSearchQuery("")
+                             actions.setSearchQuery("")
                         }) { Text("取消") }
                     } else {
                         IconButton(onClick = { searchOpen = true }) {
@@ -364,7 +394,7 @@ fun HomeScreen(
                                 tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
-                        IconButton(onClick = { viewModel.toggleMenu() }) {
+                         IconButton(onClick = { actions.toggleMenu() }) {
                             Icon(
                                 Icons.Default.Settings,
                                 contentDescription = "设置",
@@ -373,19 +403,19 @@ fun HomeScreen(
                         }
                         GearMenu(
                             expanded = menuOpen,
-                            onDismiss = { viewModel.dismissMenu() },
+                             onDismiss = { actions.dismissMenu() },
                             onOrganize = {
                                 organizeViewModel.enter(
                                     if (inFolder) sortedFolders.getOrNull(pageIdx - 1)?.id else null,
                                 )
-                                viewModel.setOrganizing(true)
+                                 actions.setOrganizing(true)
                             },
-                            onUnfreezeAll = { viewModel.unfreezeAll() },
-                            onFreezeAll = { viewModel.freezeAll() },
-                            onAppManage = { viewModel.openAppManage() },
-                            onQuickToggle = { viewModel.openQuickToggle() },
-                            onSettings = { viewModel.openSettings() },
-                            onAbout = { viewModel.openAbout() },
+                             onUnfreezeAll = { actions.unfreezeAll() },
+                             onFreezeAll = { actions.freezeAll() },
+                             onAppManage = { actions.openAppManage() },
+                             onQuickToggle = { actions.openQuickToggle() },
+                             onSettings = { actions.openSettings() },
+                             onAbout = { actions.openAbout() },
                         )
                     }
                 },
@@ -414,10 +444,10 @@ fun HomeScreen(
         BackHandler(enabled = searchOpen || organizing || pagerState.currentPage % actualCount != 0) {
             if (searchOpen) {
                 searchOpen = false
-                viewModel.setSearchQuery("")
+                 actions.setSearchQuery("")
             } else if (organizing) {
                 organizeViewModel.commitFolderName()
-                viewModel.setOrganizing(false)
+                actions.setOrganizing(false)
             } else {
                 scope.launch { if (animationsEnabled) pagerState.animateHome(actualCount) else pagerState.scrollHome(actualCount) }
             }
@@ -467,7 +497,7 @@ fun HomeScreen(
                         ShizukuGuideCard(
                             running = shizukuRunning,
                             onRequest = onRequestShizuku,
-                            onRefresh = { viewModel.refreshEngineStatus() },
+                             onRefresh = { actions.refreshEngineStatus() },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
@@ -615,8 +645,8 @@ fun HomeScreen(
         }
 
         // 批量操作进度条（停用/启用全部、智能清理、神之一手、快速启停）
-        val batchProgress by com.nbljsbdk.snowhide.data.repo.BatchProgress.progress.collectAsState()
-        val batchLabel by com.nbljsbdk.snowhide.data.repo.BatchProgress.label.collectAsState()
+        val batchProgress = state.batchProgress
+        val batchLabel = state.batchLabel
         if (batchProgress != null) {
             Column(
                 modifier = Modifier
@@ -686,13 +716,13 @@ fun HomeScreen(
                 icons = icons,
                 iconSize = dockIconSize.dp,
                 transparentBg = transparentBg,
-                onQuickClean = { viewModel.quickClean() },
+                 onQuickClean = { actions.quickClean() },
                 onAppClick = { handleAppClick(it) },
                 onAppLongClick = { pkg ->
-                    viewModel.gridRepository.toggleLock(pkg)
+                     actions.toggleLock(pkg)
                     HapticController.vibrate(context, HapticType.FREEZE_LOCK)
                 },
-                onAppSwipeUp = { pkg -> viewModel.toggleFreeze(pkg) },
+                 onAppSwipeUp = { pkg -> actions.toggleFreeze(pkg) },
             )
         }
         }
@@ -727,7 +757,7 @@ fun HomeScreen(
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     if (renameText.isNotBlank()) {
-                        viewModel.gridRepository.renameFolder(folder.id, renameText.trim())
+                         actions.renameFolder(folder.id, renameText.trim())
                     }
                     renameFolder = null
                 }) { Text("确定") }
@@ -746,7 +776,7 @@ fun HomeScreen(
             text = { Text("删除「${folder.name}」？其中应用将移回主屏幕。") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    viewModel.gridRepository.deleteFolder(folder.id)
+                     actions.deleteFolder(folder.id)
                     deleteFolderTarget = null
                 }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
@@ -764,7 +794,7 @@ fun HomeScreen(
             text = {
                 Column {
                     DialogAction("是否移除该应用（解冻并移出）") {
-                        viewModel.removeApp(pkg)
+                         actions.removeApp(pkg)
                         removeAppTarget = null
                     }
                     DialogAction("移除并卸载（⚠️ 会删除应用数据）") {
@@ -786,7 +816,7 @@ fun HomeScreen(
             text = { Text("确定要卸载 ${labels[pkg] ?: pkg} 吗？\n\n⚠️ 这会删除该应用及其全部数据，且不可恢复。") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    viewModel.uninstallApp(pkg)
+                     actions.uninstallApp(pkg)
                     uninstallTarget = null
                 }) { Text("卸载", color = MaterialTheme.colorScheme.error) }
             },
@@ -829,7 +859,7 @@ fun HomeScreen(
             locationName = target.pkg?.let(::appLocation) ?: "",
             targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
-            onToggleFreeze = { pkg -> viewModel.toggleFreeze(pkg); longPressTarget = null },
+             onToggleFreeze = { pkg -> actions.toggleFreeze(pkg); longPressTarget = null },
             onOpen = { pkg -> handleAppClick(pkg); longPressTarget = null },
             onRemove = { pkg ->
                 removeAppTarget = pkg
@@ -849,10 +879,10 @@ fun HomeScreen(
                 longPressTarget = null
             },
             onFreezeFolder = { folder ->
-                viewModel.freezeFolder(folder); longPressTarget = null
+                 actions.freezeFolder(folder); longPressTarget = null
             },
             onUnfreezeFolder = { folder ->
-                viewModel.unfreezeFolder(folder); longPressTarget = null
+                 actions.unfreezeFolder(folder); longPressTarget = null
             },
         )
     }
@@ -894,12 +924,12 @@ fun HomeScreen(
             iconPacksLoading = iconPacksLoading,
             onRefreshIconPacks = { refreshIconPacks() },
             iconShape = iconShape,
-            onIconPackSelect = { pkg -> viewModel.applyIconPack(pkg) },
-            onTransparentToggle = { on -> viewModel.settingsRepository.setTransparentBg(on) },
-            onWallpaperOverlayChange = { alpha -> viewModel.settingsRepository.setWallpaperOverlay(alpha) },
-            onAnimationsToggle = { on -> viewModel.settingsRepository.setAnimationsEnabled(on) },
-            onFreezeStyleSelect = { style -> viewModel.settingsRepository.setFreezeStyle(style.name) },
-            onIconShapeSelect = { shape -> viewModel.settingsRepository.setIconShape(shape) },
+             onIconPackSelect = { pkg -> actions.applyIconPack(pkg) },
+             onTransparentToggle = { on -> actions.setTransparentBg(on) },
+             onWallpaperOverlayChange = { alpha -> actions.setWallpaperOverlay(alpha) },
+             onAnimationsToggle = { on -> actions.setAnimationsEnabled(on) },
+             onFreezeStyleSelect = { style -> actions.setFreezeStyle(style.name) },
+             onIconShapeSelect = { shape -> actions.setIconShape(shape) },
             onDismiss = { beautyPanelOpen = false },
         )
     }
@@ -912,11 +942,11 @@ fun HomeScreen(
             verticalSpace = verticalSpace,
             dockIconSize = dockIconSize,
             folderPreview = folderPreview,
-            onColumnsChange = { viewModel.settingsRepository.setColumns(it) },
-            onIconSizeChange = { viewModel.settingsRepository.setIconSize(it) },
-            onVerticalSpaceChange = { viewModel.settingsRepository.setVerticalSpace(it) },
-            onDockIconSizeChange = { viewModel.settingsRepository.setDockIconSize(it) },
-            onFolderPreviewChange = { viewModel.settingsRepository.setFolderPreview(it) },
+             onColumnsChange = { actions.setColumns(it) },
+             onIconSizeChange = { actions.setIconSize(it) },
+             onVerticalSpaceChange = { actions.setVerticalSpace(it) },
+             onDockIconSizeChange = { actions.setDockIconSize(it) },
+             onFolderPreviewChange = { actions.setFolderPreview(it) },
             onDismiss = { layoutPanelOpen = false },
         )
     }

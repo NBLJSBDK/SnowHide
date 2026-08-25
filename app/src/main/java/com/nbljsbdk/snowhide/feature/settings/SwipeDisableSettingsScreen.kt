@@ -28,18 +28,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
-import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
-import com.nbljsbdk.snowhide.service.RecentSwipeController
+import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
 
 /** Recent 划卡停用三级设置页。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SwipeDisableSettingsScreen(onBack: () -> Unit) {
+fun SwipeDisableSettingsScreen(
+    onBack: () -> Unit,
+    calibrationUseCase: RecentCalibrationUseCase,
+    onRequestCalibration: () -> Unit,
+) {
     val context = LocalContext.current
     SettingsRepository.init(context)
-    RecentCalibrationRepository.init(context)
     val enabled by SettingsRepository.swipeDisableEnabled.collectAsState()
-    val packages by RecentCalibrationRepository.packages.collectAsState()
+    val packages by calibrationUseCase.packages.collectAsState()
     val labels = remember(packages) {
         packages.associateWith { pkg ->
             runCatching {
@@ -126,10 +128,10 @@ fun SwipeDisableSettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    TextButton(onClick = { RecentSwipeController.requestCalibration(context) }) {
+                    TextButton(onClick = onRequestCalibration) {
                         Text("手动校准")
                     }
-                    TextButton(onClick = { RecentCalibrationRepository.clear() }) {
+                    TextButton(onClick = calibrationUseCase::clear) {
                         Text("清除识别结果")
                     }
                 }

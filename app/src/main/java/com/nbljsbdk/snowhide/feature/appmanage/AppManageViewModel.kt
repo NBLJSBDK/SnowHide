@@ -12,6 +12,7 @@ import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
+import com.nbljsbdk.snowhide.domain.appmanage.AppManageFreezePlanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,7 @@ class AppManageViewModel(
 ) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
+    private var initialPackages: Set<String>? = null
 
     /**
      * ViewModel 工厂由组合根持有业务用例，页面只负责传入依赖。
@@ -230,6 +232,11 @@ class AppManageViewModel(
         _filter.value = _filter.value.copy(rightSort = _filter.value.rightSort.next())
     }
 
+    /** 每次进入增删页建立基线，避免「应用」误处理之前已存在的应用。 */
+    fun beginSession() {
+        initialPackages = GridRepository.allAddedPackages().toSet()
+    }
+
     private fun SortMode.next(): SortMode = when (this) {
         SortMode.TIME_DESC -> SortMode.TIME_ASC
         SortMode.TIME_ASC -> SortMode.NAME_DESC
@@ -256,14 +263,18 @@ class AppManageViewModel(
     }
 
     /**
-     * 「应用」按钮（用户拍板）：冻结**已添加列表**里所有未冻结的应用。
-     * 移出是即时生效的，本按钮只管冻结，不管移出。
+     * 「应用」按钮：只冻结本次进入页面后新增且未冻结的应用。
+     * 移出是即时生效的，本按钮不处理已有应用。
      */
     fun applyAndFreeze() {
         viewModelScope.launch {
+            val initial = initialPackages ?: return@launch
             val states = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value
-            val targets = GridRepository.allAddedPackages()
-                .filter { states[it] != true }
+            val targets = AppManageFreezePlanner.newlyAddedUnfrozenPackages(
+                initialPackages = initial,
+                currentPackages = GridRepository.allAddedPackages(),
+                frozenStates = states,
+            )
             targets.forEach { pkg -> freezeUseCase.freezeApp(pkg) }
             com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
         }

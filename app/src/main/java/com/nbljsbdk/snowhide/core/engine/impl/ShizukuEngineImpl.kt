@@ -7,10 +7,13 @@ import android.content.pm.PackageManager
 import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.Parcel
+import com.nbljsbdk.snowhide.core.engine.BinderConnectionEvent
+import com.nbljsbdk.snowhide.core.engine.BinderConnectionState
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
 import com.nbljsbdk.snowhide.core.model.PackageName
 import com.nbljsbdk.snowhide.core.operation.PmCommand
 import com.nbljsbdk.snowhide.core.operation.PmOperation
+import com.nbljsbdk.snowhide.core.engine.reduceBinderConnectionState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -115,6 +118,8 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
     private var pendingBind: CompletableDeferred<IBinder>? = null
     private var nextBindGeneration = 0L
     private var activeBindGeneration = 0L
+    @Volatile
+    private var connectionState: BinderConnectionState = BinderConnectionState.Disconnected
 
     /** 获取（必要时建立）常驻连接 */
     private suspend fun awaitBinder(): IBinder {
@@ -131,11 +136,13 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
                 val pending = pendingBind
                 if (pending != null) {
                     deferredToAwait = pending
+                    bindGeneration = activeBindGeneration
                 } else {
                     val deferred = CompletableDeferred<IBinder>()
                     pendingBind = deferred
                     bindGeneration = ++nextBindGeneration
                     activeBindGeneration = bindGeneration
+                    updateConnectionState(BinderConnectionEvent.Begin(bindGeneration))
                     deferredToAwait = deferred
                     val args = Shizuku.UserServiceArgs(
                         ComponentName(context, ShellCommandService::class.java),
@@ -166,6 +173,9 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
                     } catch (error: Throwable) {
                         pendingBind = null
                         activeBindGeneration = 0L
+                        updateConnectionState(
+                            BinderConnectionEvent.Failed(bindGeneration, error.message ?: "bind 失败")
+                        )
                         deferred.completeExceptionally(error)
                     }
                 }
@@ -182,6 +192,13 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
                     pendingBind = null
                     if (bindGeneration == activeBindGeneration) activeBindGeneration = 0L
                 }
+                updateConnectionState(
+                    if (error is kotlinx.coroutines.CancellationException) {
+                        BinderConnectionEvent.Cancelled(bindGeneration)
+                    } else {
+                        BinderConnectionEvent.TimedOut(bindGeneration)
+                    }
+                )
             }
             deferred.completeExceptionally(error)
             throw error
@@ -198,6 +215,13 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
             if (generation != activeBindGeneration || pendingBind !== deferred) return
             pendingBind = null
             if (service != null) cachedBinder = service
+            updateConnectionState(
+                if (service == null) {
+                    BinderConnectionEvent.Failed(generation, "Shizuku 服务绑定失败")
+                } else {
+                    BinderConnectionEvent.Connected(generation)
+                }
+            )
         }
         if (service == null) {
             deferred.completeExceptionally(IllegalStateException("Shizuku 服务绑定失败"))
@@ -220,14 +244,25 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
                 pending = pendingBind
                 pendingBind = null
             }
+            updateConnectionState(BinderConnectionEvent.Disconnected(generation))
         }
         pending?.completeExceptionally(IllegalStateException("Shizuku 服务已断开"))
     }
 
     private fun invalidateBinder(binder: IBinder) {
         synchronized(bindLock) {
-            if (cachedBinder === binder) cachedBinder = null
+            if (cachedBinder === binder) {
+                cachedBinder = null
+                val generation = (connectionState as? BinderConnectionState.Connected)?.generation
+                if (generation != null) {
+                    updateConnectionState(BinderConnectionEvent.Disconnected(generation))
+                }
+            }
         }
+    }
+
+    private fun updateConnectionState(event: BinderConnectionEvent) {
+        connectionState = reduceBinderConnectionState(connectionState, event)
     }
 
     /** 手写 Binder 事务：写入命令 → 读取输出 */

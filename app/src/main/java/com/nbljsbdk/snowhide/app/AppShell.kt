@@ -12,13 +12,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
-import com.nbljsbdk.snowhide.feature.about.AboutScreen
+import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
+import com.nbljsbdk.snowhide.feature.about.AboutRoute
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
-import com.nbljsbdk.snowhide.feature.home.HomeScreen
+import com.nbljsbdk.snowhide.feature.home.HomeRoute
 import com.nbljsbdk.snowhide.feature.home.HomeViewModel
 import com.nbljsbdk.snowhide.feature.quicktoggle.QuickToggleScreen
-import com.nbljsbdk.snowhide.feature.settings.SettingsScreen
+import com.nbljsbdk.snowhide.feature.settings.SettingsRoute
+import com.nbljsbdk.snowhide.service.RecentSwipeController
 
 /**
  * 应用页面组合根。
@@ -32,6 +34,7 @@ fun AppShell(
     onRequestShizuku: () -> Unit = {},
     backupUseCase: BackupUseCase,
     freezeUseCase: FreezeUseCase,
+    recentCalibrationUseCase: RecentCalibrationUseCase,
     homeViewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.Factory(
             LocalContext.current.applicationContext as Application,
@@ -45,6 +48,7 @@ fun AppShell(
         )
     ),
 ) {
+    val context = LocalContext.current
     val appManageOpen by homeViewModel.appManageOpen.collectAsState()
     val settingsOpen by homeViewModel.settingsOpen.collectAsState()
     val quickToggleOpen by homeViewModel.quickToggleOpen.collectAsState()
@@ -59,7 +63,7 @@ fun AppShell(
     val systemUnlocked by appManageViewModel.systemUnlocked.collectAsState()
 
     Box(modifier = modifier.fillMaxSize()) {
-        HomeScreen(
+        HomeRoute(
             modifier = Modifier.fillMaxSize(),
             onRequestShizuku = onRequestShizuku,
             viewModel = homeViewModel,
@@ -71,15 +75,19 @@ fun AppShell(
                 onClose = { homeViewModel.closeAppManage() },
                 viewModel = appManageViewModel,
             )
-            AppDestination.SETTINGS -> SettingsScreen(
+            AppDestination.SETTINGS -> SettingsRoute(
                 onClose = { homeViewModel.closeSettings() },
                 onSyncStatus = { homeViewModel.syncActualStatus() },
                 backupUseCase = backupUseCase,
+                recentCalibrationUseCase = recentCalibrationUseCase,
+                onRequestRecentCalibration = {
+                    RecentSwipeController.requestCalibration(context)
+                },
             )
             AppDestination.QUICK_TOGGLE -> QuickToggleScreen(
                 onClose = { homeViewModel.closeQuickToggle() },
             )
-            AppDestination.ABOUT -> AboutScreen(
+            AppDestination.ABOUT -> AboutRoute(
                 onClose = { homeViewModel.closeAbout() },
                 systemUnlocked = systemUnlocked,
                 onUnlockSystemApps = { appManageViewModel.unlockSystemApps() },

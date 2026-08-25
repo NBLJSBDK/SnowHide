@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
                     },
                     backupUseCase = appContainer.backupUseCase,
                     freezeUseCase = appContainer.freezeUseCase,
+                    recentCalibrationUseCase = appContainer.recentCalibrationUseCase,
                 )
             }
         }

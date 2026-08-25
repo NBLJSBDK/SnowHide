@@ -1,19 +1,19 @@
 package com.nbljsbdk.snowhide.domain
 
-import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.engine.EngineProvider
 import com.nbljsbdk.snowhide.core.mode.FreezeExecutor
 import com.nbljsbdk.snowhide.core.mode.FreezeMode
+import com.nbljsbdk.snowhide.core.model.FreezeTargetStore
 import com.nbljsbdk.snowhide.core.operation.PmCommand
 import com.nbljsbdk.snowhide.core.operation.PmOperation
-import com.nbljsbdk.snowhide.data.repo.GridRepository
 
 /**
  * 冻结业务用例——所有冻结/解冻操作唯一入口（UI 永不直连 FreezeExecutor）
  */
 class FreezeUseCase(
     private val executor: FreezeExecutor,
-    private val gridRepository: GridRepository,
-    private val engineManager: EngineManager,
+    private val targetStore: FreezeTargetStore,
+    private val engineProvider: EngineProvider,
 ) {
 
     /**
@@ -32,7 +32,7 @@ class FreezeUseCase(
     }
 
     private fun executorEngine() =
-        engineManager.primaryEngine.value
+        engineProvider.primaryEngine.value
 
     /** 冻结单个应用（P0 单模式 FREEZE） */
     suspend fun freezeApp(pkg: String, mode: FreezeMode = FreezeMode.FREEZE): Result<Unit> =
@@ -51,8 +51,8 @@ class FreezeUseCase(
     suspend fun freezePackages(packages: Collection<String>): Result<Int> {
         val targets = packages
             .asSequence()
-            .filter { gridRepository.isAppAdded(it) }
-            .filterNot { gridRepository.isLocked(it) }
+            .filter { targetStore.isAppAdded(it) }
+            .filterNot { targetStore.isLocked(it) }
             .distinct()
             .toList()
         if (targets.isEmpty()) return Result.success(0)
@@ -61,9 +61,13 @@ class FreezeUseCase(
         return engine.execBatched(targets, PmOperation.DISABLE_USER, "划卡停用")
     }
 
-    /** 查询冻结状态（引擎不可用时返回 false，不报错） */
+    /** 查询冻结状态，保留引擎失败原因供安全调用方处理。 */
+    suspend fun isFrozenResult(pkg: String): Result<Boolean> =
+        executor.isFrozen(FreezeMode.FREEZE, pkg)
+
+    /** 兼容旧调用方：查询失败时仍返回 false。 */
     suspend fun isFrozen(pkg: String): Boolean =
-        executor.isFrozen(FreezeMode.FREEZE, pkg).getOrDefault(false)
+        isFrozenResult(pkg).getOrDefault(false)
 
     /**
      * 一键冻结全部已添加应用（齿轮菜单「停用全部」/「停用目录」）
@@ -79,15 +83,13 @@ class FreezeUseCase(
         exceptLocked: Boolean = false,
     ): Result<Int> {
         val targets = when (onlyFolderId) {
-            null -> gridRepository.allAddedPackages()
-            else -> gridRepository.folderApps.value
-                .filter { it.folderId == onlyFolderId }
-                .map { it.pkg }
+            null -> targetStore.allAddedPackages()
+            else -> targetStore.folderPackages(onlyFolderId)
         }
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
         val filtered = if (exceptLocked) {
-            targets.filterNot { gridRepository.isLocked(it) }
+            targets.filterNot { targetStore.isLocked(it) }
         } else targets
         if (filtered.isEmpty()) return Result.success(0)
         return engine.execBatched(filtered, PmOperation.DISABLE_USER, "停用")
@@ -97,7 +99,7 @@ class FreezeUseCase(
     suspend fun unfreezeAll(): Result<Int> {
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
-        val targets = gridRepository.allAddedPackages()
+        val targets = targetStore.allAddedPackages()
         if (targets.isEmpty()) return Result.success(0)
         return engine.execBatched(targets, PmOperation.ENABLE, "启用")
     }
@@ -113,9 +115,9 @@ class FreezeUseCase(
     suspend fun quickCleanPackages(): Result<List<String>> {
         val engine = executorEngine()
             ?: return Result.failure(IllegalStateException("没有可用的权限引擎"))
-        val frozenSet = engine.listFrozenPackages().getOrDefault(emptyList()).toSet()
-        val targets = gridRepository.allAddedPackages()
-            .filter { !gridRepository.isLocked(it) && it !in frozenSet }
+        val frozenSet = engine.listFrozenPackages().getOrElse { return Result.failure(it) }.toSet()
+        val targets = targetStore.allAddedPackages()
+            .filter { !targetStore.isLocked(it) && it !in frozenSet }
         if (targets.isEmpty()) return Result.success(emptyList())
         return engine.execBatched(targets, PmOperation.DISABLE_USER, "停用")
             .map { targets }

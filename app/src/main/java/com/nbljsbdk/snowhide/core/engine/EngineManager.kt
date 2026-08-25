@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * 优先级：root > do > shizuku（P0 只注册 shizuku，其余留空壳）
  */
-object EngineManager {
+object EngineManager : EngineProvider {
 
     /** 引擎信息（供 UI 渲染引擎区块） */
     data class EngineInfo(
@@ -30,7 +30,7 @@ object EngineManager {
 
     private val _primaryEngine = MutableStateFlow<PowerEngine?>(null)
     /** 当前主引擎（可用引擎中优先级最高者；无可用引擎为 null） */
-    val primaryEngine: StateFlow<PowerEngine?> = _primaryEngine.asStateFlow()
+    override val primaryEngine: StateFlow<PowerEngine?> = _primaryEngine.asStateFlow()
 
     private val _engineInfos = MutableStateFlow<List<EngineInfo>>(emptyList())
     /** 全部已注册引擎的可用性状态（设置页引擎区块的数据源） */

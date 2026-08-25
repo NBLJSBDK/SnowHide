@@ -67,7 +67,7 @@ fun FeedbackSettingsScreen(onBack: () -> Unit) {
                     SettingsRepository.setShowToast(it)
                 }
                 Text(
-                    text = "控制冻结、解冻、批量清理、快捷方式、快速启停等成功结果的短暂弹窗。关闭后不影响进度条、Snackbar 和系统通知。",
+                    text = "控制冻结、解冻、批量清理、快捷方式、快速启停等成功或失败结果的短暂弹窗。关闭后不影响进度条、Snackbar 和系统通知。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
