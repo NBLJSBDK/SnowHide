@@ -54,7 +54,7 @@ gradlew.bat assembleDebug / assembleRelease
 ## 4. Versioning (do NOT change casually)
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
-- `versionName` = 语义版本（当前 v0.3 施工值 `0.3.0`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
+- `versionName` = 语义版本（当前 `0.3.1`，上一正式版本为 `v0.3.0`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
 
@@ -224,6 +224,11 @@ b660a46 feat: 美化设置加图标形状（圆角方形/圆形，未收录图�
 195dc9b fix: ANR 根因（binder.transact 切 IO 线程）
 d996a27 feat: 进度条文案计数（正在停用: 45/130）
 f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
+0ac9e93 feat: 完成 v0.3 架构施工与回归修复
+0222799 docs: 更新 v0.3.0 发布记录
+9cdc536 feat: 优化 Dock 操作槽并固化个人设置
+43cc632 test: 覆盖 Dock 设置备份读写
+01c771b docs: 拆分整理目录模块文档
 ```
 
 已完成（08-13 之后）：
@@ -242,7 +247,9 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - v0.2.0：Recent 划卡停用（自动/手动校准、会话差异、退出后批量冻结）完成并通过真机验证；经 Shizuku 静默读取真实任务包名，支持 ColorOS 同名卡片并优化滑动时序
 - v0.2.0：关于应用显示语义版本、编译时间和版本历史
 - v0.2.1：修复 Recent 基线建立期间误停用全部应用；改为任务快照确认后逐包即时停用，不触发主界面批量进度条；增加持久化补执行队列、雪藏自身排除和应用名 Toast
+- v0.2.2：统一 Recent 划卡停用提示文案；补充渐进式解耦架构指导
 - v0.3.0：组合根/AppShell、受控命令、QuickToggle/Backup 数据边界、Recent/整理/文件夹纯逻辑、反馈平台适配、JVM 回归测试和 Android Test 编译门已落地；Release 真机三条回归通过并已发布
+- v0.3.1：Dock 右侧操作槽图标独立调节与形状同步；固化个人设置默认值；备份支持操作图标大小；整理目录规则文档补齐
 
 **未完成（候选下一步）**：
 1. 应用分身（pm --user 分用户冻结）
@@ -274,7 +281,9 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 基线历史仍包含 `v0.1.6`（指向 `69df809`）及提示、震动、设置页卡片层级功能。
 - `v0.2.0` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
 - `v0.2.1` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
+- `v0.2.2` 已创建，内容为 Recent 提示修正与渐进式解耦架构指导；后续版本仍须遵循同样的更新说明流程。
 - `v0.3.0` 已由提交 `0ac9e93` 创建并推送；Release 真机三条回归已通过，Android instrumentation 仍待后续补跑。
+- `v0.3.1` 发布说明、Release 构建和真机覆盖安装已完成，本次发布提交后创建并推送 Tag。
 - 未经用户明确允许，不执行 commit、amend、push 或创建 tag。
 
 ---
@@ -301,6 +310,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 遇到困难不擅自退缩、跳过或终止；主动说明阻塞原因，并询问用户是否继续或是否执行下一步操作。
 - 编译通过后可以直接安装 APK 并继续真机验证；commit、amend、push、创建 tag 仍必须先获得用户明确授权。
 - 用户明确授权后，每个可编译的小功能点再单独 commit 存档（§13 规范）。
+- **HARD RULE（更新说明）**：每次准备 commit、push 或创建 Tag 前，必须先根据 Git 版本区间核对并更新 `app/src/main/java/com/nbljsbdk/snowhide/feature/about/VersionHistory.kt`；发布状态同时同步到 `AGENTS.md`、`v0.3task.md` 和设计文档。没有对应且真实的更新说明，不得提交、推送或创建 Tag。
 - **HARD RULE（用户强调）**：集成任何三方库前，**必须先看官方文档并核对 jar 内真实 API 签名**，绝不凭训练数据假设 API 存在（训练数据会过期）。Shizuku 教训：`newProcess` 已私有、`onRequestPermissionsResult` 转发已移除、`ShizukuProvider` 必须手动声明——三个坑全是凭训练数据写的。正确做法：① webfetch 官方 README/GitHub ② javap/jadx 反编译核对 jar 签名 ③ 再写代码。
 
 ---
