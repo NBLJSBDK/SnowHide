@@ -29,6 +29,7 @@ fun HomeRoute(
     val iconSize by viewModel.iconSize.collectAsState()
     val verticalSpace by viewModel.verticalSpace.collectAsState()
     val dockIconSize by viewModel.dockIconSize.collectAsState()
+    val dockActionIconSize by viewModel.dockActionIconSize.collectAsState()
     val folderPreview by viewModel.folderPreview.collectAsState()
     val showAppName by viewModel.showAppName.collectAsState()
     val showReturnHomeButton by viewModel.showReturnHomeButton.collectAsState()
@@ -61,6 +62,7 @@ fun HomeRoute(
         iconSize = iconSize,
         verticalSpace = verticalSpace,
         dockIconSize = dockIconSize,
+        dockActionIconSize = dockActionIconSize,
         folderPreview = folderPreview,
         showAppName = showAppName,
         showReturnHomeButton = showReturnHomeButton,
@@ -126,5 +128,6 @@ private class HomeViewModelActions(
     override fun setIconSize(value: Int) = viewModel.setIconSize(value)
     override fun setVerticalSpace(value: Int) = viewModel.setVerticalSpace(value)
     override fun setDockIconSize(value: Int) = viewModel.setDockIconSize(value)
+    override fun setDockActionIconSize(value: Int) = viewModel.setDockActionIconSize(value)
     override fun setFolderPreview(value: Int) = viewModel.setFolderPreview(value)
 }

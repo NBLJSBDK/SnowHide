@@ -37,11 +37,13 @@ fun LayoutPanel(
     iconSize: Int,
     verticalSpace: Int,
     dockIconSize: Int,
+    dockActionIconSize: Int,
     folderPreview: Int,
     onColumnsChange: (Int) -> Unit,
     onIconSizeChange: (Int) -> Unit,
     onVerticalSpaceChange: (Int) -> Unit,
     onDockIconSizeChange: (Int) -> Unit,
+    onDockActionIconSizeChange: (Int) -> Unit,
     onFolderPreviewChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -84,6 +86,7 @@ fun LayoutPanel(
             SliderRow("图标大小", iconSize, 36f..96f, onIconSizeChange)
             SliderRow("上下间距", verticalSpace, 0f..40f, onVerticalSpaceChange)
             SliderRow("底部图标", dockIconSize, 28f..72f, onDockIconSizeChange)
+            SliderRow("操作图标", dockActionIconSize, 12f..32f, onDockActionIconSizeChange)
 
             // 文件夹拼贴 2×2 / 3×3（用户拍板）
             Row(verticalAlignment = Alignment.CenterVertically) {

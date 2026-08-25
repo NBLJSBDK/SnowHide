@@ -53,6 +53,7 @@ class HomeViewModel(
     val iconSize: StateFlow<Int> = settingsRepository.iconSize
     val verticalSpace: StateFlow<Int> = settingsRepository.verticalSpace
     val dockIconSize: StateFlow<Int> = settingsRepository.dockIconSize
+    val dockActionIconSize: StateFlow<Int> = settingsRepository.dockActionIconSize
     val folderPreview: StateFlow<Int> = settingsRepository.folderPreview
     val showAppName: StateFlow<Boolean> = settingsRepository.showAppName
     val showReturnHomeButton: StateFlow<Boolean> = settingsRepository.showReturnHomeButton
@@ -266,6 +267,8 @@ class HomeViewModel(
     fun setVerticalSpace(value: Int) = settingsRepository.setVerticalSpace(value)
 
     fun setDockIconSize(value: Int) = settingsRepository.setDockIconSize(value)
+
+    fun setDockActionIconSize(value: Int) = settingsRepository.setDockActionIconSize(value)
 
     fun setFolderPreview(value: Int) = settingsRepository.setFolderPreview(value)
 

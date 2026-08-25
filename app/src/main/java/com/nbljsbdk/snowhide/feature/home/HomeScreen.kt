@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
@@ -142,6 +143,7 @@ fun HomeContent(
     val iconSize = state.iconSize
     val verticalSpace = state.verticalSpace
     val dockIconSize = state.dockIconSize
+    val dockActionIconSize = state.dockActionIconSize
     val folderPreview = state.folderPreview
     val showAppName = state.showAppName
     val showReturnHomeButton = state.showReturnHomeButton
@@ -715,6 +717,8 @@ fun HomeContent(
                 lockedPackages = lockedPackages,
                 icons = icons,
                 iconSize = dockIconSize.dp,
+                actionIconSize = dockActionIconSize.dp,
+                iconShape = iconShape,
                 transparentBg = transparentBg,
                  onQuickClean = { actions.quickClean() },
                 onAppClick = { handleAppClick(it) },
@@ -941,11 +945,13 @@ fun HomeContent(
             iconSize = iconSize,
             verticalSpace = verticalSpace,
             dockIconSize = dockIconSize,
+            dockActionIconSize = dockActionIconSize,
             folderPreview = folderPreview,
              onColumnsChange = { actions.setColumns(it) },
              onIconSizeChange = { actions.setIconSize(it) },
              onVerticalSpaceChange = { actions.setVerticalSpace(it) },
              onDockIconSizeChange = { actions.setDockIconSize(it) },
+             onDockActionIconSizeChange = { actions.setDockActionIconSize(it) },
              onFolderPreviewChange = { actions.setFolderPreview(it) },
             onDismiss = { layoutPanelOpen = false },
         )
@@ -1205,12 +1211,16 @@ private fun DockBar(
     lockedPackages: Set<String>,
     icons: Map<String, ImageBitmap>,
     iconSize: androidx.compose.ui.unit.Dp,
+    actionIconSize: androidx.compose.ui.unit.Dp,
+    iconShape: String,
     transparentBg: Boolean = false,
     onQuickClean: () -> Unit,
     onAppClick: (String) -> Unit,
     onAppLongClick: (String) -> Unit,
     onAppSwipeUp: (String) -> Unit,
 ) {
+    val boundedActionIconSize = actionIconSize.coerceAtMost((iconSize.value - 8f).coerceAtLeast(12f).dp)
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -1225,8 +1235,8 @@ private fun DockBar(
         LazyRow(
             modifier = Modifier.weight(1f),
             // 默认居中开始，放不下时左右滚动（设计文档 §3.6）。
-            // 扫帚占掉右侧宽度后视口中心左移，start padding 补偿半个
-            // （扫帚宽 = 图标宽 + 间隔）使图标相对整个 dock 栏居中
+            // 右侧操作槽占掉固定宽度后视口中心左移，start padding 补偿半个
+            // （操作槽宽 = Dock 槽位宽 + 间隔）使应用图标相对整个 Dock 居中
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = iconSize / 2 + 6.dp,
@@ -1247,17 +1257,25 @@ private fun DockBar(
             }
         }
         Spacer(modifier = Modifier.width(6.dp))
-        // 智能清理按钮（暖橙强调，豁免锁定；与 dock 应用图标完全同大小——
-        // 不用 IconButton 固定 48dp 容器，dock 高度随「底部图标」设置变化，
-        // 且应用全冻结后 dock 不塌缩）
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.ic_broom),
-            contentDescription = "智能清理",
+        // 右侧操作槽与 Dock 应用槽完全同尺寸；内图标独立调节，便于未来替换扫帚。
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(iconSize)
-                .clip(RoundedCornerShape(iconSize.value * 0.22f))
+                .clip(
+                    if (iconShape == "circle") CircleShape
+                    else RoundedCornerShape(iconSize.value * 0.22f),
+                )
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
                 .clickable(onClick = onQuickClean),
-        )
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_broom),
+                contentDescription = "智能清理",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(boundedActionIconSize),
+            )
+        }
     }
 }
 

@@ -16,6 +16,35 @@ object SettingsRepository {
 
     private lateinit var prefs: android.content.SharedPreferences
 
+    /** 当前个人设备确认后的默认设置；应用数据和列表状态不在这里。 */
+    private object DefaultSettings {
+        const val SHOW_TOAST = true
+        const val SHOW_REENTRY_TOAST = false
+        const val SWIPE_DISABLE_ENABLED = true
+        const val SHOW_APP_NAME = true
+        const val SHOW_RETURN_HOME_BUTTON = true
+        const val RESET_HOME_ON_REENTRY = true
+        const val HAPTIC_LEVEL = 4
+        const val HAPTIC_ENABLED = true
+        const val ICON_SIZE = 47
+        const val VERTICAL_SPACE = 0
+        const val DOCK_ICON_SIZE = 47
+        const val DOCK_ACTION_ICON_SIZE = 26
+        const val FOLDER_PREVIEW = 2
+        const val ICON_PACK = "me.morirain.dev.iconpack.pure"
+        const val ICON_SHAPE = "circle"
+        const val LOCK_CLEAN_ENABLED = true
+        const val LOCK_CLEAN_DELAY = 60
+        const val LOCK_CLEAN_NOTIFY = true
+        const val WALLPAPER_OVERLAY = 0.1f
+        const val TRANSPARENT_BACKGROUND = true
+        const val ANIMATIONS_ENABLED = true
+        const val AUTO_SYNC_STATUS = true
+        const val COLUMNS = 4
+        const val BACKGROUND_IMAGE_PATH = ""
+        val FREEZE_STYLE = com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
+    }
+
     /** 初始化（Application 启动时调用一次） */
     fun init(context: Context) {
         if (::prefs.isInitialized) return
@@ -23,35 +52,36 @@ object SettingsRepository {
         // 关键：prefs 就绪后重读全部设置。
         // 对象初始化时 prefs 尚未就绪，属性拿到的是默认值——
         // 之前版本重启后设置全部回默认（震动档位 bug 即此）。
-        _showToast.value = prefs.getBoolean(KEY_TOAST, true)
-        _showReentryToast.value = prefs.getBoolean(KEY_REENTRY_TOAST, true)
-        _swipeDisableEnabled.value = prefs.getBoolean(KEY_SWIPE_DISABLE, false)
-        _showAppName.value = prefs.getBoolean(KEY_APP_NAME, true)
-        _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, true)
-        _resetHomeOnReentry.value = prefs.getBoolean(KEY_BACK_DIR, true)
-        val legacyHapticLevel = prefs.getInt(KEY_HAPTIC, 4).coerceIn(0, 4)
+        _showToast.value = prefs.getBoolean(KEY_TOAST, DefaultSettings.SHOW_TOAST)
+        _showReentryToast.value = prefs.getBoolean(KEY_REENTRY_TOAST, DefaultSettings.SHOW_REENTRY_TOAST)
+        _swipeDisableEnabled.value = prefs.getBoolean(KEY_SWIPE_DISABLE, DefaultSettings.SWIPE_DISABLE_ENABLED)
+        _showAppName.value = prefs.getBoolean(KEY_APP_NAME, DefaultSettings.SHOW_APP_NAME)
+        _showReturnHomeButton.value = prefs.getBoolean(KEY_RETURN_HOME_BUTTON, DefaultSettings.SHOW_RETURN_HOME_BUTTON)
+        _resetHomeOnReentry.value = prefs.getBoolean(KEY_BACK_DIR, DefaultSettings.RESET_HOME_ON_REENTRY)
+        val legacyHapticLevel = prefs.getInt(KEY_HAPTIC, DefaultSettings.HAPTIC_LEVEL).coerceIn(0, 4)
         _hapticLevel.value = legacyHapticLevel
         _hapticEnabled.value = prefs.getBoolean(KEY_HAPTIC_ENABLED, legacyHapticLevel > 0)
         _hapticNavigationLevel.value = prefs.getInt(KEY_HAPTIC_NAVIGATION, legacyHapticLevel).coerceIn(0, 4)
         _hapticFreezeLockLevel.value = prefs.getInt(KEY_HAPTIC_FREEZE_LOCK, legacyHapticLevel).coerceIn(0, 4)
         _hapticOrganizeListLevel.value = prefs.getInt(KEY_HAPTIC_ORGANIZE_LIST, legacyHapticLevel).coerceIn(0, 4)
         _hapticBatchLevel.value = prefs.getInt(KEY_HAPTIC_BATCH, legacyHapticLevel).coerceIn(0, 4)
-        _columns.value = prefs.getInt(KEY_COLUMNS, 4)
-        _iconSize.value = prefs.getInt(KEY_ICON_SIZE, 56)
-        _verticalSpace.value = prefs.getInt(KEY_V_SPACE, 12)
-        _dockIconSize.value = prefs.getInt(KEY_DOCK_SIZE, 40)
-        _folderPreview.value = prefs.getInt(KEY_FOLDER_PREVIEW, 2)
-        _iconPack.value = prefs.getString(KEY_ICON_PACK, "") ?: ""
-        _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name) ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
-        _iconShape.value = prefs.getString(KEY_ICON_SHAPE, "round") ?: "round"
-        _lockCleanEnabled.value = prefs.getBoolean(KEY_LOCK_CLEAN, false)
-        _lockCleanDelay.value = prefs.getInt(KEY_LOCK_CLEAN_DELAY, 30)
-        _lockCleanNotify.value = prefs.getBoolean(KEY_LOCK_CLEAN_NOTIFY, true)
-        _wallpaperOverlay.value = prefs.getFloat(KEY_WALLPAPER_OVERLAY, 0.25f)
-        _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, true)
-        _animationsEnabled.value = prefs.getBoolean(KEY_ANIMATIONS, true)
-        _autoSyncStatus.value = prefs.getBoolean(KEY_AUTO_SYNC_STATUS, true)
-        _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, "") ?: ""
+        _columns.value = prefs.getInt(KEY_COLUMNS, DefaultSettings.COLUMNS)
+        _iconSize.value = prefs.getInt(KEY_ICON_SIZE, DefaultSettings.ICON_SIZE)
+        _verticalSpace.value = prefs.getInt(KEY_V_SPACE, DefaultSettings.VERTICAL_SPACE)
+        _dockIconSize.value = prefs.getInt(KEY_DOCK_SIZE, DefaultSettings.DOCK_ICON_SIZE)
+        _dockActionIconSize.value = prefs.getInt(KEY_DOCK_ACTION_SIZE, DefaultSettings.DOCK_ACTION_ICON_SIZE)
+        _folderPreview.value = prefs.getInt(KEY_FOLDER_PREVIEW, DefaultSettings.FOLDER_PREVIEW)
+        _iconPack.value = prefs.getString(KEY_ICON_PACK, DefaultSettings.ICON_PACK) ?: DefaultSettings.ICON_PACK
+        _freezeStyle.value = prefs.getString(KEY_FREEZE_STYLE, DefaultSettings.FREEZE_STYLE) ?: DefaultSettings.FREEZE_STYLE
+        _iconShape.value = prefs.getString(KEY_ICON_SHAPE, DefaultSettings.ICON_SHAPE) ?: DefaultSettings.ICON_SHAPE
+        _lockCleanEnabled.value = prefs.getBoolean(KEY_LOCK_CLEAN, DefaultSettings.LOCK_CLEAN_ENABLED)
+        _lockCleanDelay.value = prefs.getInt(KEY_LOCK_CLEAN_DELAY, DefaultSettings.LOCK_CLEAN_DELAY)
+        _lockCleanNotify.value = prefs.getBoolean(KEY_LOCK_CLEAN_NOTIFY, DefaultSettings.LOCK_CLEAN_NOTIFY)
+        _wallpaperOverlay.value = prefs.getFloat(KEY_WALLPAPER_OVERLAY, DefaultSettings.WALLPAPER_OVERLAY)
+        _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, DefaultSettings.TRANSPARENT_BACKGROUND)
+        _animationsEnabled.value = prefs.getBoolean(KEY_ANIMATIONS, DefaultSettings.ANIMATIONS_ENABLED)
+        _autoSyncStatus.value = prefs.getBoolean(KEY_AUTO_SYNC_STATUS, DefaultSettings.AUTO_SYNC_STATUS)
+        _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, DefaultSettings.BACKGROUND_IMAGE_PATH) ?: DefaultSettings.BACKGROUND_IMAGE_PATH
     }
 
     private fun getBool(key: String, def: Boolean): Boolean =
@@ -70,23 +100,23 @@ object SettingsRepository {
     // 简单设置（设计文档 §3.11）
     // ═══════════════════════════════════════
 
-    private val _showToast = MutableStateFlow(getBool(KEY_TOAST, true))
+    private val _showToast = MutableStateFlow(getBool(KEY_TOAST, DefaultSettings.SHOW_TOAST))
     /** 操作完成后是否展示 Toast（默认启用） */
     val showToast: StateFlow<Boolean> = _showToast.asStateFlow()
 
-    private val _showReentryToast = MutableStateFlow(getBool(KEY_REENTRY_TOAST, true))
-    /** 离开应用超过阈值后重进时是否展示提示 Toast（默认启用） */
+    private val _showReentryToast = MutableStateFlow(getBool(KEY_REENTRY_TOAST, DefaultSettings.SHOW_REENTRY_TOAST))
+    /** 离开应用超过阈值后重进时是否展示提示 Toast（默认关闭） */
     val showReentryToast: StateFlow<Boolean> = _showReentryToast.asStateFlow()
 
-    private val _showAppName = MutableStateFlow(getBool(KEY_APP_NAME, true))
+    private val _showAppName = MutableStateFlow(getBool(KEY_APP_NAME, DefaultSettings.SHOW_APP_NAME))
     /** 是否显示图标下方文字（应用、文件夹、返回主屏按钮） */
     val showAppName: StateFlow<Boolean> = _showAppName.asStateFlow()
 
-    private val _showReturnHomeButton = MutableStateFlow(getBool(KEY_RETURN_HOME_BUTTON, true))
+    private val _showReturnHomeButton = MutableStateFlow(getBool(KEY_RETURN_HOME_BUTTON, DefaultSettings.SHOW_RETURN_HOME_BUTTON))
     /** 文件夹内是否显示返回主屏按钮 */
     val showReturnHomeButton: StateFlow<Boolean> = _showReturnHomeButton.asStateFlow()
 
-    private val _resetHomeOnReentry = MutableStateFlow(getBool(KEY_BACK_DIR, true))
+    private val _resetHomeOnReentry = MutableStateFlow(getBool(KEY_BACK_DIR, DefaultSettings.RESET_HOME_ON_REENTRY))
     /** 离开应用超过阈值后重新进入是否回到主屏 */
     val resetHomeOnReentry: StateFlow<Boolean> = _resetHomeOnReentry.asStateFlow()
 
@@ -105,7 +135,7 @@ object SettingsRepository {
     // ═══════════════════════════════════════
 
     private val _swipeDisableEnabled = MutableStateFlow(
-        getBool(KEY_SWIPE_DISABLE, false),
+        getBool(KEY_SWIPE_DISABLE, DefaultSettings.SWIPE_DISABLE_ENABLED),
     )
     /** 划掉 Recent 卡片后，立即冻结已添加且未锁定应用。 */
     val swipeDisableEnabled: StateFlow<Boolean> = _swipeDisableEnabled.asStateFlow()
@@ -119,27 +149,27 @@ object SettingsRepository {
     // 震动反馈（总开关 + 四类场景，0-4 档，0=关闭）
     // ═══════════════════════════════════════
 
-    private val _hapticLevel = MutableStateFlow(getInt(KEY_HAPTIC, 4))
+    private val _hapticLevel = MutableStateFlow(getInt(KEY_HAPTIC, DefaultSettings.HAPTIC_LEVEL))
     /** 旧版全局档位，仅用于兼容旧设置 */
     val hapticLevel: StateFlow<Int> = _hapticLevel.asStateFlow()
 
-    private val _hapticEnabled = MutableStateFlow(getBool(KEY_HAPTIC_ENABLED, true))
+    private val _hapticEnabled = MutableStateFlow(getBool(KEY_HAPTIC_ENABLED, DefaultSettings.HAPTIC_ENABLED))
     /** 震动总开关 */
     val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
 
-    private val _hapticNavigationLevel = MutableStateFlow(getInt(KEY_HAPTIC_NAVIGATION, getInt(KEY_HAPTIC, 4)))
+    private val _hapticNavigationLevel = MutableStateFlow(getInt(KEY_HAPTIC_NAVIGATION, getInt(KEY_HAPTIC, DefaultSettings.HAPTIC_LEVEL)))
     /** 导航操作震感档位 */
     val hapticNavigationLevel: StateFlow<Int> = _hapticNavigationLevel.asStateFlow()
 
-    private val _hapticFreezeLockLevel = MutableStateFlow(getInt(KEY_HAPTIC_FREEZE_LOCK, getInt(KEY_HAPTIC, 4)))
+    private val _hapticFreezeLockLevel = MutableStateFlow(getInt(KEY_HAPTIC_FREEZE_LOCK, getInt(KEY_HAPTIC, DefaultSettings.HAPTIC_LEVEL)))
     /** 冻结与锁定震感档位 */
     val hapticFreezeLockLevel: StateFlow<Int> = _hapticFreezeLockLevel.asStateFlow()
 
-    private val _hapticOrganizeListLevel = MutableStateFlow(getInt(KEY_HAPTIC_ORGANIZE_LIST, getInt(KEY_HAPTIC, 4)))
+    private val _hapticOrganizeListLevel = MutableStateFlow(getInt(KEY_HAPTIC_ORGANIZE_LIST, getInt(KEY_HAPTIC, DefaultSettings.HAPTIC_LEVEL)))
     /** 整理与列表操作震感档位 */
     val hapticOrganizeListLevel: StateFlow<Int> = _hapticOrganizeListLevel.asStateFlow()
 
-    private val _hapticBatchLevel = MutableStateFlow(getInt(KEY_HAPTIC_BATCH, getInt(KEY_HAPTIC, 4)))
+    private val _hapticBatchLevel = MutableStateFlow(getInt(KEY_HAPTIC_BATCH, getInt(KEY_HAPTIC, DefaultSettings.HAPTIC_LEVEL)))
     /** 批量操作震感档位 */
     val hapticBatchLevel: StateFlow<Int> = _hapticBatchLevel.asStateFlow()
 
@@ -177,13 +207,13 @@ object SettingsRepository {
     }
 
     // ═══════════════════════════════════════
-    // 冻结滤镜样式（美化设置，默认变蓝）
+    // 冻结滤镜样式（美化设置，默认原色）
     // ═══════════════════════════════════════
 
     private val _freezeStyle = MutableStateFlow(
-        getStr(KEY_FREEZE_STYLE, com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name)
+        getStr(KEY_FREEZE_STYLE, DefaultSettings.FREEZE_STYLE)
     )
-    /** 冻结滤镜样式（FreezeStyle 枚举名） */
+    /** 冻结滤镜样式（FreezeStyle 枚举名，默认原色） */
     val freezeStyle: StateFlow<String> = _freezeStyle.asStateFlow()
 
     fun setFreezeStyle(style: String) {
@@ -195,8 +225,8 @@ object SettingsRepository {
     // 图标形状（美化设置：未收录图标包的应用也裁成圆形）
     // ═══════════════════════════════════════
 
-    private val _iconShape = MutableStateFlow(getStr(KEY_ICON_SHAPE, "round"))
-    /** 图标形状："round"=圆角方形（默认）/"circle"=圆形 */
+    private val _iconShape = MutableStateFlow(getStr(KEY_ICON_SHAPE, DefaultSettings.ICON_SHAPE))
+    /** 图标形状："round"=圆角方形/"circle"=圆形（默认） */
     val iconShape: StateFlow<String> = _iconShape.asStateFlow()
 
     fun setIconShape(shape: String) {
@@ -208,15 +238,15 @@ object SettingsRepository {
     // 锁屏自动清理（设置页卡片，用户拍板语义）
     // ═══════════════════════════════════════
 
-    private val _lockCleanEnabled = MutableStateFlow(getBool(KEY_LOCK_CLEAN, false))
+    private val _lockCleanEnabled = MutableStateFlow(getBool(KEY_LOCK_CLEAN, DefaultSettings.LOCK_CLEAN_ENABLED))
     /** 锁屏后自动清理开关 */
     val lockCleanEnabled: StateFlow<Boolean> = _lockCleanEnabled.asStateFlow()
 
-    private val _lockCleanDelay = MutableStateFlow(getInt(KEY_LOCK_CLEAN_DELAY, 30))
+    private val _lockCleanDelay = MutableStateFlow(getInt(KEY_LOCK_CLEAN_DELAY, DefaultSettings.LOCK_CLEAN_DELAY))
     /** 息屏后延迟分钟（0=立即，10 分钟一档 0..120） */
     val lockCleanDelay: StateFlow<Int> = _lockCleanDelay.asStateFlow()
 
-    private val _lockCleanNotify = MutableStateFlow(getBool(KEY_LOCK_CLEAN_NOTIFY, true))
+    private val _lockCleanNotify = MutableStateFlow(getBool(KEY_LOCK_CLEAN_NOTIFY, DefaultSettings.LOCK_CLEAN_NOTIFY))
     /** 清理完成通知开关 */
     val lockCleanNotify: StateFlow<Boolean> = _lockCleanNotify.asStateFlow()
 
@@ -233,11 +263,11 @@ object SettingsRepository {
     }
 
     // ═══════════════════════════════════════
-    // 壁纸遮罩浓度（透明背景：0=不遮 1=全遮，0.05 步进，默认 0.25）
+    // 壁纸遮罩浓度（透明背景：0=不遮 1=全遮，0.05 步进，默认 0.1）
     // ═══════════════════════════════════════
 
-    private val _wallpaperOverlay = MutableStateFlow(getFloat(KEY_WALLPAPER_OVERLAY, 0.25f))
-    /** 壁纸遮罩透明度（0f..1f） */
+    private val _wallpaperOverlay = MutableStateFlow(getFloat(KEY_WALLPAPER_OVERLAY, DefaultSettings.WALLPAPER_OVERLAY))
+    /** 壁纸遮罩透明度（0f..1f，默认 0.1） */
     val wallpaperOverlay: StateFlow<Float> = _wallpaperOverlay.asStateFlow()
 
     fun setWallpaperOverlay(alpha: Float) {
@@ -264,32 +294,39 @@ object SettingsRepository {
     // 布局设置（全局通用一套，设计文档 §3.5）
     // ═══════════════════════════════════════
 
-    private val _columns = MutableStateFlow(getInt(KEY_COLUMNS, 4))
+    private val _columns = MutableStateFlow(getInt(KEY_COLUMNS, DefaultSettings.COLUMNS))
     /** 每排数量 */
     val columns: StateFlow<Int> = _columns.asStateFlow()
 
-    private val _iconSize = MutableStateFlow(getInt(KEY_ICON_SIZE, 56))
+    private val _iconSize = MutableStateFlow(getInt(KEY_ICON_SIZE, DefaultSettings.ICON_SIZE))
     /** 图标大小（dp） */
     val iconSize: StateFlow<Int> = _iconSize.asStateFlow()
 
-    private val _verticalSpace = MutableStateFlow(getInt(KEY_V_SPACE, 12))
+    private val _verticalSpace = MutableStateFlow(getInt(KEY_V_SPACE, DefaultSettings.VERTICAL_SPACE))
     /** 上下间距（dp） */
     val verticalSpace: StateFlow<Int> = _verticalSpace.asStateFlow()
 
-    private val _dockIconSize = MutableStateFlow(getInt(KEY_DOCK_SIZE, 40))
-    /** 底部图标大小（dp） */
+    private val _dockIconSize = MutableStateFlow(getInt(KEY_DOCK_SIZE, DefaultSettings.DOCK_ICON_SIZE))
+    /** Dock 槽位大小（dp），应用图标和右侧操作槽共用 */
     val dockIconSize: StateFlow<Int> = _dockIconSize.asStateFlow()
+
+    private val _dockActionIconSize = MutableStateFlow(getInt(KEY_DOCK_ACTION_SIZE, DefaultSettings.DOCK_ACTION_ICON_SIZE))
+    /** Dock 右侧操作槽内图标大小（dp） */
+    val dockActionIconSize: StateFlow<Int> = _dockActionIconSize.asStateFlow()
 
     fun setColumns(value: Int) = save(KEY_COLUMNS, value) { _columns.value = it }
     fun setIconSize(value: Int) = save(KEY_ICON_SIZE, value) { _iconSize.value = it }
     fun setVerticalSpace(value: Int) = save(KEY_V_SPACE, value) { _verticalSpace.value = it }
     fun setDockIconSize(value: Int) = save(KEY_DOCK_SIZE, value) { _dockIconSize.value = it }
+    fun setDockActionIconSize(value: Int) = save(KEY_DOCK_ACTION_SIZE, value) {
+        _dockActionIconSize.value = it
+    }
 
     // ═══════════════════════════════════════
     // 文件夹拼贴（2×2 / 3×3，布局设计里选）
     // ═══════════════════════════════════════
 
-    private val _folderPreview = MutableStateFlow(getInt(KEY_FOLDER_PREVIEW, 2))
+    private val _folderPreview = MutableStateFlow(getInt(KEY_FOLDER_PREVIEW, DefaultSettings.FOLDER_PREVIEW))
     /** 文件夹拼贴行列数（2=2×2 四个预览，3=3×3 九个预览） */
     val folderPreview: StateFlow<Int> = _folderPreview.asStateFlow()
 
@@ -299,19 +336,19 @@ object SettingsRepository {
     // 图标包 / 壁纸（美化菜单）
     // ═══════════════════════════════════════
 
-    private val _iconPack = MutableStateFlow(getStr(KEY_ICON_PACK, ""))
+    private val _iconPack = MutableStateFlow(getStr(KEY_ICON_PACK, DefaultSettings.ICON_PACK))
     /** 当前图标包包名（空=系统默认图标） */
     val iconPack: StateFlow<String> = _iconPack.asStateFlow()
 
-    private val _transparentBg = MutableStateFlow(getBool(KEY_TRANSPARENT, true))
+    private val _transparentBg = MutableStateFlow(getBool(KEY_TRANSPARENT, DefaultSettings.TRANSPARENT_BACKGROUND))
     /** 背景透明（透出壁纸），false=自定义图片背景 */
     val transparentBg: StateFlow<Boolean> = _transparentBg.asStateFlow()
 
-    private val _bgImagePath = MutableStateFlow(getStr(KEY_BG_IMAGE, ""))
+    private val _bgImagePath = MutableStateFlow(getStr(KEY_BG_IMAGE, DefaultSettings.BACKGROUND_IMAGE_PATH))
     /** 自定义背景图片路径（transparentBg=false 时生效） */
     val bgImagePath: StateFlow<String> = _bgImagePath.asStateFlow()
 
-    private val _animationsEnabled = MutableStateFlow(getBool(KEY_ANIMATIONS, true))
+    private val _animationsEnabled = MutableStateFlow(getBool(KEY_ANIMATIONS, DefaultSettings.ANIMATIONS_ENABLED))
     /** 动画速度档位：true=开（页面切换带动画），false=关（瞬时切换） */
     val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
 
@@ -320,7 +357,7 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_ANIMATIONS, enabled).apply()
     }
 
-    private val _autoSyncStatus = MutableStateFlow(getBool(KEY_AUTO_SYNC_STATUS, true))
+    private val _autoSyncStatus = MutableStateFlow(getBool(KEY_AUTO_SYNC_STATUS, DefaultSettings.AUTO_SYNC_STATUS))
     /** 是否在应用回到前台时静默同步系统实际状态 */
     val autoSyncStatus: StateFlow<Boolean> = _autoSyncStatus.asStateFlow()
 
@@ -373,6 +410,7 @@ object SettingsRepository {
     private const val KEY_ICON_SIZE = "icon_size"
     private const val KEY_V_SPACE = "vertical_space"
     private const val KEY_DOCK_SIZE = "dock_icon_size"
+    private const val KEY_DOCK_ACTION_SIZE = "dock_action_icon_size"
     private const val KEY_FOLDER_PREVIEW = "folder_preview"
     private const val KEY_ICON_PACK = "icon_pack"
     private const val KEY_TRANSPARENT = "transparent_bg"

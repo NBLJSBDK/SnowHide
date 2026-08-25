@@ -60,6 +60,7 @@ object BackupRepository {
         "icon_size" to ValueType.INT,
         "vertical_space" to ValueType.INT,
         "dock_icon_size" to ValueType.INT,
+        "dock_action_icon_size" to ValueType.INT,
         "folder_preview" to ValueType.INT,
         "icon_pack" to ValueType.STRING,
         "transparent_bg" to ValueType.BOOLEAN,

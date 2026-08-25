@@ -20,6 +20,7 @@ data class HomeUiState(
     val iconSize: Int,
     val verticalSpace: Int,
     val dockIconSize: Int,
+    val dockActionIconSize: Int,
     val folderPreview: Int,
     val showAppName: Boolean,
     val showReturnHomeButton: Boolean,
@@ -76,5 +77,6 @@ interface HomeActions {
     fun setIconSize(value: Int)
     fun setVerticalSpace(value: Int)
     fun setDockIconSize(value: Int)
+    fun setDockActionIconSize(value: Int)
     fun setFolderPreview(value: Int)
 }
