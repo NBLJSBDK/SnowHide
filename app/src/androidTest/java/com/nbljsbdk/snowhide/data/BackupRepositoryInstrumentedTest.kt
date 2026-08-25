@@ -40,6 +40,7 @@ class BackupRepositoryInstrumentedTest {
                 "settings",
                 JSONObject()
                     .put("show_toast", false)
+                    .put("dock_action_icon_size", 26)
                     .put("quick_toggle_members", "[\"com.example.app\"]")
                     .put("quick_toggle_opened", "[\"com.example.runtime\"]")
                     .put("lock_clean_pending", true),
@@ -47,10 +48,11 @@ class BackupRepositoryInstrumentedTest {
 
         val count = BackupRepository.importBackup(document.toString())
 
-        assertEquals(6, count)
+        assertEquals(7, count)
         assertEquals("[]", grid.getString("grid_items", null))
         assertEquals("[\"com.example.app\"]", grid.getString("locked_packages", null))
         assertEquals(false, settings.getBoolean("show_toast", true))
+        assertEquals(26, settings.getInt("dock_action_icon_size", -1))
         assertEquals("[\"com.example.app\"]", settings.getString("quick_toggle_members", null))
         assertEquals(null, settings.getString("lock_clean_pending", null))
     }
@@ -79,11 +81,17 @@ class BackupRepositoryInstrumentedTest {
         val grid = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
         val settings = context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
         grid.edit().clear().putString("grid_items", "[]").commit()
-        settings.edit().clear().putBoolean("show_toast", false).commit()
+        settings.edit()
+            .clear()
+            .putBoolean("show_toast", false)
+            .putInt("dock_action_icon_size", 26)
+            .commit()
 
         val useCase = BackupUseCase(BackupRepository)
         assertTrue(JSONObject(useCase.export(BackupUseCase.Scope.GRID).getOrThrow()).has("grid"))
-        assertTrue(JSONObject(useCase.export(BackupUseCase.Scope.SETTINGS).getOrThrow()).has("settings"))
+        val exportedSettings = JSONObject(useCase.export(BackupUseCase.Scope.SETTINGS).getOrThrow())
+            .getJSONObject("settings")
+        assertEquals(26, exportedSettings.getInt("dock_action_icon_size"))
         assertTrue(useCase.import("{\"version\":99,\"grid\":{}} ").isFailure)
     }
 }
