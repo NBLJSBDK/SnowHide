@@ -311,6 +311,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 编译通过后可以直接安装 APK 并继续真机验证；commit、amend、push、创建 tag 仍必须先获得用户明确授权。
 - 用户明确授权后，每个可编译的小功能点再单独 commit 存档（§13 规范）。
 - **HARD RULE（更新说明）**：每次准备 commit、push 或创建 Tag 前，必须先根据 Git 版本区间核对并更新 `app/src/main/java/com/nbljsbdk/snowhide/feature/about/VersionHistory.kt`；发布状态同时同步到 `AGENTS.md`、`v0.3task.md` 和设计文档。没有对应且真实的更新说明，不得提交、推送或创建 Tag。
+- **发布提交教训**：`v0.2.0` 历史曾把 Recent 划卡停用功能和更新说明放在同一发布提交；已发布历史不重写。以后功能实现、测试、模块文档和版本说明/版本号按独立提交组织，版本说明与版本号只进入专门的发布提交，确认后再推送和创建 Tag。
 - **HARD RULE（用户强调）**：集成任何三方库前，**必须先看官方文档并核对 jar 内真实 API 签名**，绝不凭训练数据假设 API 存在（训练数据会过期）。Shizuku 教训：`newProcess` 已私有、`onRequestPermissionsResult` 转发已移除、`ShizukuProvider` 必须手动声明——三个坑全是凭训练数据写的。正确做法：① webfetch 官方 README/GitHub ② javap/jadx 反编译核对 jar 签名 ③ 再写代码。
 
 ---
