@@ -17,6 +17,7 @@ class FolderPageSettingsUseCase(
     val loopEnabled = repository.folderPageLoopEnabled
     val excludedFolderIds = repository.excludedFolderIds
     val showReturnHomeButton = repository.showReturnHomeButton
+    val resetHomeOnReentry = repository.resetHomeOnReentry
 
     fun setLoopEnabled(enabled: Boolean) = repository.setFolderPageLoopEnabled(enabled)
 
@@ -36,4 +37,6 @@ class FolderPageSettingsUseCase(
     }
 
     fun setShowReturnHomeButton(enabled: Boolean) = repository.setShowReturnHomeButton(enabled)
+
+    fun setResetHomeOnReentry(enabled: Boolean) = repository.setResetHomeOnReentry(enabled)
 }

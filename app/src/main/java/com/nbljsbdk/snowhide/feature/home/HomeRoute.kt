@@ -143,4 +143,5 @@ private class HomeViewModelActions(
     override fun setFolderExcluded(folderId: Long, excluded: Boolean) =
         viewModel.setFolderExcluded(folderId, excluded)
     override fun setShowReturnHomeButton(enabled: Boolean) = viewModel.setShowReturnHomeButton(enabled)
+    override fun setResetHomeOnReentry(enabled: Boolean) = viewModel.setResetHomeOnReentry(enabled)
 }

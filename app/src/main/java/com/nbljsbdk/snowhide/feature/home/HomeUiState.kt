@@ -88,4 +88,5 @@ interface HomeActions {
     fun setFolderPageLoopEnabled(enabled: Boolean)
     fun setFolderExcluded(folderId: Long, excluded: Boolean)
     fun setShowReturnHomeButton(enabled: Boolean)
+    fun setResetHomeOnReentry(enabled: Boolean)
 }

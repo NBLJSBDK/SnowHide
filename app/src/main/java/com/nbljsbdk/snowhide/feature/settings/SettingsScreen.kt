@@ -59,7 +59,7 @@ import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 /**
  * 设置页（设计文档 §3.11 更多选项，P0 子集）
  *
- * - 简单设置：提示与反馈 / 退出回目录
+ * - 提示与反馈 / 退出回目录
  * - 图标包选择器
  * - 壁纸：透明开关（图片选择 P1）
  * - 布局设置已移到主屏长按菜单 → 透明浮框（实时预览）
@@ -83,7 +83,6 @@ fun SettingsScreen(
 ) {
     val settings = viewModel.settings
     val showToast by settings.showToast.collectAsState()
-    val resetHomeOnReentry by settings.resetHomeOnReentry.collectAsState()
     val autoSyncStatus by settings.autoSyncStatus.collectAsState()
     val hapticEnabled by settings.hapticEnabled.collectAsState()
     val lockCleanEnabled by settings.lockCleanEnabled.collectAsState()
@@ -95,7 +94,6 @@ fun SettingsScreen(
     var showFeedbackSettings by remember { mutableStateOf(false) }
     var showHapticSettings by remember { mutableStateOf(false) }
     var showSwipeDisableSettings by remember { mutableStateOf(false) }
-    var reentryInfoOpen by remember { mutableStateOf(false) }
     var lockCleanInfoOpen by remember { mutableStateOf(false) }
 
     // 备份导出/导入提示
@@ -176,19 +174,6 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { restartPrompt = false }) { Text("稍后") }
-            },
-        )
-    }
-
-    if (reentryInfoOpen) {
-        AlertDialog(
-            onDismissRequest = { reentryInfoOpen = false },
-            title = { Text("重进时回到主屏") },
-            text = {
-                Text("开启后，离开雪藏超过 10 秒，再次进入会自动回到主屏并关闭搜索状态。是否显示提示可在“提示与反馈”中单独设置。10 秒内返回则保留当前页面。")
-            },
-            confirmButton = {
-                TextButton(onClick = { reentryInfoOpen = false }) { Text("知道了") }
             },
         )
     }
@@ -287,16 +272,6 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── 简单设置（基础开关置顶） ──
-            SettingCard("简单设置") {
-                SwitchSetting(
-                    label = "重进时回到主屏",
-                    checked = resetHomeOnReentry,
-                    onChange = { settings.setResetHomeOnReentry(it) },
-                    onInfo = { reentryInfoOpen = true },
-                )
-            }
-
             // ── 提示与反馈（独立三级页入口） ──
             SettingCard("提示与反馈") {
                 Row(

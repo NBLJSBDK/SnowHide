@@ -961,7 +961,7 @@ fun HomeContent(
             title = { Text("宫格设置") },
             text = {
                 Column {
-                    DialogAction("布局设计") {
+                    DialogAction("布局设置") {
                         blankMenuOpen = false
                         layoutPanelOpen = true
                     }
@@ -1017,6 +1017,7 @@ fun HomeContent(
             loopEnabled = folderPageLoopEnabled,
             excludedFolderIds = excludedFolderIds,
             showReturnHomeButton = showReturnHomeButton,
+            resetHomeOnReentry = resetHomeOnReentry,
             onLoopEnabledChange = { enabled -> actions.setFolderPageLoopEnabled(enabled) },
             onFolderExcludedChange = { folderId, excluded ->
                 if (excluded && currentFolderId == folderId) {
@@ -1025,6 +1026,7 @@ fun HomeContent(
                 actions.setFolderExcluded(folderId, excluded)
             },
             onShowReturnHomeButtonChange = { enabled -> actions.setShowReturnHomeButton(enabled) },
+            onResetHomeOnReentryChange = { enabled -> actions.setResetHomeOnReentry(enabled) },
             onComplete = { folderPagePanelOpen = false },
             onBackToMenu = {
                 folderPagePanelOpen = false

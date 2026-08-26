@@ -359,7 +359,7 @@ object SettingsRepository {
     }
 
     // ═══════════════════════════════════════
-    // 文件夹拼贴（2×2 / 3×3，布局设计里选）
+    // 文件夹拼贴（2×2 / 3×3，布局设置里选）
     // ═══════════════════════════════════════
 
     private val _folderPreview = MutableStateFlow(getInt(KEY_FOLDER_PREVIEW, DefaultSettings.FOLDER_PREVIEW))

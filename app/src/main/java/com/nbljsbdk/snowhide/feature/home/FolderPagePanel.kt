@@ -44,9 +44,11 @@ fun FolderPagePanel(
     loopEnabled: Boolean,
     excludedFolderIds: Set<Long>,
     showReturnHomeButton: Boolean,
+    resetHomeOnReentry: Boolean,
     onLoopEnabledChange: (Boolean) -> Unit,
     onFolderExcludedChange: (Long, Boolean) -> Unit,
     onShowReturnHomeButtonChange: (Boolean) -> Unit,
+    onResetHomeOnReentryChange: (Boolean) -> Unit,
     onComplete: () -> Unit,
     onBackToMenu: () -> Unit,
 ) {
@@ -155,6 +157,12 @@ fun FolderPagePanel(
                     onCheckedChange = onShowReturnHomeButtonChange,
                     onInfo = { infoTarget = InfoTarget.RETURN_HOME },
                 )
+                SettingInfoRow(
+                    label = "重进时回到主屏",
+                    checked = resetHomeOnReentry,
+                    onCheckedChange = onResetHomeOnReentryChange,
+                    onInfo = { infoTarget = InfoTarget.REENTRY },
+                )
                 PanelButtons(
                     primaryText = "完成",
                     onPrimary = onComplete,
@@ -191,6 +199,10 @@ private enum class InfoTarget(
     RETURN_HOME(
         title = "返回主屏按钮说明",
         description = "开启后，文件夹页面的首格显示返回主屏按钮；关闭后不显示这个首格。",
+    ),
+    REENTRY(
+        title = "重进时回到主屏说明",
+        description = "开启后，离开雪藏超过 10 秒，再次进入会自动回到主屏并关闭搜索状态。是否显示提示可在“提示与反馈”中单独设置。10 秒内返回则保留当前页面。",
     ),
 }
 

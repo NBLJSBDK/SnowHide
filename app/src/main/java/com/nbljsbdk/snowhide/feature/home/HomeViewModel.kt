@@ -90,7 +90,7 @@ class HomeViewModel(
     val showReturnHomeButton: StateFlow<Boolean> = folderPageSettingsUseCase.showReturnHomeButton
     val folderPageLoopEnabled: StateFlow<Boolean> = folderPageSettingsUseCase.loopEnabled
     val excludedFolderIds: StateFlow<Set<Long>> = folderPageSettingsUseCase.excludedFolderIds
-    val resetHomeOnReentry: StateFlow<Boolean> = settingsRepository.resetHomeOnReentry
+    val resetHomeOnReentry: StateFlow<Boolean> = folderPageSettingsUseCase.resetHomeOnReentry
     val showReentryToast: StateFlow<Boolean> = settingsRepository.showReentryToast
     val autoSyncStatus: StateFlow<Boolean> = settingsRepository.autoSyncStatus
     val iconPack: StateFlow<String> = appearanceSettingsUseCase.iconPack
@@ -312,6 +312,9 @@ class HomeViewModel(
 
     fun setShowReturnHomeButton(enabled: Boolean) =
         folderPageSettingsUseCase.setShowReturnHomeButton(enabled)
+
+    fun setResetHomeOnReentry(enabled: Boolean) =
+        folderPageSettingsUseCase.setResetHomeOnReentry(enabled)
 
     fun setColumns(value: Int) = settingsRepository.setColumns(value)
 
