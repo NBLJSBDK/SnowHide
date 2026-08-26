@@ -117,7 +117,7 @@
 ## 6. 数据和副作用
 
 - 主屏应用/文件夹顺序由 `GridItem.sortOrder` 维护。
-- 文件夹顺序由 `Folder.sortOrder` 维护。
+- 文件夹页的循环顺序取主屏混排中各文件夹 `GridItem.sortOrder` 的顺序；`Folder.sortOrder` 仅作为文件夹元数据和缺失主屏项时的回退顺序。
 - 文件夹内应用顺序由 `FolderApp.sortOrder` 维护。
 - 左右移动、上下转移、新建、删除和改名均立即 `persist()`。
 - 删除文件夹不删除应用数据，只改变宫格归属并把成员补回主屏。
