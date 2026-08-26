@@ -8,6 +8,7 @@ import com.nbljsbdk.snowhide.data.model.GridItem
 /** 主屏 Content 所需的不可变状态快照，不包含 Compose 类型或 Repository。 */
 data class HomeUiState(
     val gridItems: List<GridItem>,
+    val homeFolderIds: List<Long>,
     val folders: List<Folder>,
     val folderApps: List<FolderApp>,
     val frozenStates: Map<String, Boolean>,

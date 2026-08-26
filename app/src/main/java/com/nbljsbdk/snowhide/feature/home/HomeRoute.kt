@@ -17,6 +17,7 @@ fun HomeRoute(
     viewModel: HomeViewModel,
 ) {
     val gridItems by viewModel.gridItems.collectAsState()
+    val homeFolderIds by viewModel.homeFolderIds.collectAsState()
     val folders by viewModel.folders.collectAsState()
     val folderApps by viewModel.folderApps.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
@@ -50,6 +51,7 @@ fun HomeRoute(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val state = HomeUiState(
         gridItems = gridItems,
+        homeFolderIds = homeFolderIds,
         folders = folders,
         folderApps = folderApps,
         frozenStates = frozenStates,

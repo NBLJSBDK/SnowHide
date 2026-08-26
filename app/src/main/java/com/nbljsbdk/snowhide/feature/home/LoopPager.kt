@@ -5,7 +5,7 @@ import androidx.compose.foundation.pager.PagerState
 /**
  * 循环滑动分页锚点（设计文档 §3.2）
  *
- * 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按 sortOrder），
+ * 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按主屏混排顺序），
  * 左右滑动循环切换。Pager 以 LOOP_BASE 倍数为起点、LOOP_TOTAL 倍数
  * 为总页数模拟循环；「主屏基准页」= currentPage 所在循环段的首页
  * （对 actualCount 取模为 0）。

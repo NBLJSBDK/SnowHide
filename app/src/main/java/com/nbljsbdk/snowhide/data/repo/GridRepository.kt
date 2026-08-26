@@ -76,7 +76,7 @@ object GridRepository : FreezeTargetStore {
     val gridItems: StateFlow<List<GridItem>> = _gridItems.asStateFlow()
 
     private val _folders = MutableStateFlow<List<Folder>>(emptyList())
-    /** 文件夹列表（按 sortOrder 升序，即循环滑动顺序） */
+    /** 文件夹元数据；循环页面顺序由主屏混排中的文件夹项决定 */
     val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
 
     private val _folderApps = MutableStateFlow<List<FolderApp>>(emptyList())

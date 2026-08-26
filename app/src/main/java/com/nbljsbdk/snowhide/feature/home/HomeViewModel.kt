@@ -23,8 +23,11 @@ import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -45,6 +48,9 @@ class HomeViewModel(
     private val settingsRepository = SettingsRepository
 
     val gridItems: StateFlow<List<GridItem>> = gridRepository.gridItems
+    val homeFolderIds: StateFlow<List<Long>> = gridRepository.gridItems
+        .map(::folderIdsInHomeOrder)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val folders: StateFlow<List<Folder>> = gridRepository.folders
     val folderApps: StateFlow<List<FolderApp>> = gridRepository.folderApps
     val lockedPackages: StateFlow<Set<String>> = gridRepository.lockedPackages
@@ -453,3 +459,12 @@ class HomeViewModel(
         _message.value = null
     }
 }
+
+/** 从主屏混排顺序投影文件夹页序列，避免 Composable 直接拼装业务排序。 */
+internal fun folderIdsInHomeOrder(items: List<GridItem>): List<Long> =
+    items.asSequence()
+        .filter { it.type == "folder" }
+        .sortedBy { it.sortOrder }
+        .mapNotNull { it.folderId }
+        .distinct()
+        .toList()

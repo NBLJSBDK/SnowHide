@@ -4,7 +4,7 @@ package com.nbljsbdk.snowhide.data.model
  * 主屏幕宫格项——应用与文件夹混排（设计文档 §3.2）
  *
  * 顺序即用户摆放顺序（整理目录左右键维护），
- * 也是循环滑动的页面序列依据（文件夹按 sortOrder 排列）。
+ * 也是循环滑动的页面序列依据（文件夹按主屏混排中的出现顺序排列）。
  */
 data class GridItem(
     val id: Long,            // 自增

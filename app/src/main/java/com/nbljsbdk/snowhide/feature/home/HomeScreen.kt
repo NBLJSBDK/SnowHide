@@ -126,6 +126,7 @@ fun HomeContent(
     actions: HomeActions,
 ) {
     val gridItems = state.gridItems
+    val homeFolderIds = state.homeFolderIds
     val folders = state.folders
     val folderApps = state.folderApps
     val frozenStates = state.frozenStates
@@ -285,10 +286,11 @@ fun HomeContent(
             )
         }
         // 循环滑动（设计文档 §3.2）：
-        // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹按 sortOrder）
+        // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹顺序跟随主屏混排）
         // 左右滑动循环切换；从哪个文件夹进入就从哪里开始
         val pagePlan = FolderPagePlanner.plan(
             folders.map { FolderPageInput(it.id, it.sortOrder) },
+            homeFolderIds = homeFolderIds,
         )
         val sortedFolders = pagePlan.folderIds.mapNotNull { id -> folders.firstOrNull { it.id == id } }
         val actualCount = pagePlan.pageCount

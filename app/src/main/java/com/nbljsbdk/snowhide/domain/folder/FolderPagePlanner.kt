@@ -63,12 +63,22 @@ object FolderPagePlanner {
         folders: List<FolderPageInput>,
         loopEnabled: Boolean = true,
         excludedFolderIds: Set<Long> = emptySet(),
+        /** 主屏混排中按 GridItem.sortOrder 得到的文件夹顺序。 */
+        homeFolderIds: List<Long> = emptyList(),
     ): FolderPagePlan {
+        val homeOrder = homeFolderIds
+            .distinct()
+            .withIndex()
+            .associate { it.value to it.index }
         val pages = buildList {
             add(FolderPage.Home)
             folders.asSequence()
                 .filter { it.id !in excludedFolderIds }
-                .sortedWith(compareBy<FolderPageInput> { it.sortOrder }.thenBy { it.id })
+                .sortedWith(
+                    compareBy<FolderPageInput> { homeOrder[it.id] ?: Int.MAX_VALUE }
+                        .thenBy { it.sortOrder }
+                        .thenBy { it.id },
+                )
                 .forEach { add(FolderPage.Folder(it.id)) }
         }
         return FolderPagePlan(pages, loopEnabled)
