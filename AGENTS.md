@@ -364,7 +364,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 1. **debug 包比 release 卡**：debug 无 R8 优化 + debuggable，大列表渲染差异明显——日常使用 release（正常）。
 2. **图标包覆盖不全**：未收录的应用回退系统图标（可配合「图标形状=圆形」统一视觉）。
-3. **Android instrumentation 尚未运行**：JVM 回归测试已建立并通过，Android Test APK 已编译，仍需连接设备执行。
+3. **Android instrumentation 已通过**：`connectedDebugAndroidTest` 在 RMX3888（Android 14）运行 6 个测试全部通过；测试使用独立 debug 包。
 4. **应用桥**：功能已研究清楚（黑白门 3.3.3 反编译实证），优先级最后；快速启停一定程度替代它。
 5. **调试日志已清空**：以后加日志用 `BuildConfig.DEBUG` 门控。
 6. **应用分身规格尚未细化**：正式实施前需补充用户空间选择、状态查询、数据模型和跨用户安全规则。
