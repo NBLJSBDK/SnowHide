@@ -35,7 +35,7 @@ import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 /**
  * 美化设置透明浮框（长按主屏空白 → 美化设置，与布局设置同款浮框）
  *
- * 内容：图标包选择（点击行在浮框内展开列表）+ 背景透明开关。
+ * 内容：图标包选择（点击行在浮框内展开列表）+ 背景透明开关 + 显示图标名称。
  * 无状态组件（值+回调）。
  */
 @Composable
@@ -44,6 +44,7 @@ fun BeautyPanel(
     transparentBg: Boolean,
     wallpaperOverlay: Float = 0.25f,
     animationsEnabled: Boolean = true,
+    showAppName: Boolean = true,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
     iconShape: String = "round",
     iconPacks: List<AppIconLoader.IconPackInfo>,
@@ -53,15 +54,19 @@ fun BeautyPanel(
     onTransparentToggle: (Boolean) -> Unit,
     onWallpaperOverlayChange: (Float) -> Unit = {},
     onAnimationsToggle: (Boolean) -> Unit = {},
+    onShowAppNameChange: (Boolean) -> Unit = {},
     onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
     onIconShapeSelect: (String) -> Unit = {},
-    onDismiss: () -> Unit,
+    onComplete: () -> Unit,
+    onBackToMenu: () -> Unit,
 ) {
     // 浮框内两态：false=主视图，true=图标包列表
     var showPackList by remember { mutableStateOf(false) }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (showPackList) showPackList = false else onBackToMenu()
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Column(
@@ -162,6 +167,25 @@ fun BeautyPanel(
                     valueRange = 0f..1f,
                     steps = 19, // 0.05 步进
                 )
+                // 应用、文件夹和返回主屏按钮的名称显示
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onShowAppNameChange(!showAppName) }
+                        .padding(vertical = 8.dp),
+                ) {
+                    Text(
+                        text = "显示图标名称",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Checkbox(
+                        checked = showAppName,
+                        onCheckedChange = onShowAppNameChange,
+                    )
+                }
                 // 动画速度档位（用户拍板：关=页面切换瞬时，快速操作）
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -233,7 +257,8 @@ fun BeautyPanel(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
                 ) {
-                    TextButton(onClick = onDismiss) { Text("完成") }
+                    TextButton(onClick = onBackToMenu) { Text("取消") }
+                    TextButton(onClick = onComplete) { Text("完成") }
                 }
             }
         }

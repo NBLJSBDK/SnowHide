@@ -9,7 +9,10 @@ import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
 import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.QuickToggleUseCase
+import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
+import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 
 /**
  * 进程级依赖容器——UseCase 的唯一构造点。
@@ -41,5 +44,15 @@ class AppContainer {
     /** Recent 校准数据门面（校准触发由 AppShell 注入系统回调）。 */
     val recentCalibrationUseCase: RecentCalibrationUseCase by lazy {
         RecentCalibrationUseCase(RecentCalibrationRepository)
+    }
+
+    /** 外观设置入口（图标名称、图标包、背景和冻结视觉）。 */
+    val appearanceSettingsUseCase: AppearanceSettingsUseCase by lazy {
+        AppearanceSettingsUseCase(SettingsRepository)
+    }
+
+    /** 文件夹页面设置入口（循环、排除和返回主屏按钮）。 */
+    val folderPageSettingsUseCase: FolderPageSettingsUseCase by lazy {
+        FolderPageSettingsUseCase(SettingsRepository)
     }
 }

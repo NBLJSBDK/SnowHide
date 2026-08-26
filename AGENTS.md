@@ -108,7 +108,7 @@ gradlew.bat assembleRelease
 ## 4. Versioning (do NOT change casually)
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
-- `versionName` = 语义版本（当前 `0.3.2`，上一正式版本为 `v0.3.1`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
+- `versionName` = 语义版本（当前开发版 `0.4.0-dev`，最近正式版 `0.3.2`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
 - **开发版号**：开发阶段使用正式目标版本加 `-dev` 后缀，例如 `0.3.3-dev`；反复修改和重新编译可递增为 `0.3.3-dev.1`、`0.3.3-dev.2`，正式发布时去掉后缀恢复为 `0.3.3`。开发版号只用于区分安装包，不创建正式 Tag 或正式版本历史记录。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
@@ -190,12 +190,14 @@ domain/
   backup/BackupUseCase.kt — 备份导入导出校验与业务结果
   recent/              — Recent 会话状态、候选策略和校准业务
   folder/              — 文件夹页面规划
+  folder/FolderPageSettingsUseCase.kt — 循环、排除和返回主屏设置入口
+  settings/AppearanceSettingsUseCase.kt — 外观设置入口
   organize/            — 整理目录状态机与 Reducer
   appmanage/           — 应用管理冻结规划
   QuickToggleUseCase.kt — 快速启停成员与执行规则
 
 feature/
-  home/                — 主屏幕（HomeViewModel + HomeScreen）
+  home/                — 主屏幕（HomeViewModel + HomeScreen + 宫格设置浮框）
   folder/ organize/ appmanage/ settings/ about/ — 主功能页；划卡停用与版本历史在 settings/about
 
 service/               — 锁屏清理与 Recent 划卡停用；未来扩展 tile
@@ -342,6 +344,11 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 9. P2/P3：禁用/隐藏模式及多引擎身份一致性
 10. 应用桥（已完成调研，优先级最后）
 
+**当前开发中（`0.4.0-dev`，尚未功能验收）**：
+- 宫格设置统一入口：主屏和任意文件夹空白处长按均可打开。
+- 美化设置增加显示图标名称；布局设计保持不变。
+- 目录设置增加循环滑动、排除文件夹和显示返回主屏按钮。
+
 ## 12. Known limitations / candidate next tasks
 
 1. **debug 包比 release 卡**：debug 无 R8 优化 + debuggable，大列表渲染差异明显——日常使用 release（正常）。
@@ -357,6 +364,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 ## 13. Repo / git
 
 - 当前分支：`master`，最近正式发布提交：`b206ae1`（`v0.3.2` tag）；历史回退基线：`5cd8ce6`（`baseline-before-v0.2.0` tag）。
+- `v0.4` 基线 Tag 已指向 `666eae5`（主线开始 `0.4.0-dev` 开发）；开发阶段不创建 `-dev` Tag，正式版本 Tag 仍须等验收完成后创建。
 - 基线历史仍包含 `v0.1.6`（指向 `69df809`）及提示、震动、设置页卡片层级功能。
 - `v0.2.0` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
 - `v0.2.1` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。

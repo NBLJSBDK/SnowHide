@@ -97,8 +97,7 @@ import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.core.feedback.HapticType
 import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
-import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
-import com.nbljsbdk.snowhide.domain.folder.FolderPageInput
+import com.nbljsbdk.snowhide.domain.folder.FolderPageOption
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeViewModel
@@ -126,7 +125,6 @@ fun HomeContent(
     actions: HomeActions,
 ) {
     val gridItems = state.gridItems
-    val homeFolderIds = state.homeFolderIds
     val folders = state.folders
     val folderApps = state.folderApps
     val frozenStates = state.frozenStates
@@ -148,6 +146,9 @@ fun HomeContent(
     val folderPreview = state.folderPreview
     val showAppName = state.showAppName
     val showReturnHomeButton = state.showReturnHomeButton
+    val folderPagePlan = state.folderPagePlan
+    val folderPageLoopEnabled = state.folderPageLoopEnabled
+    val excludedFolderIds = state.excludedFolderIds
     val resetHomeOnReentry = state.resetHomeOnReentry
     val showReentryToast = state.showReentryToast
     val autoSyncStatus = state.autoSyncStatus
@@ -199,6 +200,20 @@ fun HomeContent(
     var layoutPanelOpen by remember { mutableStateOf(false) }
     var blankMenuOpen by remember { mutableStateOf(false) }
     var beautyPanelOpen by remember { mutableStateOf(false) }
+    var folderPagePanelOpen by remember { mutableStateOf(false) }
+    var returnHomeAfterFolderSetting by remember { mutableStateOf(false) }
+    var currentFolderId by remember { mutableStateOf<Long?>(null) }
+    var directFolderId by remember { mutableStateOf<Long?>(null) }
+
+    val sortedFolders = folderPagePlan.folderIds.mapNotNull { id -> folders.firstOrNull { it.id == id } }
+    val actualCount = folderPagePlan.pageCount
+    val directFolder = directFolderId?.let { id -> folders.firstOrNull { it.id == id } }
+    val folderPageOptions = remember(folders) {
+        folders.map { FolderPageOption(it.id, it.name, it.sortOrder) }
+    }
+    LaunchedEffect(directFolderId, folders) {
+        if (directFolderId != null && directFolder == null) directFolderId = null
+    }
 
     // 美化浮框数据：当前图标包/透明开关 + 已装图标包列表
     val iconPack = state.iconPack
@@ -287,19 +302,18 @@ fun HomeContent(
         }
         // 循环滑动（设计文档 §3.2）：
         // 页面序列 = [主屏, 文件夹1, 文件夹2, ...]（文件夹顺序跟随主屏混排）
-        // 左右滑动循环切换；从哪个文件夹进入就从哪里开始
-        val pagePlan = FolderPagePlanner.plan(
-            folders.map { FolderPageInput(it.id, it.sortOrder) },
-            homeFolderIds = homeFolderIds,
-        )
-        val sortedFolders = pagePlan.folderIds.mapNotNull { id -> folders.firstOrNull { it.id == id } }
-        val actualCount = pagePlan.pageCount
+        // 页面计划由 HomeViewModel 组合 domain 规划器和持久化设置得到。
         val pagerState = rememberPagerState(
-            initialPage = LOOP_BASE * actualCount,
-        ) { LOOP_TOTAL * actualCount }
+            initialPage = if (folderPageLoopEnabled) LOOP_BASE * actualCount else 0,
+        ) {
+            if (folderPageLoopEnabled) LOOP_TOTAL * actualCount else actualCount
+        }
         // 当前页索引（0=主屏）：顶栏动态显示主屏「雪藏」/ 文件夹名
-        val pageIdx = pagePlan.logicalIndex(pagerState.currentPage)
-        val inFolder = !organizing && pageIdx != 0
+        val pageIdx = folderPagePlan.logicalIndex(pagerState.currentPage)
+        val inFolder = directFolder != null || (!organizing && pageIdx != 0)
+        LaunchedEffect(pageIdx, folderPagePlan.folderIds, directFolderId) {
+            currentFolderId = directFolder?.id ?: folderPagePlan.folderIds.getOrNull(pageIdx - 1)
+        }
         val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
         DisposableEffect(
             lifecycleOwner,
@@ -354,6 +368,7 @@ fun HomeContent(
                     Text(
                         text = when {
                             organizing -> "整理目录"
+                            directFolder != null -> directFolder.name
                             inFolder -> sortedFolders[pageIdx - 1].name
                             else -> stringResource(com.nbljsbdk.snowhide.R.string.app_name)
                         },
@@ -407,10 +422,14 @@ fun HomeContent(
                         }
                         GearMenu(
                             expanded = menuOpen,
-                             onDismiss = { actions.dismissMenu() },
+                            onDismiss = { actions.dismissMenu() },
                             onOrganize = {
                                 organizeViewModel.enter(
-                                    if (inFolder) sortedFolders.getOrNull(pageIdx - 1)?.id else null,
+                                    directFolder?.id ?: if (!organizing && pageIdx != 0) {
+                                        sortedFolders.getOrNull(pageIdx - 1)?.id
+                                    } else {
+                                        null
+                                    },
                                 )
                                  actions.setOrganizing(true)
                             },
@@ -445,13 +464,18 @@ fun HomeContent(
         // ② 整理目录模式 → 退出整理，所有操作已经即时生效
         // ③ 文件夹页 → 滑回主屏页
         // ④ 主屏非整理 → 默认行为（退出 App）
-        BackHandler(enabled = searchOpen || organizing || pagerState.currentPage % actualCount != 0) {
+        BackHandler(
+            enabled = searchOpen || organizing || directFolderId != null ||
+                pagerState.currentPage % actualCount != 0,
+        ) {
             if (searchOpen) {
                 searchOpen = false
                  actions.setSearchQuery("")
             } else if (organizing) {
                 organizeViewModel.commitFolderName()
                 actions.setOrganizing(false)
+            } else if (directFolderId != null) {
+                directFolderId = null
             } else {
                 scope.launch { if (animationsEnabled) pagerState.animateHome(actualCount) else pagerState.scrollHome(actualCount) }
             }
@@ -462,9 +486,16 @@ fun HomeContent(
         // actualCount 变化会让取模结果漂到别的文件夹页（scrollHome 瞬时对齐）。
         // - 整理模式：锁定主屏
         // - 非整理：删除文件夹的唯一入口是主屏长按（用户本在主屏），漂移即对齐回主屏
-        LaunchedEffect(organizing, actualCount) {
-            if (organizing || pagerState.currentPage % actualCount != 0) {
-                pagerState.scrollHome(actualCount)
+        LaunchedEffect(organizing, actualCount, folderPageLoopEnabled) {
+            val needsHome = if (folderPageLoopEnabled) {
+                pagerState.currentPage % actualCount != 0
+            } else {
+                pagerState.currentPage >= actualCount
+            }
+            if (returnHomeAfterFolderSetting || organizing || needsHome) {
+                returnHomeAfterFolderSetting = false
+                if (folderPageLoopEnabled) pagerState.scrollHome(actualCount)
+                else pagerState.scrollToPage(0)
             }
         }
 
@@ -483,15 +514,41 @@ fun HomeContent(
         HorizontalPager(
             state = pagerState,
             // 只有一个主屏（没有文件夹）时禁用滑动；搜索/整理期间锁定主屏
-            userScrollEnabled = !organizing && sortedFolders.isNotEmpty() && searchQuery.isBlank(),
+            userScrollEnabled = directFolderId == null &&
+                !organizing && sortedFolders.isNotEmpty() && searchQuery.isBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
         ) { page ->
             // 整理模式强制渲染主屏：创建/删除文件夹的瞬间 actualCount 已变而
             // currentPage 还未对齐，取模结果会漂到文件夹页造成闪动。
-            val idx = if (organizing) 0 else ((page % actualCount) + actualCount) % actualCount
-            if (idx == 0) {
+            val idx = if (organizing) 0 else folderPagePlan.logicalIndex(page)
+            if (directFolderId != null) {
+                directFolder?.let { folder ->
+                    FolderScreen(
+                        folder = folder,
+                        memberPackages = folderApps
+                            .filter { it.folderId == folder.id }
+                            .sortedBy { it.sortOrder }
+                            .map { it.pkg },
+                        icons = icons,
+                        frozenStates = frozenStates,
+                        columns = columns,
+                        iconSize = iconSize.dp,
+                        verticalSpace = verticalSpace,
+                        freezeStyle = freezeStyle,
+                        iconShape = iconShape,
+                        showAppName = showAppName,
+                        appStates = appStates,
+                        showReturnHomeButton = showReturnHomeButton,
+                        onBackToHome = { directFolderId = null },
+                        onAppClick = { handleAppClick(it) },
+                        onAppLongClick = { item -> longPressTarget = item },
+                        onAppLabel = { pkg -> labels[pkg] ?: "" },
+                        onBlankLongPress = { blankMenuOpen = true },
+                    )
+                }
+            } else if (idx == 0) {
                 // ── 主屏页 ──
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -512,12 +569,12 @@ fun HomeContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .padding(horizontal = 12.dp)
-                            // 空白处长按 → 布局设计/美化设置菜单（用户拍板）
+                             // 空白处长按 → 宫格设置菜单（用户拍板）
                             .combinedClickable(
                                 onClick = {},
                                 onLongClick = { blankMenuOpen = true },
-                            ),
+                            )
+                            .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
                     ) {
@@ -570,13 +627,17 @@ fun HomeContent(
                                                     organizeViewModel.tapFolder(folder)
                                                 } else {
                                                     // 跳到该文件夹页（循环内当前位置的相邻页）
-                                                    val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
-                                                    if (folderIndex >= 0) {
+                                                     val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
+                                                     if (folderIndex >= 0) {
+                                                          HapticController.vibrate(context, HapticType.NAVIGATION)
+                                                         scope.launch {
+                                                             pagerState.jumpToFolder(actualCount, folderIndex)
+                                                         }
+                                                     } else {
+                                                         // 被排除的文件夹仍可从主屏直接打开，但不加入左右滑动页面。
                                                          HapticController.vibrate(context, HapticType.NAVIGATION)
-                                                        scope.launch {
-                                                            pagerState.jumpToFolder(actualCount, folderIndex)
-                                                        }
-                                                    }
+                                                         directFolderId = folder.id
+                                                     }
                                                 }
                                             },
                                             onLongPress = { longPressTarget = item },
@@ -893,11 +954,11 @@ fun HomeContent(
         )
     }
 
-    // 主屏空白处长按菜单：布局设计 / 美化设置（用户拍板）
+    // 任意宫格空白处长按菜单：三类宫格设置
     if (blankMenuOpen) {
         AlertDialog(
             onDismissRequest = { blankMenuOpen = false },
-            title = { Text("主屏幕") },
+            title = { Text("宫格设置") },
             text = {
                 Column {
                     DialogAction("布局设计") {
@@ -907,6 +968,10 @@ fun HomeContent(
                     DialogAction("美化设置") {
                         blankMenuOpen = false
                         beautyPanelOpen = true
+                    }
+                    DialogAction("目录设置") {
+                        blankMenuOpen = false
+                        folderPagePanelOpen = true
                     }
                 }
             },
@@ -925,18 +990,46 @@ fun HomeContent(
             transparentBg = transparentBg,
             wallpaperOverlay = wallpaperOverlay,
             animationsEnabled = animationsEnabled,
+            showAppName = showAppName,
             freezeStyle = freezeStyle,
             iconPacks = iconPacks,
             iconPacksLoading = iconPacksLoading,
             onRefreshIconPacks = { refreshIconPacks() },
-            iconShape = iconShape,
+             iconShape = iconShape,
              onIconPackSelect = { pkg -> actions.applyIconPack(pkg) },
              onTransparentToggle = { on -> actions.setTransparentBg(on) },
              onWallpaperOverlayChange = { alpha -> actions.setWallpaperOverlay(alpha) },
              onAnimationsToggle = { on -> actions.setAnimationsEnabled(on) },
+             onShowAppNameChange = { on -> actions.setShowAppName(on) },
              onFreezeStyleSelect = { style -> actions.setFreezeStyle(style.name) },
              onIconShapeSelect = { shape -> actions.setIconShape(shape) },
-            onDismiss = { beautyPanelOpen = false },
+            onComplete = { beautyPanelOpen = false },
+            onBackToMenu = {
+                beautyPanelOpen = false
+                blankMenuOpen = true
+            },
+        )
+    }
+
+    if (folderPagePanelOpen) {
+        FolderPagePanel(
+            folders = folderPageOptions,
+            loopEnabled = folderPageLoopEnabled,
+            excludedFolderIds = excludedFolderIds,
+            showReturnHomeButton = showReturnHomeButton,
+            onLoopEnabledChange = { enabled -> actions.setFolderPageLoopEnabled(enabled) },
+            onFolderExcludedChange = { folderId, excluded ->
+                if (excluded && currentFolderId == folderId) {
+                    returnHomeAfterFolderSetting = true
+                }
+                actions.setFolderExcluded(folderId, excluded)
+            },
+            onShowReturnHomeButtonChange = { enabled -> actions.setShowReturnHomeButton(enabled) },
+            onComplete = { folderPagePanelOpen = false },
+            onBackToMenu = {
+                folderPagePanelOpen = false
+                blankMenuOpen = true
+            },
         )
     }
 
@@ -955,7 +1048,11 @@ fun HomeContent(
              onDockIconSizeChange = { actions.setDockIconSize(it) },
              onDockActionIconSizeChange = { actions.setDockActionIconSize(it) },
              onFolderPreviewChange = { actions.setFolderPreview(it) },
-            onDismiss = { layoutPanelOpen = false },
+            onComplete = { layoutPanelOpen = false },
+            onBackToMenu = {
+                layoutPanelOpen = false
+                blankMenuOpen = true
+            },
         )
     }
 }

@@ -19,9 +19,15 @@ import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
+import com.nbljsbdk.snowhide.domain.folder.FolderPageInput
+import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
+import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
+import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
+import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +45,8 @@ import kotlinx.coroutines.launch
 class HomeViewModel(
     application: Application,
     private val freezeUseCase: FreezeUseCase,
+    private val appearanceSettingsUseCase: AppearanceSettingsUseCase,
+    private val folderPageSettingsUseCase: FolderPageSettingsUseCase,
 ) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
@@ -54,6 +62,23 @@ class HomeViewModel(
     val folders: StateFlow<List<Folder>> = gridRepository.folders
     val folderApps: StateFlow<List<FolderApp>> = gridRepository.folderApps
     val lockedPackages: StateFlow<Set<String>> = gridRepository.lockedPackages
+    val folderPagePlan: StateFlow<FolderPagePlan> = combine(
+        folders,
+        homeFolderIds,
+        folderPageSettingsUseCase.loopEnabled,
+        folderPageSettingsUseCase.excludedFolderIds,
+    ) { folderList, homeIds, loopEnabled, excludedFolderIds ->
+        FolderPagePlanner.plan(
+            folders = folderList.map { FolderPageInput(it.id, it.sortOrder) },
+            loopEnabled = loopEnabled,
+            excludedFolderIds = excludedFolderIds,
+            homeFolderIds = homeIds,
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        FolderPagePlanner.plan(emptyList()),
+    )
 
     val columns: StateFlow<Int> = settingsRepository.columns
     val iconSize: StateFlow<Int> = settingsRepository.iconSize
@@ -61,27 +86,36 @@ class HomeViewModel(
     val dockIconSize: StateFlow<Int> = settingsRepository.dockIconSize
     val dockActionIconSize: StateFlow<Int> = settingsRepository.dockActionIconSize
     val folderPreview: StateFlow<Int> = settingsRepository.folderPreview
-    val showAppName: StateFlow<Boolean> = settingsRepository.showAppName
-    val showReturnHomeButton: StateFlow<Boolean> = settingsRepository.showReturnHomeButton
+    val showAppName: StateFlow<Boolean> = appearanceSettingsUseCase.showAppName
+    val showReturnHomeButton: StateFlow<Boolean> = folderPageSettingsUseCase.showReturnHomeButton
+    val folderPageLoopEnabled: StateFlow<Boolean> = folderPageSettingsUseCase.loopEnabled
+    val excludedFolderIds: StateFlow<Set<Long>> = folderPageSettingsUseCase.excludedFolderIds
     val resetHomeOnReentry: StateFlow<Boolean> = settingsRepository.resetHomeOnReentry
     val showReentryToast: StateFlow<Boolean> = settingsRepository.showReentryToast
     val autoSyncStatus: StateFlow<Boolean> = settingsRepository.autoSyncStatus
-    val iconPack: StateFlow<String> = settingsRepository.iconPack
-    val transparentBg: StateFlow<Boolean> = settingsRepository.transparentBg
-    val wallpaperOverlay: StateFlow<Float> = settingsRepository.wallpaperOverlay
-    val iconShape: StateFlow<String> = settingsRepository.iconShape
-    val animationsEnabled: StateFlow<Boolean> = settingsRepository.animationsEnabled
-    val freezeStyle: StateFlow<String> = settingsRepository.freezeStyle
+    val iconPack: StateFlow<String> = appearanceSettingsUseCase.iconPack
+    val transparentBg: StateFlow<Boolean> = appearanceSettingsUseCase.transparentBg
+    val wallpaperOverlay: StateFlow<Float> = appearanceSettingsUseCase.wallpaperOverlay
+    val iconShape: StateFlow<String> = appearanceSettingsUseCase.iconShape
+    val animationsEnabled: StateFlow<Boolean> = appearanceSettingsUseCase.animationsEnabled
+    val freezeStyle: StateFlow<String> = appearanceSettingsUseCase.freezeStyle
 
     /** 由组合根注入业务用例，避免页面 ViewModel 自行装配依赖。 */
     class Factory(
         private val application: Application,
         private val freezeUseCase: FreezeUseCase,
+        private val appearanceSettingsUseCase: AppearanceSettingsUseCase,
+        private val folderPageSettingsUseCase: FolderPageSettingsUseCase,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
-                return HomeViewModel(application, freezeUseCase) as T
+                return HomeViewModel(
+                    application,
+                    freezeUseCase,
+                    appearanceSettingsUseCase,
+                    folderPageSettingsUseCase,
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
@@ -245,7 +279,7 @@ class HomeViewModel(
 
     /** 用户从设置切换图标包后刷新（持久化 + 重载全部图标） */
     fun applyIconPack(pkg: String) {
-        settingsRepository.setIconPack(pkg) // 持久化（之前缺失，重启丢失）
+        appearanceSettingsUseCase.setIconPack(pkg) // 持久化（之前缺失，重启丢失）
         AppIconLoader.iconPackPkg = pkg
         AppIconLoader.clearCache()
     }
@@ -254,17 +288,30 @@ class HomeViewModel(
 
     fun renameFolder(folderId: Long, name: String) = gridRepository.renameFolder(folderId, name)
 
-    fun deleteFolder(folderId: Long) = gridRepository.deleteFolder(folderId)
+    fun deleteFolder(folderId: Long) {
+        gridRepository.deleteFolder(folderId)
+        folderPageSettingsUseCase.removeFolder(folderId)
+    }
 
-    fun setTransparentBg(enabled: Boolean) = settingsRepository.setTransparentBg(enabled)
+    fun setShowAppName(enabled: Boolean) = appearanceSettingsUseCase.setShowAppName(enabled)
 
-    fun setWallpaperOverlay(alpha: Float) = settingsRepository.setWallpaperOverlay(alpha)
+    fun setTransparentBg(enabled: Boolean) = appearanceSettingsUseCase.setTransparentBg(enabled)
 
-    fun setAnimationsEnabled(enabled: Boolean) = settingsRepository.setAnimationsEnabled(enabled)
+    fun setWallpaperOverlay(alpha: Float) = appearanceSettingsUseCase.setWallpaperOverlay(alpha)
 
-    fun setFreezeStyle(style: String) = settingsRepository.setFreezeStyle(style)
+    fun setAnimationsEnabled(enabled: Boolean) = appearanceSettingsUseCase.setAnimationsEnabled(enabled)
 
-    fun setIconShape(shape: String) = settingsRepository.setIconShape(shape)
+    fun setFreezeStyle(style: String) = appearanceSettingsUseCase.setFreezeStyle(style)
+
+    fun setIconShape(shape: String) = appearanceSettingsUseCase.setIconShape(shape)
+
+    fun setFolderPageLoopEnabled(enabled: Boolean) = folderPageSettingsUseCase.setLoopEnabled(enabled)
+
+    fun setFolderExcluded(folderId: Long, excluded: Boolean) =
+        folderPageSettingsUseCase.setFolderExcluded(folderId, excluded)
+
+    fun setShowReturnHomeButton(enabled: Boolean) =
+        folderPageSettingsUseCase.setShowReturnHomeButton(enabled)
 
     fun setColumns(value: Int) = settingsRepository.setColumns(value)
 

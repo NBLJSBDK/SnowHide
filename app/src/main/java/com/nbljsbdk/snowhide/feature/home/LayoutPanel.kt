@@ -45,10 +45,11 @@ fun LayoutPanel(
     onDockIconSizeChange: (Int) -> Unit,
     onDockActionIconSizeChange: (Int) -> Unit,
     onFolderPreviewChange: (Int) -> Unit,
-    onDismiss: () -> Unit,
+    onComplete: () -> Unit,
+    onBackToMenu: () -> Unit,
 ) {
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = onBackToMenu,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Column(
@@ -122,7 +123,8 @@ fun LayoutPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("完成") }
+                TextButton(onClick = onBackToMenu) { Text("取消") }
+                TextButton(onClick = onComplete) { Text("完成") }
             }
         }
     }

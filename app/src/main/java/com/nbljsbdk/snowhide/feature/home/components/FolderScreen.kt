@@ -76,13 +76,13 @@ fun FolderScreen(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                // 空白处长按 → 布局设计/美化设置菜单（与主屏一致）
+                // 空白处长按 → 宫格设置菜单（与主屏一致）
+                .fillMaxSize()
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { onBlankLongPress() },
-                ),
+                )
+                .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
         ) {

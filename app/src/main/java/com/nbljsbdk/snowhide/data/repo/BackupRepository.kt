@@ -67,6 +67,8 @@ object BackupRepository {
         "bg_image_path" to ValueType.STRING,
         "animations_enabled" to ValueType.BOOLEAN,
         "auto_sync_status" to ValueType.BOOLEAN,
+        "folder_page_loop_enabled" to ValueType.BOOLEAN,
+        "excluded_folder_ids" to ValueType.STRING,
         "app_manage_added_order" to ValueType.STRING,
         "app_manage_removed_order" to ValueType.STRING,
         "quick_toggle_added_order" to ValueType.STRING,
@@ -279,6 +281,7 @@ object BackupRepository {
             "app_manage_added_order", "app_manage_removed_order",
             "quick_toggle_added_order", "quick_toggle_removed_order" ->
                 validateOrderMap(raw, key)
+            "excluded_folder_ids" -> validateLongArray(raw, key)
             "icon_pack", "swipe_recent_window_package" -> {
                 if (raw.isNotEmpty() && !PackageName.isValid(raw)) {
                     throw IllegalArgumentException("$key 包名非法")
@@ -340,6 +343,19 @@ object BackupRepository {
             val pkg = array.opt(index) as? String
                 ?: throw IllegalArgumentException("$field[$index] 类型错误")
             requirePackage(pkg, "$field[$index]")
+        }
+    }
+
+    private fun validateLongArray(raw: String, field: String) {
+        val array = parseArray(raw, field)
+        for (index in 0 until array.length()) {
+            val value = array.opt(index)
+            val id = value as? Number
+                ?: throw IllegalArgumentException("$field[$index] 类型错误")
+            val longValue = id.toLong()
+            if (longValue <= 0L || id.toDouble() != longValue.toDouble()) {
+                throw IllegalArgumentException("$field[$index] 必须是正整数")
+            }
         }
     }
 

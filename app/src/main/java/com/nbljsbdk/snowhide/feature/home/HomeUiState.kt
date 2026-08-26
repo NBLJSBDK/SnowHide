@@ -4,6 +4,7 @@ import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.FolderApp
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
 
 /** 主屏 Content 所需的不可变状态快照，不包含 Compose 类型或 Repository。 */
 data class HomeUiState(
@@ -11,6 +12,9 @@ data class HomeUiState(
     val homeFolderIds: List<Long>,
     val folders: List<Folder>,
     val folderApps: List<FolderApp>,
+    val folderPagePlan: FolderPagePlan,
+    val folderPageLoopEnabled: Boolean,
+    val excludedFolderIds: Set<Long>,
     val frozenStates: Map<String, Boolean>,
     val appStates: Map<String, AppRuntimeState>,
     val lockedPackages: Set<String>,
@@ -69,6 +73,7 @@ interface HomeActions {
     fun freezeFolder(folder: Folder)
     fun unfreezeFolder(folder: Folder)
     fun applyIconPack(pkg: String)
+    fun setShowAppName(enabled: Boolean)
     fun setTransparentBg(enabled: Boolean)
     fun setWallpaperOverlay(alpha: Float)
     fun setAnimationsEnabled(enabled: Boolean)
@@ -80,4 +85,7 @@ interface HomeActions {
     fun setDockIconSize(value: Int)
     fun setDockActionIconSize(value: Int)
     fun setFolderPreview(value: Int)
+    fun setFolderPageLoopEnabled(enabled: Boolean)
+    fun setFolderExcluded(folderId: Long, excluded: Boolean)
+    fun setShowReturnHomeButton(enabled: Boolean)
 }

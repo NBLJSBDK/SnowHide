@@ -54,4 +54,19 @@ class FolderPagePlannerTest {
         assertEquals(1, plan.move(0, 1))
         assertEquals(1, plan.move(1, 1))
     }
+
+    @Test
+    fun excludingAllFoldersLeavesOnlyHomePage() {
+        val plan = FolderPagePlanner.plan(
+            folders = listOf(
+                FolderPageInput(1L, 0),
+                FolderPageInput(2L, 1),
+            ),
+            excludedFolderIds = setOf(1L, 2L),
+        )
+
+        assertEquals(listOf(FolderPage.Home), plan.pages)
+        assertEquals(1, plan.pageCount)
+        assertEquals(0, plan.logicalIndex(1000))
+    }
 }

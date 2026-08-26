@@ -20,6 +20,9 @@ fun HomeRoute(
     val homeFolderIds by viewModel.homeFolderIds.collectAsState()
     val folders by viewModel.folders.collectAsState()
     val folderApps by viewModel.folderApps.collectAsState()
+    val folderPagePlan by viewModel.folderPagePlan.collectAsState()
+    val folderPageLoopEnabled by viewModel.folderPageLoopEnabled.collectAsState()
+    val excludedFolderIds by viewModel.excludedFolderIds.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
     val appStates by viewModel.appStates.collectAsState()
     val lockedPackages by viewModel.lockedPackages.collectAsState()
@@ -54,6 +57,9 @@ fun HomeRoute(
         homeFolderIds = homeFolderIds,
         folders = folders,
         folderApps = folderApps,
+        folderPagePlan = folderPagePlan,
+        folderPageLoopEnabled = folderPageLoopEnabled,
+        excludedFolderIds = excludedFolderIds,
         frozenStates = frozenStates,
         appStates = appStates,
         lockedPackages = lockedPackages,
@@ -121,6 +127,7 @@ private class HomeViewModelActions(
     override fun freezeFolder(folder: Folder) = viewModel.freezeFolder(folder)
     override fun unfreezeFolder(folder: Folder) = viewModel.unfreezeFolder(folder)
     override fun applyIconPack(pkg: String) = viewModel.applyIconPack(pkg)
+    override fun setShowAppName(enabled: Boolean) = viewModel.setShowAppName(enabled)
     override fun setTransparentBg(enabled: Boolean) = viewModel.setTransparentBg(enabled)
     override fun setWallpaperOverlay(alpha: Float) = viewModel.setWallpaperOverlay(alpha)
     override fun setAnimationsEnabled(enabled: Boolean) = viewModel.setAnimationsEnabled(enabled)
@@ -132,4 +139,8 @@ private class HomeViewModelActions(
     override fun setDockIconSize(value: Int) = viewModel.setDockIconSize(value)
     override fun setDockActionIconSize(value: Int) = viewModel.setDockActionIconSize(value)
     override fun setFolderPreview(value: Int) = viewModel.setFolderPreview(value)
+    override fun setFolderPageLoopEnabled(enabled: Boolean) = viewModel.setFolderPageLoopEnabled(enabled)
+    override fun setFolderExcluded(folderId: Long, excluded: Boolean) =
+        viewModel.setFolderExcluded(folderId, excluded)
+    override fun setShowReturnHomeButton(enabled: Boolean) = viewModel.setShowReturnHomeButton(enabled)
 }

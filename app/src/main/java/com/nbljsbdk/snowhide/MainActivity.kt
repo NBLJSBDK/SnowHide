@@ -68,6 +68,8 @@ class MainActivity : ComponentActivity() {
                     backupUseCase = appContainer.backupUseCase,
                     freezeUseCase = appContainer.freezeUseCase,
                     recentCalibrationUseCase = appContainer.recentCalibrationUseCase,
+                    appearanceSettingsUseCase = appContainer.appearanceSettingsUseCase,
+                    folderPageSettingsUseCase = appContainer.folderPageSettingsUseCase,
                 )
             }
         }

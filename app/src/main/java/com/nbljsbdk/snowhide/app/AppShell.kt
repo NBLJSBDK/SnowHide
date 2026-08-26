@@ -12,7 +12,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
+import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
+import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.feature.about.AboutRoute
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
@@ -35,10 +37,14 @@ fun AppShell(
     backupUseCase: BackupUseCase,
     freezeUseCase: FreezeUseCase,
     recentCalibrationUseCase: RecentCalibrationUseCase,
+    appearanceSettingsUseCase: AppearanceSettingsUseCase,
+    folderPageSettingsUseCase: FolderPageSettingsUseCase,
     homeViewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.Factory(
             LocalContext.current.applicationContext as Application,
             freezeUseCase,
+            appearanceSettingsUseCase,
+            folderPageSettingsUseCase,
         )
     ),
     appManageViewModel: AppManageViewModel = viewModel(

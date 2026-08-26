@@ -5,6 +5,7 @@ import com.nbljsbdk.snowhide.core.feedback.HapticType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 
 /**
  * 设置仓库——全部用户设置的读写（SharedPreferences 持久化）
@@ -42,6 +43,7 @@ object SettingsRepository {
         const val AUTO_SYNC_STATUS = true
         const val COLUMNS = 4
         const val BACKGROUND_IMAGE_PATH = ""
+        const val FOLDER_PAGE_LOOP_ENABLED = true
         val FREEZE_STYLE = com.nbljsbdk.snowhide.ui.util.FreezeStyle.NONE.name
     }
 
@@ -82,6 +84,13 @@ object SettingsRepository {
         _animationsEnabled.value = prefs.getBoolean(KEY_ANIMATIONS, DefaultSettings.ANIMATIONS_ENABLED)
         _autoSyncStatus.value = prefs.getBoolean(KEY_AUTO_SYNC_STATUS, DefaultSettings.AUTO_SYNC_STATUS)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, DefaultSettings.BACKGROUND_IMAGE_PATH) ?: DefaultSettings.BACKGROUND_IMAGE_PATH
+        _folderPageLoopEnabled.value = prefs.getBoolean(
+            KEY_FOLDER_PAGE_LOOP_ENABLED,
+            DefaultSettings.FOLDER_PAGE_LOOP_ENABLED,
+        )
+        _excludedFolderIds.value = decodeLongSet(
+            prefs.getString(KEY_EXCLUDED_FOLDER_IDS, "") ?: "",
+        )
     }
 
     private fun getBool(key: String, def: Boolean): Boolean =
@@ -115,6 +124,18 @@ object SettingsRepository {
     private val _showReturnHomeButton = MutableStateFlow(getBool(KEY_RETURN_HOME_BUTTON, DefaultSettings.SHOW_RETURN_HOME_BUTTON))
     /** 文件夹内是否显示返回主屏按钮 */
     val showReturnHomeButton: StateFlow<Boolean> = _showReturnHomeButton.asStateFlow()
+
+    private val _folderPageLoopEnabled = MutableStateFlow(
+        getBool(KEY_FOLDER_PAGE_LOOP_ENABLED, DefaultSettings.FOLDER_PAGE_LOOP_ENABLED),
+    )
+    /** 文件夹页面是否首尾循环滑动 */
+    val folderPageLoopEnabled: StateFlow<Boolean> = _folderPageLoopEnabled.asStateFlow()
+
+    private val _excludedFolderIds = MutableStateFlow(
+        decodeLongSet(getStr(KEY_EXCLUDED_FOLDER_IDS, "")),
+    )
+    /** 只从左右滑动页面排除的文件夹 ID */
+    val excludedFolderIds: StateFlow<Set<Long>> = _excludedFolderIds.asStateFlow()
 
     private val _resetHomeOnReentry = MutableStateFlow(getBool(KEY_BACK_DIR, DefaultSettings.RESET_HOME_ON_REENTRY))
     /** 离开应用超过阈值后重新进入是否回到主屏 */
@@ -285,6 +306,21 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_RETURN_HOME_BUTTON, enabled).apply()
     }
 
+    fun setFolderPageLoopEnabled(enabled: Boolean) {
+        _folderPageLoopEnabled.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_FOLDER_PAGE_LOOP_ENABLED, enabled).apply()
+    }
+
+    fun setExcludedFolderIds(ids: Set<Long>) {
+        val normalized = ids.filter { it > 0L }.toSet()
+        _excludedFolderIds.value = normalized
+        if (::prefs.isInitialized) {
+            prefs.edit()
+                .putString(KEY_EXCLUDED_FOLDER_IDS, encodeLongSet(normalized))
+                .apply()
+        }
+    }
+
     fun setResetHomeOnReentry(enabled: Boolean) {
         _resetHomeOnReentry.value = enabled
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_BACK_DIR, enabled).apply()
@@ -388,6 +424,23 @@ object SettingsRepository {
         if (::prefs.isInitialized) prefs.edit().putInt(key, value).apply()
     }
 
+    private fun encodeLongSet(values: Set<Long>): String = JSONArray().apply {
+        values.sorted().forEach(::put)
+    }.toString()
+
+    private fun decodeLongSet(raw: String): Set<Long> = runCatching {
+        val array = JSONArray(raw)
+        buildSet {
+            for (index in 0 until array.length()) {
+                val value = array.opt(index)
+                if (value is Number) {
+                    val id = value.toLong()
+                    if (id > 0L) add(id)
+                }
+            }
+        }
+    }.getOrDefault(emptySet())
+
     private const val KEY_TOAST = "show_toast"
     private const val KEY_REENTRY_TOAST = "show_reentry_toast"
     private const val KEY_SWIPE_DISABLE = "swipe_disable_enabled"
@@ -417,4 +470,6 @@ object SettingsRepository {
     private const val KEY_BG_IMAGE = "bg_image_path"
     private const val KEY_ANIMATIONS = "animations_enabled"
     private const val KEY_AUTO_SYNC_STATUS = "auto_sync_status"
+    private const val KEY_FOLDER_PAGE_LOOP_ENABLED = "folder_page_loop_enabled"
+    private const val KEY_EXCLUDED_FOLDER_IDS = "excluded_folder_ids"
 }
