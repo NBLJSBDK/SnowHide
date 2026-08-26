@@ -1,10 +1,62 @@
+--ANSWER--
+
+## 0. Highest Priority: Response and Engineering Principles
+
+### 0.1 Response rule — highest priority
+
+- Every assistant response must begin with the exact marker `--ANSWER--` as its first non-whitespace line.
+- This applies to progress updates, questions, tool-related explanations, and final answers.
+- Do not place any text before the marker.
+
+### 0.2 Project core principles — second priority
+
+- **功能优先，安全优先**：先保证用户功能可用、数据安全和已验证行为不回退，再谈抽象和架构美观；不为了“架构漂亮”重写稳定业务。
+- **架构服务于功能**：每次新增或修复功能都必须能说明“放在哪一层、谁拥有数据、业务入口是什么、如何测试、失败怎么办”。
+- **渐进式模块化**：当前单 Gradle module 内通过 package、依赖方向、接口、组合根和测试建立边界；不为追求形式提前拆 Gradle 多模块，不制造没有真实调用者的空壳。
+- **依赖方向固定**：层级流向遵循 `feature → domain → data → core`；新代码的直接 import 遵循 `feature → domain/ui`、`domain → data/core`、`data → core`，系统入口通过组合根获得依赖；UI 负责无状态绘制，业务规则不堆进 Composable。
+- **单一所有权**：一个数据只有一个 Repository 所有者，一个业务动作只有一个 UseCase 入口，一个系统入口只处理生命周期和系统适配，不复制业务规则。
+- **纯逻辑先行**：状态机、过滤、排序、规划和策略优先放入 Android/Compose 无关的 `domain`，用 JVM 单元测试保护；Android 生命周期、Binder、无障碍和 Compose 只做适配。
+- **小步、可回滚、可验证**：每个可编译功能点独立提交；不把未经验证的多个阶段合并成大提交；修改后至少检查编译、相关测试、`git diff --check` 和必要的真机行为。
+- **协议和数据兼容**：架构重构只能改变代码组织，不能悄悄改变冻结命令、SP/JSON、Backup v1、Binder、`versionCode=1` 或已确认的用户行为。
+- **真实调用者原则**：只有出现真实功能需求和调用者时才新增抽象、目录或接口；未来能力先记录边界，不提前堆空壳。
+- **发布纪律**：功能实现、测试、模块文档和正式版本说明/版本号按独立提交组织；正式发布提交、推送或创建 Tag 前必须补齐真实更新说明并完成验证。
+
+### 0.3 Git operation rules — third priority
+
+- Git 提交说明必须使用下列允许的类型，类型后可按项目需要添加作用域，例如 `feat(home): ...`。
+
+| type | 用途 | 示例 |
+|---|---|---|
+| `feat` | 新功能（feature） | `feat(auth): 增加微信登录功能` |
+| `fix` | 修补 Bug | `fix(menu): 修复下拉菜单在移动端不显示的错误` |
+| `refactor` | 重构，不新增功能且不修复 Bug | `refactor: 简化逻辑判断函数` |
+| `perf` | 性能优化 | `perf: 提高渲染效率` |
+| `docs` | 文档变动 | `docs: 更新 API 使用说明` |
+| `test` | 增加或调整测试 | `test: 添加登录模块单元测试` |
+| `chore` | 构建过程或辅助工具变动 | `chore: 升级依赖库` |
+| `wip` | 工作进行中（Work In Progress） | `wip: 正在处理搜索建议逻辑` |
+
+- 禁止使用模糊提交类型：`add`、`update`、`modify`、`big`。
+
+### 0.4 Feature and release workflow — fourth priority
+
+- **适用范围**：新功能和 Bug 修复统一遵循以下流程；功能确认与正式发布确认分开进行。
+1. **建立可回退基线**：先执行 `git status --short`，工作区必须干净，且当前 `HEAD` 已有提交记录，确保随时可以回到当前状态。发现未提交或未跟踪的用户修改时先停止并确认，不擅自覆盖或清理。
+2. **设置开发版号**：确定本次正式目标版本，例如 `0.3.3`，应用内先使用 `0.3.3-dev`；同一开发阶段反复修改和重新编译时，可递增为 `0.3.3-dev.1`、`0.3.3-dev.2` 等，用于区分安装包。`versionCode` 永远保持 `1`，开发版号不写入正式版本历史。
+3. **开发与修复**：进行功能开发、Bug 修复、相关测试和必要的局部解耦；保持安全边界、数据兼容和既有行为不回退。
+4. **功能验收存档**：编译并安装 APK，等待用户确认并明确授权提交。通过后按 Git 类型规则提交功能/修复存档；未通过则不提交，继续修改、递增开发版号并重新编译安装，直到通过。
+5. **正式版本验收存档**：将 `-dev` 开发版号改为正式版号，更新 `VersionHistory.kt`、真实更新日志以及需要同步的 `AGENTS.md`、`v0.3task.md` 和设计文档；再次编译并安装，等待用户确认并明确授权提交后，提交独立的正式发布存档。
+6. **Tag 与推送**：只有在用户明确授权后，检查提交历史、工作区、远端差异和版本说明，再创建对应 Tag 并推送分支和 Tag；不强推、不移动旧 Tag。
+
+---
+
 # AGENTS.md — SnowHide（冻结工具 / 暂定名「雪藏」）
 
 > **一句话**：Android 应用冻结器——用 Shizuku 把应用「冻结」（`pm disable-user`：图标消失+进程全断+断自启），
 > 一键解冻秒恢复。**除了用户明确选择的「移除并卸载」，绝不删除任何应用数据。**
 
 **设计文档**（唯一事实来源，所有 UI/功能/架构决策全在这）：
-`~/opencode_dev/冻结工具设计.md` —— 新对话开工前先读它（§9 代码架构规范是硬约束）。
+`~/opencode_dev/docs/冻结工具设计.md` —— 新对话开工前先读它（§9 代码架构规范是硬约束）。
 
 This file is the single source of truth for resuming work in a fresh conversation. Read it fully first.
 
@@ -27,16 +79,18 @@ This file is the single source of truth for resuming work in a fresh conversatio
 ## 2. Build
 
 ```bash
-# Windows 直接：
-gradlew.bat assembleDebug / assembleRelease
+# Windows 直接（二选一）：
+gradlew.bat assembleDebug
+gradlew.bat assembleRelease
 # WSL（agent 已验证可用）：
 /mnt/c/Windows/System32/cmd.exe /c "cd /d D:\GitHub\Android\SnowHide && build_debug.bat"
+/mnt/c/Windows/System32/cmd.exe /c "cd /d D:\GitHub\Android\SnowHide && build_release.bat"
 ```
 
-- 项目根有 `build_debug.bat` / `build_release.bat`（设 JAVA_HOME=jdk-17.0.5 + 调 gradlew.bat）。
+- 项目根有 `build_debug.bat` / `build_release.bat`（设置 `JAVA_HOME=jdk-17.0.5` 后调用 gradlew.bat）。
 - **不要在 WSL 直接 `./gradlew`**（Windows java 读不了 `/mnt/d` 路径）。
 - 输出：`app/build/outputs/apk/debug/app-debug.apk` / `release/app-release.apk`。
-- 签名配置在 `local.properties`（gitignored）：`RELEASE_STORE_FILE/PASSWORD/ALIAS/KEY_PASSWORD`（MediaSync 同款）。
+- 签名配置在 `local.properties`（gitignored）：`RELEASE_STORE_FILE`、`RELEASE_STORE_PASSWORD`、`RELEASE_ALIAS`、`RELEASE_KEY_PASSWORD`（MediaSync 同款）。
 - 首次编译曾失败：AS 模板 `core-ktx 1.19.0` 要求 SDK 37 → **已降级 1.10.1**，勿再升级。
 
 ---
@@ -55,6 +109,7 @@ gradlew.bat assembleDebug / assembleRelease
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
 - `versionName` = 语义版本（当前 `0.3.2`，上一正式版本为 `v0.3.1`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
+- **开发版号**：开发阶段使用正式目标版本加 `-dev` 后缀，例如 `0.3.3-dev`；反复修改和重新编译可递增为 `0.3.3-dev.1`、`0.3.3-dev.2`，正式发布时去掉后缀恢复为 `0.3.3`。开发版号只用于区分安装包，不创建正式 Tag 或正式版本历史记录。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
 
@@ -71,7 +126,7 @@ gradlew.bat assembleDebug / assembleRelease
 
 ## 6. File safety (HARD CONSTRAINT — never violate)
 
-- 只操作**包管理器状态**（`pm disable-user/enable` 等），**不删除、不修改任何应用数据/文件**。
+- 只通过 `PowerEngine` 操作**被管理应用的包管理器状态**（`pm disable-user/enable` 等）；不得删除或修改被管理应用的数据/文件。SnowHide 自身的 SharedPreferences、JSON、缓存和用户主动选择的备份文件属于正常功能，不在此限制内。
 - ⚠️ **唯一特例（用户拍板）**：「移除并卸载」允许真正卸载应用（删应用+数据）——仅限用户在长按菜单明确选择该项并二次确认时执行。
 - 禁止出现：`File.delete()`、`rm`、`Runtime.exec("rm")`、`PackageManager.deletePackage`（除卸载特例外）等。
 - `pm` 命令全部经 `PowerEngine.exec()`（shell 身份），不写任何本地文件。
@@ -88,16 +143,21 @@ gradlew.bat assembleDebug / assembleRelease
 | `android.permission.VIBRATE` | dock 锁定/解锁震动反馈（受系统静音/勿扰控制） |
 
 - Shizuku 授权流程：UI 引导卡 → `Shizuku.requestPermission(code)`（必须从 Activity 发起）→ `OnRequestPermissionResultListener` 接收结果 → `EngineManager.refresh()`。
-- 后续阶段权限：P1 通知（POST_NOTIFICATIONS）、P2 Device Owner、P3 root——到时按设计文档补。
+- `POST_NOTIFICATIONS` 已在当前版本接入 Manifest 和 Activity 运行时申请；后续阶段权限为 P2 Device Owner、P3 root，按设计文档补齐。
 
 ---
 
 ## 8. Architecture (package `com.nbljsbdk.snowhide`)
 
-依赖单向：`feature → domain → data → core`；feature 间禁止互相 import。
+依赖单向：层级流向为 `feature → domain → data → core`；直接 import 遵循 `feature → domain/ui`、`domain → data/core`、`data → core`；feature 间禁止互相 import。
 
 ```
-MainActivity.kt        — 极薄：EngineRegistry.init() + setContent + Shizuku 授权回调转发
+MainActivity.kt        — 系统入口：CompositionRoot.initActivity() + setContent + Shizuku 授权回调及系统适配
+
+app/                  ★组合根
+  CompositionRoot.kt   — 唯一依赖装配点，初始化 Repository、EngineRegistry、反馈适配和 AppContainer
+  AppContainer.kt      — 持有页面需要的 UseCase 依赖
+  AppShell.kt           — 页面组合与导航
 
 core/                  ★核心抽象（P0 就位，扩展点全在这）
   engine/
@@ -116,11 +176,23 @@ data/
   model/GridModels.kt  — GridItem / Folder / FolderApp（type/parent 概念见设计文档 §4）
   repo/GridRepository.kt — 宫格/文件夹/排序/整理目录全部数据操作（SP+JSON，StateFlow）
   repo/ListOrderRepository.kt — 增删应用/快速启停滑入列表顺序（排序档位不持久化）
+  repo/AppListRepository.kt — 已安装应用扫描、名称和图标信息
+  repo/FrozenStateStore.kt — 全局冻结状态查询与 StateFlow
+  repo/BackupRepository.kt — v1 备份数据读写
+  repo/QuickToggleRepository.kt — 快速启停成员和 opened 状态
+  repo/RecentFreezeQueueRepository.kt — Recent 补执行短队列
   repo/RecentCalibrationRepository.kt — Recent 校准包名/窗口锚点（SP+StateFlow）
   prefs/SettingsRepository.kt — 布局/壁纸/开关/图标包（SP 持久化）
 
 domain/
   FreezeUseCase.kt     — 冻结/解冻/批量/快速清理/划卡停用（UI 永不直连 executor）
+  BatchExec.kt         — 批量执行、分块和进度规则
+  backup/BackupUseCase.kt — 备份导入导出校验与业务结果
+  recent/              — Recent 会话状态、候选策略和校准业务
+  folder/              — 文件夹页面规划
+  organize/            — 整理目录状态机与 Reducer
+  appmanage/           — 应用管理冻结规划
+  QuickToggleUseCase.kt — 快速启停成员与执行规则
 
 feature/
   home/                — 主屏幕（HomeViewModel + HomeScreen）
@@ -157,7 +229,7 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 
 ### 冻结 / 解冻
 1. UI 调 `FreezeUseCase.freezeApp/unfreezeApp(pkg)` → `FreezeExecutor` 按模式分发 → 主引擎执行。
-2. Shizuku 实现：`pm disable-user --user 0 <pkg>` / `pm enable <pkg>`（`Shizuku.newProcess` shell 身份）。
+2. Shizuku 实现：`pm disable-user --user 0 <pkg>` / `pm enable <pkg>`（通过 `Shizuku.bindUserService` 启动 `ShellCommandService`，在 shell 身份执行）。
 3. 冻结状态查询：`pm list packages -d` 批量解析（`listFrozenPackages()`），一次刷新全列表。
 4. 结果 Snackbar 提示（设置里有 toast 开关）。
 
@@ -204,9 +276,15 @@ bridge/                — 应用桥预留（已研究清楚，黑白门 3.3.3 �
 
 ---
 
-## 11. Recent features (current state — 2026-08-25)
+## 11. Recent features (current state — 2026-08-26)
 
 ```
+b206ae1 chore: 发布 v0.3.2
+3b74430 docs: 修正宫格循环顺序说明
+d361a73 test: 覆盖主屏文件夹循环顺序
+a05bd2f fix: 统一主屏与文件夹循环顺序
+cb3cfa4 docs: 记录发布提交纪律
+8349cbc chore: 发布 v0.3.1
 ee370b4 style: 调整设置页卡片层级
 5936878 feat: 增加分场景震动反馈
 62bdef4 feat: 添加提示与反馈设置
@@ -278,7 +356,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 ## 13. Repo / git
 
-- 当前分支：`master`，基线提交：`5cd8ce6`（`baseline-before-v0.2.0` tag）；`v0.2.0` 已发布，`v0.2.1` 修复已完成真机验证并由本次发布归档。
+- 当前分支：`master`，最近正式发布提交：`b206ae1`（`v0.3.2` tag）；历史回退基线：`5cd8ce6`（`baseline-before-v0.2.0` tag）。
 - 基线历史仍包含 `v0.1.6`（指向 `69df809`）及提示、震动、设置页卡片层级功能。
 - `v0.2.0` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
 - `v0.2.1` 已在真机验证完成并获得用户明确授权后创建；后续版本仍须遵循同样的验证和授权流程。
@@ -306,14 +384,15 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - 用**中文**沟通；代码注释中文 KDoc（MediaSync 风格）。
 - 铁律：§6 文件安全、§4 versionCode、§13 git 纪律。
 - 分层纪律：feature 间零 import、UI 无状态、注册表驱动、impl 隔离。
-- 改权限/版本/插件/架构时，同步更新本文件与 `~/opencode_dev/冻结工具设计.md`。
+- 改权限/版本/插件/架构时，同步更新本文件与 `~/opencode_dev/docs/冻结工具设计.md`。
 - 未经用户明确允许，不写应用代码、不修改功能性文件；用户明确要求同步文档时，只修改指定文档。
 - 未经用户明确允许，不执行 commit、amend、push 或创建 tag；编译完成后的 `adb install -r` 可自动执行，卸载、清数据和修改设备包管理器状态仍须明确授权。
 - 遇到困难不擅自退缩、跳过或终止；主动说明阻塞原因，并询问用户是否继续或是否执行下一步操作。
 - 编译通过后可以直接安装 APK 并继续真机验证；commit、amend、push、创建 tag 仍必须先获得用户明确授权。
 - 用户明确授权后，每个可编译的小功能点再单独 commit 存档（§13 规范）。
-- **HARD RULE（更新说明）**：每次准备 commit、push 或创建 Tag 前，必须先根据 Git 版本区间核对并更新 `app/src/main/java/com/nbljsbdk/snowhide/feature/about/VersionHistory.kt`；发布状态同时同步到 `AGENTS.md`、`v0.3task.md` 和设计文档。没有对应且真实的更新说明，不得提交、推送或创建 Tag。
-- **发布提交教训**：`v0.2.0` 历史曾把 Recent 划卡停用功能和更新说明放在同一发布提交；已发布历史不重写。以后功能实现、测试、模块文档和版本说明/版本号按独立提交组织，版本说明与版本号只进入专门的发布提交，确认后再推送和创建 Tag。
+- **HARD RULE（正式发布更新说明）**：准备正式版本发布提交、push 或创建 Tag 前，必须先根据 Git 版本区间核对并更新 `app/src/main/java/com/nbljsbdk/snowhide/feature/about/VersionHistory.kt`；发布状态同时同步到 `AGENTS.md`、`v0.3task.md` 和设计文档。没有对应且真实的更新说明，不得提交正式发布版本、推送或创建 Tag。
+- **开发版与发布版边界**：功能/修复开发阶段使用 `-dev` 版号，功能验收通过后可以先提交功能存档；不提前伪造正式版本历史。正式版号、`VersionHistory.kt` 和正式更新说明只进入专门的发布提交。
+- **发布提交教训**：`v0.2.0` 历史曾把 Recent 划卡停用功能和更新说明放在同一发布提交；已发布历史不重写。以后功能实现、测试、模块文档和正式版本说明/版本号按独立提交组织，正式版本说明与版本号只进入专门的发布提交，确认后再推送和创建 Tag。
 - **HARD RULE（用户强调）**：集成任何三方库前，**必须先看官方文档并核对 jar 内真实 API 签名**，绝不凭训练数据假设 API 存在（训练数据会过期）。Shizuku 教训：`newProcess` 已私有、`onRequestPermissionsResult` 转发已移除、`ShizukuProvider` 必须手动声明——三个坑全是凭训练数据写的。正确做法：① webfetch 官方 README/GitHub ② javap/jadx 反编译核对 jar 签名 ③ 再写代码。
 
 ---
