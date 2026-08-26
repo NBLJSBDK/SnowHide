@@ -54,7 +54,7 @@ gradlew.bat assembleDebug / assembleRelease
 ## 4. Versioning (do NOT change casually)
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
-- `versionName` = 语义版本（当前 `0.3.1`，上一正式版本为 `v0.3.0`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
+- `versionName` = 语义版本（当前 `0.3.2`，上一正式版本为 `v0.3.1`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
 
@@ -250,6 +250,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - v0.2.2：统一 Recent 划卡停用提示文案；补充渐进式解耦架构指导
 - v0.3.0：组合根/AppShell、受控命令、QuickToggle/Backup 数据边界、Recent/整理/文件夹纯逻辑、反馈平台适配、JVM 回归测试和 Android Test 编译门已落地；Release 真机三条回归通过并已发布
 - v0.3.1：Dock 右侧操作槽图标独立调节与形状同步；固化个人设置默认值；备份支持操作图标大小；整理目录规则文档补齐
+- v0.3.2：修复主屏宫格文件夹顺序与循环滑动页面顺序不一致；新增主屏文件夹顺序回归测试
 
 **未完成（候选下一步）**：
 1. 应用分身（pm --user 分用户冻结）
@@ -284,6 +285,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - `v0.2.2` 已创建，内容为 Recent 提示修正与渐进式解耦架构指导；后续版本仍须遵循同样的更新说明流程。
 - `v0.3.0` 已由提交 `0ac9e93` 创建并推送；Release 真机三条回归已通过，Android instrumentation 仍待后续补跑。
 - `v0.3.1` 发布说明、Release 构建和真机覆盖安装已完成，本次发布提交后创建并推送 Tag。
+- `v0.3.2` 更新说明、Release 构建和真机覆盖安装完成，本次发布提交后创建并推送 Tag。
 - 未经用户明确允许，不执行 commit、amend、push 或创建 tag。
 
 ---
