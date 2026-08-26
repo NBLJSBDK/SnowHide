@@ -94,4 +94,20 @@ class BackupRepositoryInstrumentedTest {
         assertEquals(26, exportedSettings.getInt("dock_action_icon_size"))
         assertTrue(useCase.import("{\"version\":99,\"grid\":{}} ").isFailure)
     }
+
+    @Test
+    fun animationLevelRoundTripsThroughV1Backup() {
+        val settings = context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
+        settings.edit().clear().putInt("animation_level", 1).commit()
+
+        val exported = JSONObject(BackupRepository.exportSettings())
+            .getJSONObject("settings")
+        assertEquals(1, exported.getInt("animation_level"))
+
+        val replacement = JSONObject()
+            .put("version", 1)
+            .put("settings", JSONObject().put("animation_level", 3))
+        BackupRepository.importBackup(replacement.toString())
+        assertEquals(3, settings.getInt("animation_level", -1))
+    }
 }

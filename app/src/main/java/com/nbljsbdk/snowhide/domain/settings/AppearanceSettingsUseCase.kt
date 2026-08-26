@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.domain.settings
 
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
+import kotlinx.coroutines.flow.map
 
 /** 外观设置业务入口：主屏只通过本门面读取和修改视觉设置。 */
 class AppearanceSettingsUseCase(
@@ -12,7 +13,7 @@ class AppearanceSettingsUseCase(
     val transparentBg = repository.transparentBg
     val wallpaperOverlay = repository.wallpaperOverlay
     val iconShape = repository.iconShape
-    val animationsEnabled = repository.animationsEnabled
+    val animationLevel = repository.animationLevel.map(AnimationLevel::fromStorageValue)
     val freezeStyle = repository.freezeStyle
 
     fun setShowAppName(enabled: Boolean) = repository.setShowAppName(enabled)
@@ -21,7 +22,7 @@ class AppearanceSettingsUseCase(
 
     fun setWallpaperOverlay(alpha: Float) = repository.setWallpaperOverlay(alpha)
 
-    fun setAnimationsEnabled(enabled: Boolean) = repository.setAnimationsEnabled(enabled)
+    fun setAnimationLevel(level: AnimationLevel) = repository.setAnimationLevel(level.storageValue)
 
     fun setFreezeStyle(style: String) = repository.setFreezeStyle(style)
 

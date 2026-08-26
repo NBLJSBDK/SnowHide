@@ -66,6 +66,7 @@ object BackupRepository {
         "transparent_bg" to ValueType.BOOLEAN,
         "bg_image_path" to ValueType.STRING,
         "animations_enabled" to ValueType.BOOLEAN,
+        "animation_level" to ValueType.INT,
         "auto_sync_status" to ValueType.BOOLEAN,
         "folder_page_loop_enabled" to ValueType.BOOLEAN,
         "excluded_folder_ids" to ValueType.STRING,

@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.ui.util
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -32,7 +33,7 @@ enum class FreezeStyle {
 /**
  * 霜化视觉（设计文档 §3.1：冻结 = 结霜）
  *
- * [frosted]：已冻结内容按 [style] 蒙滤镜 + 半透明 + 300ms 渐变过渡。
+ * [frosted]：已冻结内容按 [style] 蒙滤镜 + 半透明，并使用指定时长过渡。
  * NONE = 真正原色（连透明度都不动，完全原样）。
  * 性能：解冻或原色时**直接返回不进入 composed**——
  * 避免大列表滑动时每个 item 创建 Animatable（真机 38% jank 实锤）。
@@ -42,35 +43,41 @@ enum class FreezeStyle {
 fun Modifier.frosted(
     enabled: Boolean,
     style: FreezeStyle = FreezeStyle.BLUE,
+    animationDurationMillis: Int = 300,
 ): Modifier {
     // 解冻或原色：完全无视觉变化，零开销直接返回
     if (!enabled || style == FreezeStyle.NONE) return this
+    // 关闭动画时仍保留冻结滤镜，但不创建动画状态。
+    if (animationDurationMillis <= 0) return frostedLayer(style, 1f)
     return composed {
         val progress by animateFloatAsState(
-            targetValue = if (enabled) 1f else 0f,
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = animationDurationMillis),
             label = "frost",
         )
-        if (progress <= 0f) {
-            this
-        } else {
-            val alphaLayer = graphicsLayer {
-                alpha = 1f - 0.4f * progress // 透明度降至 60%
+        frostedLayer(style, progress)
+    }
+}
+
+/** 绘制冻结滤镜；动画关闭时直接复用同一绘制路径但跳过动画状态。 */
+private fun Modifier.frostedLayer(style: FreezeStyle, progress: Float): Modifier {
+    if (progress <= 0f) return this
+    val alphaLayer = graphicsLayer {
+        alpha = 1f - 0.4f * progress // 透明度降至 60%
+    }
+    val matrix = matrixFor(style)
+    return if (matrix == null) {
+        alphaLayer
+    } else {
+        alphaLayer.drawWithCache {
+            val paint = Paint().apply {
+                colorFilter = ColorFilter.colorMatrix(matrix)
             }
-            val matrix = matrixFor(style)
-            if (matrix == null) {
-                alphaLayer
-            } else {
-                alphaLayer.drawWithCache {
-                    val paint = Paint().apply {
-                        colorFilter = ColorFilter.colorMatrix(matrix)
-                    }
-                    onDrawWithContent {
-                        drawIntoCanvas { canvas ->
-                            canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
-                            drawContent()
-                            canvas.restore()
-                        }
-                    }
+            onDrawWithContent {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
+                    drawContent()
+                    canvas.restore()
                 }
             }
         }

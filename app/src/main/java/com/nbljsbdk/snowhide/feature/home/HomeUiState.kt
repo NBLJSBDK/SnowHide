@@ -5,6 +5,7 @@ import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.FolderApp
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
+import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 
 /** 主屏 Content 所需的不可变状态快照，不包含 Compose 类型或 Repository。 */
 data class HomeUiState(
@@ -36,7 +37,7 @@ data class HomeUiState(
     val transparentBg: Boolean,
     val wallpaperOverlay: Float,
     val iconShape: String,
-    val animationsEnabled: Boolean,
+    val animationLevel: AnimationLevel,
     val freezeStyle: String,
     val message: String?,
     val batchProgress: Float?,
@@ -76,7 +77,7 @@ interface HomeActions {
     fun setShowAppName(enabled: Boolean)
     fun setTransparentBg(enabled: Boolean)
     fun setWallpaperOverlay(alpha: Float)
-    fun setAnimationsEnabled(enabled: Boolean)
+    fun setAnimationLevel(level: AnimationLevel)
     fun setFreezeStyle(style: String)
     fun setIconShape(shape: String)
     fun setColumns(value: Int)

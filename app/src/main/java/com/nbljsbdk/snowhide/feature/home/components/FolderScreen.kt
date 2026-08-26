@@ -61,6 +61,7 @@ fun FolderScreen(
     iconSize: Dp,
     verticalSpace: Int,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
+    frostAnimationDurationMillis: Int = 300,
     iconShape: String = "round",
     showAppName: Boolean,
     showReturnHomeButton: Boolean,
@@ -132,7 +133,11 @@ fun FolderScreen(
                                     .size(iconSize)
                                     .clip(if (iconShape == "circle") CircleShape
                                     else RoundedCornerShape(iconSize.value * 0.22f))
-                                    .frosted(enabled = frozen, style = freezeStyle),
+                                     .frosted(
+                                         enabled = frozen,
+                                         style = freezeStyle,
+                                         animationDurationMillis = frostAnimationDurationMillis,
+                                     ),
                             )
                         }
                         // 雪花角标（与主屏一致）

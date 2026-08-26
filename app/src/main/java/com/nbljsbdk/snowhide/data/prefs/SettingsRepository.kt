@@ -39,7 +39,7 @@ object SettingsRepository {
         const val LOCK_CLEAN_NOTIFY = true
         const val WALLPAPER_OVERLAY = 0.1f
         const val TRANSPARENT_BACKGROUND = true
-        const val ANIMATIONS_ENABLED = true
+        const val ANIMATION_LEVEL = 2 // 中档；旧 animations_enabled=true 也映射到这里
         const val AUTO_SYNC_STATUS = true
         const val COLUMNS = 4
         const val BACKGROUND_IMAGE_PATH = ""
@@ -81,7 +81,7 @@ object SettingsRepository {
         _lockCleanNotify.value = prefs.getBoolean(KEY_LOCK_CLEAN_NOTIFY, DefaultSettings.LOCK_CLEAN_NOTIFY)
         _wallpaperOverlay.value = prefs.getFloat(KEY_WALLPAPER_OVERLAY, DefaultSettings.WALLPAPER_OVERLAY)
         _transparentBg.value = prefs.getBoolean(KEY_TRANSPARENT, DefaultSettings.TRANSPARENT_BACKGROUND)
-        _animationsEnabled.value = prefs.getBoolean(KEY_ANIMATIONS, DefaultSettings.ANIMATIONS_ENABLED)
+        _animationLevel.value = readAnimationLevel()
         _autoSyncStatus.value = prefs.getBoolean(KEY_AUTO_SYNC_STATUS, DefaultSettings.AUTO_SYNC_STATUS)
         _bgImagePath.value = prefs.getString(KEY_BG_IMAGE, DefaultSettings.BACKGROUND_IMAGE_PATH) ?: DefaultSettings.BACKGROUND_IMAGE_PATH
         _folderPageLoopEnabled.value = prefs.getBoolean(
@@ -384,13 +384,20 @@ object SettingsRepository {
     /** 自定义背景图片路径（transparentBg=false 时生效） */
     val bgImagePath: StateFlow<String> = _bgImagePath.asStateFlow()
 
-    private val _animationsEnabled = MutableStateFlow(getBool(KEY_ANIMATIONS, DefaultSettings.ANIMATIONS_ENABLED))
-    /** 动画速度档位：true=开（页面切换带动画），false=关（瞬时切换） */
-    val animationsEnabled: StateFlow<Boolean> = _animationsEnabled.asStateFlow()
+    private val _animationLevel = MutableStateFlow(readAnimationLevel())
+    /** 应用显式动画速度档位：0=关，1=高，2=中，3=低。 */
+    val animationLevel: StateFlow<Int> = _animationLevel.asStateFlow()
 
-    fun setAnimationsEnabled(enabled: Boolean) {
-        _animationsEnabled.value = enabled
-        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_ANIMATIONS, enabled).apply()
+    fun setAnimationLevel(level: Int) {
+        val normalized = normalizeAnimationLevel(level)
+        _animationLevel.value = normalized
+        if (::prefs.isInitialized) {
+            prefs.edit()
+                .putInt(KEY_ANIMATION_LEVEL, normalized)
+                // 保留旧开关字段，便于旧版本继续读取“是否开启动画”。
+                .putBoolean(KEY_ANIMATIONS, normalized != ANIMATION_LEVEL_OFF)
+                .apply()
+        }
     }
 
     private val _autoSyncStatus = MutableStateFlow(getBool(KEY_AUTO_SYNC_STATUS, DefaultSettings.AUTO_SYNC_STATUS))
@@ -422,6 +429,24 @@ object SettingsRepository {
     private fun save(key: String, value: Int, apply: (Int) -> Unit) {
         apply(value)
         if (::prefs.isInitialized) prefs.edit().putInt(key, value).apply()
+    }
+
+    private fun readAnimationLevel(): Int {
+        val stored = if (::prefs.isInitialized) prefs.all[KEY_ANIMATION_LEVEL] else null
+        if (stored is Number) return normalizeAnimationLevel(stored.toInt())
+        val legacyEnabled = runCatching {
+            getBool(KEY_ANIMATIONS, true)
+        }.getOrDefault(true)
+        return if (legacyEnabled) DefaultSettings.ANIMATION_LEVEL else ANIMATION_LEVEL_OFF
+    }
+
+    private fun normalizeAnimationLevel(value: Int): Int = when (value) {
+        ANIMATION_LEVEL_OFF,
+        ANIMATION_LEVEL_HIGH,
+        ANIMATION_LEVEL_MEDIUM,
+        ANIMATION_LEVEL_LOW,
+        -> value
+        else -> DefaultSettings.ANIMATION_LEVEL
     }
 
     private fun encodeLongSet(values: Set<Long>): String = JSONArray().apply {
@@ -469,7 +494,12 @@ object SettingsRepository {
     private const val KEY_TRANSPARENT = "transparent_bg"
     private const val KEY_BG_IMAGE = "bg_image_path"
     private const val KEY_ANIMATIONS = "animations_enabled"
+    private const val KEY_ANIMATION_LEVEL = "animation_level"
     private const val KEY_AUTO_SYNC_STATUS = "auto_sync_status"
     private const val KEY_FOLDER_PAGE_LOOP_ENABLED = "folder_page_loop_enabled"
     private const val KEY_EXCLUDED_FOLDER_IDS = "excluded_folder_ids"
+    private const val ANIMATION_LEVEL_OFF = 0
+    private const val ANIMATION_LEVEL_HIGH = 1
+    private const val ANIMATION_LEVEL_MEDIUM = 2
+    private const val ANIMATION_LEVEL_LOW = 3
 }

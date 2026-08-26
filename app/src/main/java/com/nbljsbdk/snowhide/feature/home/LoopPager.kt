@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.feature.home
 
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.animation.core.tween
 
 /**
  * 循环滑动分页锚点（设计文档 §3.2）
@@ -27,12 +28,29 @@ internal suspend fun PagerState.scrollHome(actualCount: Int) {
     if (currentPage != base) scrollToPage(base)
 }
 
-/** 带动画滑回主屏基准（文件夹页按返回键用） */
-internal suspend fun PagerState.animateHome(actualCount: Int) =
-    animateScrollToPage(homeBase(actualCount))
+/** 按动画档位滑回主屏基准（文件夹页按返回键用）。 */
+internal suspend fun PagerState.animateHome(actualCount: Int, durationMillis: Int) {
+    if (durationMillis <= 0) {
+        scrollHome(actualCount)
+    } else {
+        animateScrollToPage(
+            homeBase(actualCount),
+            animationSpec = tween(durationMillis),
+        )
+    }
+}
 
-/** 瞬时跳到指定文件夹页（主屏点文件夹图标用，无动画快速弹出） */
-internal suspend fun PagerState.jumpToFolder(actualCount: Int, folderIndex: Int) {
+/** 跳到指定文件夹页（主屏点文件夹图标用，动画关闭时瞬时打开）。 */
+internal suspend fun PagerState.jumpToFolder(
+    actualCount: Int,
+    folderIndex: Int,
+    durationMillis: Int,
+) {
     val target = homeBase(actualCount) + folderIndex + 1
-    if (currentPage != target) scrollToPage(target)
+    if (currentPage == target) return
+    if (durationMillis <= 0) {
+        scrollToPage(target)
+    } else {
+        animateScrollToPage(target, animationSpec = tween(durationMillis))
+    }
 }

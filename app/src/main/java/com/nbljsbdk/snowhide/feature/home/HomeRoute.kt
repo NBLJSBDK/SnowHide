@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nbljsbdk.snowhide.data.model.Folder
+import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 
 /**
  * 主屏 Route：接收组合根提供的 ViewModel，并把绘制交给无导航职责的 Content。
@@ -44,7 +45,7 @@ fun HomeRoute(
     val transparentBg by viewModel.transparentBg.collectAsState()
     val wallpaperOverlay by viewModel.wallpaperOverlay.collectAsState()
     val iconShape by viewModel.iconShape.collectAsState()
-    val animationsEnabled by viewModel.animationsEnabled.collectAsState()
+    val animationLevel by viewModel.animationLevel.collectAsState()
     val freezeStyle by viewModel.freezeStyle.collectAsState()
     val message by viewModel.message.collectAsState()
     val batchProgress by viewModel.batchProgress.collectAsState()
@@ -81,7 +82,7 @@ fun HomeRoute(
         transparentBg = transparentBg,
         wallpaperOverlay = wallpaperOverlay,
         iconShape = iconShape,
-        animationsEnabled = animationsEnabled,
+        animationLevel = animationLevel,
         freezeStyle = freezeStyle,
         message = message,
         batchProgress = batchProgress,
@@ -130,7 +131,7 @@ private class HomeViewModelActions(
     override fun setShowAppName(enabled: Boolean) = viewModel.setShowAppName(enabled)
     override fun setTransparentBg(enabled: Boolean) = viewModel.setTransparentBg(enabled)
     override fun setWallpaperOverlay(alpha: Float) = viewModel.setWallpaperOverlay(alpha)
-    override fun setAnimationsEnabled(enabled: Boolean) = viewModel.setAnimationsEnabled(enabled)
+    override fun setAnimationLevel(level: AnimationLevel) = viewModel.setAnimationLevel(level)
     override fun setFreezeStyle(style: String) = viewModel.setFreezeStyle(style)
     override fun setIconShape(shape: String) = viewModel.setIconShape(shape)
     override fun setColumns(value: Int) = viewModel.setColumns(value)

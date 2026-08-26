@@ -23,6 +23,7 @@ import com.nbljsbdk.snowhide.domain.folder.FolderPageInput
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
 import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
+import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
@@ -97,7 +98,8 @@ class HomeViewModel(
     val transparentBg: StateFlow<Boolean> = appearanceSettingsUseCase.transparentBg
     val wallpaperOverlay: StateFlow<Float> = appearanceSettingsUseCase.wallpaperOverlay
     val iconShape: StateFlow<String> = appearanceSettingsUseCase.iconShape
-    val animationsEnabled: StateFlow<Boolean> = appearanceSettingsUseCase.animationsEnabled
+    val animationLevel: StateFlow<AnimationLevel> = appearanceSettingsUseCase.animationLevel
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AnimationLevel.MEDIUM)
     val freezeStyle: StateFlow<String> = appearanceSettingsUseCase.freezeStyle
 
     /** 由组合根注入业务用例，避免页面 ViewModel 自行装配依赖。 */
@@ -299,7 +301,7 @@ class HomeViewModel(
 
     fun setWallpaperOverlay(alpha: Float) = appearanceSettingsUseCase.setWallpaperOverlay(alpha)
 
-    fun setAnimationsEnabled(enabled: Boolean) = appearanceSettingsUseCase.setAnimationsEnabled(enabled)
+    fun setAnimationLevel(level: AnimationLevel) = appearanceSettingsUseCase.setAnimationLevel(level)
 
     fun setFreezeStyle(style: String) = appearanceSettingsUseCase.setFreezeStyle(style)
 

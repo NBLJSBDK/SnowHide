@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateTo
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
@@ -220,7 +221,8 @@ fun HomeContent(
     val transparentBg = state.transparentBg
     val wallpaperOverlay = state.wallpaperOverlay
     val iconShape = state.iconShape
-    val animationsEnabled = state.animationsEnabled
+    val animationLevel = state.animationLevel
+    val animationDurationMillis = animationLevel.durationMillis
     val freezeStyleName = state.freezeStyle
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
         .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
@@ -322,6 +324,7 @@ fun HomeContent(
             actualCount,
             autoSyncStatus,
             engineReady,
+            animationLevel,
         ) {
             var stoppedAt = 0L
             var hasStarted = false
@@ -341,7 +344,7 @@ fun HomeContent(
                             searchOpen = false
                             actions.setSearchQuery("")
                             actions.dismissMenu()
-                            scope.launch { pagerState.scrollHome(actualCount) }
+                            scope.launch { pagerState.animateHome(actualCount, animationDurationMillis) }
                             FeedbackController.toast(
                                 context,
                                 "${context.getString(com.nbljsbdk.snowhide.R.string.app_name)}离开超过10秒，已回到主屏幕",
@@ -477,7 +480,7 @@ fun HomeContent(
             } else if (directFolderId != null) {
                 directFolderId = null
             } else {
-                scope.launch { if (animationsEnabled) pagerState.animateHome(actualCount) else pagerState.scrollHome(actualCount) }
+                scope.launch { pagerState.animateHome(actualCount, animationDurationMillis) }
             }
         }
 
@@ -502,7 +505,7 @@ fun HomeContent(
         // 搜索有词时自动回主屏显示结果（结果只在主屏宫格渲染）
         LaunchedEffect(searchQuery) {
             if (searchQuery.isNotBlank()) {
-                if (animationsEnabled) pagerState.animateHome(actualCount) else pagerState.scrollHome(actualCount)
+                pagerState.animateHome(actualCount, animationDurationMillis)
             }
         }
 
@@ -537,6 +540,7 @@ fun HomeContent(
                         iconSize = iconSize.dp,
                         verticalSpace = verticalSpace,
                         freezeStyle = freezeStyle,
+                        frostAnimationDurationMillis = animationDurationMillis,
                         iconShape = iconShape,
                         showAppName = showAppName,
                         appStates = appStates,
@@ -615,6 +619,7 @@ fun HomeContent(
                                             frozenStates = frozenStates,
                                             appStates = appStates,
                                             freezeStyle = freezeStyle,
+                                            frostAnimationDurationMillis = animationDurationMillis,
                                             previewSize = folderPreview,
                                             iconShape = iconShape,
                                             showName = showAppName,
@@ -630,9 +635,13 @@ fun HomeContent(
                                                      val folderIndex = sortedFolders.indexOfFirst { it.id == folder.id }
                                                      if (folderIndex >= 0) {
                                                           HapticController.vibrate(context, HapticType.NAVIGATION)
-                                                         scope.launch {
-                                                             pagerState.jumpToFolder(actualCount, folderIndex)
-                                                         }
+                                                          scope.launch {
+                                                              pagerState.jumpToFolder(
+                                                                  actualCount,
+                                                                  folderIndex,
+                                                                  animationDurationMillis,
+                                                              )
+                                                          }
                                                      } else {
                                                          // 被排除的文件夹仍可从主屏直接打开，但不加入左右滑动页面。
                                                          HapticController.vibrate(context, HapticType.NAVIGATION)
@@ -651,10 +660,11 @@ fun HomeContent(
                                         size = iconSize.dp,
                                         frozen = frozenStates[item.pkg] == true,
                                         missing = appStates[item.pkg] == AppRuntimeState.MISSING,
-                                        icon = icons[item.pkg],
-                                        showName = showAppName,
-                                        freezeStyle = freezeStyle,
-                                        iconShape = iconShape,
+                                         icon = icons[item.pkg],
+                                         showName = showAppName,
+                                         freezeStyle = freezeStyle,
+                                         frostAnimationDurationMillis = animationDurationMillis,
+                                         iconShape = iconShape,
                                         selectionColor = if (organizing) when (val s = organizeState) {
                                              is OrganizeState.HomeAppSelected ->
                                                  if (s.app.id == item.id) OrganizeAppHighlight else null
@@ -690,6 +700,7 @@ fun HomeContent(
                     iconSize = iconSize.dp,
                     verticalSpace = verticalSpace,
                     freezeStyle = freezeStyle,
+                    frostAnimationDurationMillis = animationDurationMillis,
                     iconShape = iconShape,
                     showAppName = showAppName,
                     appStates = appStates,
@@ -697,8 +708,7 @@ fun HomeContent(
                     onBackToHome = {
                         HapticController.vibrate(context, HapticType.NAVIGATION)
                         scope.launch {
-                            if (animationsEnabled) pagerState.animateHome(actualCount)
-                            else pagerState.scrollHome(actualCount)
+                            pagerState.animateHome(actualCount, animationDurationMillis)
                         }
                     },
                     onAppClick = { handleAppClick(it) },
@@ -783,7 +793,8 @@ fun HomeContent(
                 actionIconSize = dockActionIconSize.dp,
                 iconShape = iconShape,
                 transparentBg = transparentBg,
-                 onQuickClean = { actions.quickClean() },
+                animationDurationMillis = animationDurationMillis,
+                onQuickClean = { actions.quickClean() },
                 onAppClick = { handleAppClick(it) },
                 onAppLongClick = { pkg ->
                      actions.toggleLock(pkg)
@@ -989,20 +1000,20 @@ fun HomeContent(
             iconPack = iconPack,
             transparentBg = transparentBg,
             wallpaperOverlay = wallpaperOverlay,
-            animationsEnabled = animationsEnabled,
+            animationLevel = animationLevel,
             showAppName = showAppName,
             freezeStyle = freezeStyle,
             iconPacks = iconPacks,
             iconPacksLoading = iconPacksLoading,
             onRefreshIconPacks = { refreshIconPacks() },
-             iconShape = iconShape,
-             onIconPackSelect = { pkg -> actions.applyIconPack(pkg) },
-             onTransparentToggle = { on -> actions.setTransparentBg(on) },
-             onWallpaperOverlayChange = { alpha -> actions.setWallpaperOverlay(alpha) },
-             onAnimationsToggle = { on -> actions.setAnimationsEnabled(on) },
-             onShowAppNameChange = { on -> actions.setShowAppName(on) },
-             onFreezeStyleSelect = { style -> actions.setFreezeStyle(style.name) },
-             onIconShapeSelect = { shape -> actions.setIconShape(shape) },
+            iconShape = iconShape,
+            onIconPackSelect = { pkg -> actions.applyIconPack(pkg) },
+            onTransparentToggle = { on -> actions.setTransparentBg(on) },
+            onWallpaperOverlayChange = { alpha -> actions.setWallpaperOverlay(alpha) },
+            onAnimationLevelChange = { level -> actions.setAnimationLevel(level) },
+            onShowAppNameChange = { on -> actions.setShowAppName(on) },
+            onFreezeStyleSelect = { style -> actions.setFreezeStyle(style.name) },
+            onIconShapeSelect = { shape -> actions.setIconShape(shape) },
             onComplete = { beautyPanelOpen = false },
             onBackToMenu = {
                 beautyPanelOpen = false
@@ -1127,6 +1138,7 @@ private fun AppCell(
     icon: ImageBitmap?,
     showName: Boolean,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
+    frostAnimationDurationMillis: Int = 300,
     iconShape: String = "round",
     selectionColor: Color? = null,
     onClick: () -> Unit,
@@ -1152,7 +1164,11 @@ private fun AppCell(
                         .size(size)
                         .clip(if (iconShape == "circle") androidx.compose.foundation.shape.CircleShape
                         else RoundedCornerShape(size.value * 0.22f))
-                        .frosted(enabled = frozen, style = freezeStyle),
+                        .frosted(
+                            enabled = frozen,
+                            style = freezeStyle,
+                            animationDurationMillis = frostAnimationDurationMillis,
+                        ),
                 )
             } else {
                 // 图标未加载：灰色占位块（不显示包名文字）
@@ -1206,6 +1222,7 @@ private fun FolderCell(
     frozenStates: Map<String, Boolean> = emptyMap(),
     appStates: Map<String, AppRuntimeState> = emptyMap(),
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
+    frostAnimationDurationMillis: Int = 300,
     previewSize: Int = 2,
     iconShape: String = "round",
     showName: Boolean = true,
@@ -1267,7 +1284,11 @@ private fun FolderCell(
                                                         .size(size / grid * 0.88f)
                                                         .clip(if (iconShape == "circle") androidx.compose.foundation.shape.CircleShape
                                                         else RoundedCornerShape(size.value * 0.08f))
-                                                        .frosted(enabled = frozen, style = freezeStyle),
+                                                         .frosted(
+                                                             enabled = frozen,
+                                                             style = freezeStyle,
+                                                             animationDurationMillis = frostAnimationDurationMillis,
+                                                         ),
                                                 )
                                             }
                                             if (frozen) {
@@ -1315,6 +1336,7 @@ private fun DockBar(
     actionIconSize: androidx.compose.ui.unit.Dp,
     iconShape: String,
     transparentBg: Boolean = false,
+    animationDurationMillis: Int,
     onQuickClean: () -> Unit,
     onAppClick: (String) -> Unit,
     onAppLongClick: (String) -> Unit,
@@ -1349,6 +1371,7 @@ private fun DockBar(
                         pkg = pkg,
                         bitmap = bitmap,
                         iconSize = iconSize,
+                        animationDurationMillis = animationDurationMillis,
                         locked = pkg in lockedPackages,
                         onClick = { onAppClick(pkg) },
                         onLongClick = { onAppLongClick(pkg) },
@@ -1392,6 +1415,7 @@ private fun DockIcon(
     pkg: String,
     bitmap: ImageBitmap,
     iconSize: androidx.compose.ui.unit.Dp,
+    animationDurationMillis: Int,
     locked: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -1434,10 +1458,16 @@ private fun DockIcon(
                                 onSwipeUp()
                             }
                             // 无论触发与否都回弹：失败时回到原位，成功时 item 即将移除
-                            scope.launch { offsetY.animateTo(0f) }
+                            scope.launch {
+                                if (animationDurationMillis == 0) offsetY.snapTo(0f)
+                                else offsetY.animateTo(0f, animationSpec = tween(animationDurationMillis))
+                            }
                         },
                         onDragCancel = {
-                            scope.launch { offsetY.animateTo(0f) }
+                            scope.launch {
+                                if (animationDurationMillis == 0) offsetY.snapTo(0f)
+                                else offsetY.animateTo(0f, animationSpec = tween(animationDurationMillis))
+                            }
                         },
                     )
                 },
