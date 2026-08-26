@@ -29,6 +29,22 @@ class FolderPagePlannerTest {
     }
 
     @Test
+    fun homeGridFolderOrderOverridesFolderMetadataOrder() {
+        val plan = FolderPagePlanner.plan(
+            folders = listOf(
+                FolderPageInput(id = 1L, sortOrder = 0),
+                FolderPageInput(id = 2L, sortOrder = 1),
+            ),
+            homeFolderIds = listOf(2L, 1L),
+        )
+
+        assertEquals(
+            listOf(FolderPage.Home, FolderPage.Folder(2L), FolderPage.Folder(1L)),
+            plan.pages,
+        )
+    }
+
+    @Test
     fun nonLoopingMoveStopsAtEdges() {
         val plan = FolderPagePlanner.plan(
             folders = listOf(FolderPageInput(1L, 0)),
