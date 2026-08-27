@@ -9,6 +9,11 @@ data class VersionRecord(
 
 val versionHistory = listOf(
     VersionRecord(
+        "v0.4.2",
+        "Dock 跟手与即时反馈修复",
+        "修复底部 Dock 上划时每个触摸事件启动协程造成的拖动延迟，改为直接更新位移并使用图层变换；上划释放后立即隐藏目标图标，冻结失败时恢复，成功后立即更新共享状态并继续后台真实状态校准；增加同一应用重复冻结请求保护。保持 FreezeUseCase/PowerEngine 执行链、versionCode=1、逐包冻结和应用数据安全边界不变。",
+    ),
+    VersionRecord(
         "v0.4.1",
         "动画速度与效率设置",
         "美化设置新增“关 / 高 / 中 / 低”四档动画速度滑竿，统一控制文件夹进入、返回主屏、重进主屏、搜索回主屏、Dock 回弹和冻结滤镜等应用显式动画；关闭动画时直接切换，默认使用中档。新增 animation_level 备份字段并兼容旧 animations_enabled 设置，补充动画档位与 Backup v1 回归测试；保留逐包批量执行、Binder IO 线程和应用数据安全边界不变。",
