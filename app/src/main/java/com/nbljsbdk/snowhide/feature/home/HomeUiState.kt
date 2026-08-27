@@ -17,6 +17,7 @@ data class HomeUiState(
     val folderPageLoopEnabled: Boolean,
     val excludedFolderIds: Set<Long>,
     val frozenStates: Map<String, Boolean>,
+    val pendingFreezePackages: Set<String>,
     val appStates: Map<String, AppRuntimeState>,
     val lockedPackages: Set<String>,
     val labels: Map<String, String>,

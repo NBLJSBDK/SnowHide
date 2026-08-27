@@ -25,6 +25,7 @@ fun HomeRoute(
     val folderPageLoopEnabled by viewModel.folderPageLoopEnabled.collectAsState()
     val excludedFolderIds by viewModel.excludedFolderIds.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
+    val pendingFreezePackages by viewModel.pendingFreezePackages.collectAsState()
     val appStates by viewModel.appStates.collectAsState()
     val lockedPackages by viewModel.lockedPackages.collectAsState()
     val labels by viewModel.labels.collectAsState()
@@ -62,6 +63,7 @@ fun HomeRoute(
         folderPageLoopEnabled = folderPageLoopEnabled,
         excludedFolderIds = excludedFolderIds,
         frozenStates = frozenStates,
+        pendingFreezePackages = pendingFreezePackages,
         appStates = appStates,
         lockedPackages = lockedPackages,
         labels = labels,

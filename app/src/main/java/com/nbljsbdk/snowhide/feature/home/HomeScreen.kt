@@ -4,13 +4,10 @@ package com.nbljsbdk.snowhide.feature.home
 
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateTo
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -24,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -66,8 +62,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,6 +87,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
@@ -786,7 +783,8 @@ fun HomeContent(
             )
         } else {
             DockBar(
-                packages = dockPackages(gridItems, folderApps, frozenStates, appStates),
+                packages = dockPackages(gridItems, folderApps, frozenStates, appStates)
+                    .filterNot { it in state.pendingFreezePackages },
                 lockedPackages = lockedPackages,
                 icons = icons,
                 iconSize = dockIconSize.dp,
@@ -1422,10 +1420,27 @@ private fun DockIcon(
     onSwipeUp: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    // 上划偏移（负=向上）。拖动时直接赋值（跟手），松手 animateTo 回弹
-    val offsetY = remember { Animatable(0f) }
+    // 拖动期间直接写状态，避免每个触摸事件都 launch 协程排队。
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
     val maxDrag = iconSize.value * 1.4f
     val threshold = -iconSize.value * 0.9f
+
+    fun settle() {
+        val start = offsetY
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            if (animationDurationMillis == 0) {
+                offsetY = 0f
+            } else {
+                animate(
+                    initialValue = start,
+                    targetValue = 0f,
+                    animationSpec = tween(animationDurationMillis),
+                ) { value, _ -> offsetY = value }
+            }
+        }
+    }
 
     Box {
         androidx.compose.foundation.Image(
@@ -1433,9 +1448,9 @@ private fun DockIcon(
             contentDescription = pkg,
             contentScale = ContentScale.Fit,
             modifier = Modifier
-                .offset { IntOffset(0, offsetY.value.roundToInt()) }
                 .graphicsLayer {
-                    alpha = 1f - (offsetY.value / -maxDrag).coerceIn(0f, 1f) * 0.55f
+                    translationY = offsetY
+                    alpha = 1f - (offsetY / -maxDrag).coerceIn(0f, 1f) * 0.55f
                 }
                 .size(iconSize)
                 .clip(RoundedCornerShape(iconSize.value * 0.22f))
@@ -1443,32 +1458,22 @@ private fun DockIcon(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .pointerInput(pkg) {
+                .pointerInput(pkg, animationDurationMillis) {
                     detectVerticalDragGestures(
+                        onDragStart = { _ -> settleJob?.cancel() },
                         onVerticalDrag = { change, amount ->
-                            // Main.immediate：launch 同步执行，跟手无延迟
-                            scope.launch {
-                                offsetY.snapTo((offsetY.value + amount).coerceIn(-maxDrag, 0f))
-                            }
+                            offsetY = (offsetY + amount).coerceIn(-maxDrag, 0f)
                             change.consume()
                         },
                         onDragEnd = {
-                            if (offsetY.value <= threshold) {
+                            if (offsetY <= threshold) {
                                 // 上划到位并松手 → 确认冻结（成功后图标从栏中消失）
                                 onSwipeUp()
                             }
                             // 无论触发与否都回弹：失败时回到原位，成功时 item 即将移除
-                            scope.launch {
-                                if (animationDurationMillis == 0) offsetY.snapTo(0f)
-                                else offsetY.animateTo(0f, animationSpec = tween(animationDurationMillis))
-                            }
+                            settle()
                         },
-                        onDragCancel = {
-                            scope.launch {
-                                if (animationDurationMillis == 0) offsetY.snapTo(0f)
-                                else offsetY.animateTo(0f, animationSpec = tween(animationDurationMillis))
-                            }
-                        },
+                        onDragCancel = { settle() },
                     )
                 },
         )

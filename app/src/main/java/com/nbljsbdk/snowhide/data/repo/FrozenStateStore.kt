@@ -49,6 +49,15 @@ object FrozenStateStore {
     /** pkg → 系统实际状态（主屏、文件夹、Dock 共用） */
     val appStates: StateFlow<Map<String, AppRuntimeState>> = _appStates.asStateFlow()
 
+    /** 命令成功后先更新内存和缓存，后台 refresh 再用系统真实状态校正。 */
+    fun applyCommandResult(pkg: String, frozen: Boolean) {
+        val states = _states.value + (pkg to frozen)
+        _states.value = states
+        _appStates.value = _appStates.value +
+            (pkg to if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE)
+        persistCache(states)
+    }
+
     data class StatusSyncResult(
         val success: Boolean,
         val missingCount: Int,

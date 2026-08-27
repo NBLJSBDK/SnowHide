@@ -131,6 +131,10 @@ class HomeViewModel(
     val frozenStates: StateFlow<Map<String, Boolean>> =
         FrozenStateStore.states
 
+    /** 正在执行冻结命令的应用，先从 Dock 隐藏，失败时恢复。 */
+    private val _pendingFreezePackages = MutableStateFlow<Set<String>>(emptySet())
+    val pendingFreezePackages: StateFlow<Set<String>> = _pendingFreezePackages.asStateFlow()
+
     /** 应用系统实际状态（冻结/正常/已删除/无法确认） */
     val appStates: StateFlow<Map<String, AppRuntimeState>> = FrozenStateStore.appStates
 
@@ -338,15 +342,28 @@ class HomeViewModel(
     fun toggleFreeze(pkg: String) {
         viewModelScope.launch {
             val frozen = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value[pkg] ?: false
+            if (!frozen && pkg in _pendingFreezePackages.value) return@launch
+            if (!frozen) {
+                _pendingFreezePackages.value = _pendingFreezePackages.value + pkg
+            }
             val result = if (frozen) freezeUseCase.unfreezeApp(pkg)
             else freezeUseCase.freezeApp(pkg)
             result.onSuccess {
+                FrozenStateStore.applyCommandResult(pkg, frozen = !frozen)
+                if (!frozen) {
+                    _pendingFreezePackages.value = _pendingFreezePackages.value - pkg
+                }
                 refreshFrozenStates()
                 HapticController.vibrate(context, HapticType.FREEZE_LOCK)
                 // 冻结/解冻成功提示与智能清理统一使用系统 Toast
                 val name = _labels.value[pkg] ?: pkg
                 toast(if (frozen) "已启用：$name" else "已停用：$name")
-            }.onFailure { showMessage("操作失败：${it.message}") }
+            }.onFailure {
+                if (!frozen) {
+                    _pendingFreezePackages.value = _pendingFreezePackages.value - pkg
+                }
+                showMessage("操作失败：${it.message}")
+            }
         }
     }
 
