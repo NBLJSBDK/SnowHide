@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.core.feedback.HapticType
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
 import com.nbljsbdk.snowhide.ui.util.HapticController
@@ -69,7 +70,6 @@ fun QuickToggleScreen(
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val showPackageName by viewModel.showPackageName.collectAsState()
-    val members by viewModel.members.collectAsState()
     val leftSort by viewModel.leftSort.collectAsState()
     val rightSort by viewModel.rightSort.collectAsState()
     val iconShape by SettingsRepository.iconShape.collectAsState()
@@ -157,16 +157,16 @@ fun QuickToggleScreen(
                 ) {
                     ColumnLabel("可加入（右滑加入）", leftApps.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(leftApps, key = { it }) { pkg ->
+                        items(leftApps, key = { it.key }) { target ->
                             SwipeRow(
-                                 label = viewModel.displayLabel(pkg),
-                                 pkg = pkg,
+                                  label = viewModel.displayLabel(target),
+                                  target = target,
                                  showPackageName = showPackageName,
                                  iconShape = iconShape,
                                  background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                  allowedDirection = SwipeToDismissBoxValue.StartToEnd,
                                   onSwipe = {
-                                      viewModel.addMember(pkg)
+                                       viewModel.addMember(target)
                                       HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
                                   },
                             )
@@ -184,16 +184,16 @@ fun QuickToggleScreen(
                 ) {
                     ColumnLabel("快速启停成员（左滑移出）", rightApps.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(rightApps, key = { it }) { pkg ->
+                        items(rightApps, key = { it.key }) { target ->
                             SwipeRow(
-                                 label = viewModel.displayLabel(pkg),
-                                 pkg = pkg,
+                                  label = viewModel.displayLabel(target),
+                                  target = target,
                                  showPackageName = showPackageName,
                                  iconShape = iconShape,
                                  background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                  allowedDirection = SwipeToDismissBoxValue.EndToStart,
                                   onSwipe = {
-                                      viewModel.removeMember(pkg)
+                                       viewModel.removeMember(target)
                                       HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
                                   },
                             )
@@ -261,7 +261,7 @@ private fun SortButton(label: String, onClick: () -> Unit) {
 @Composable
 private fun SwipeRow(
     label: String,
-    pkg: String,
+    target: AppTarget,
     showPackageName: Boolean,
     iconShape: String,
     background: androidx.compose.ui.graphics.Color,
@@ -299,7 +299,7 @@ private fun SwipeRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    LazyAppIcon(pkg = pkg, size = 36.dp, iconShape = iconShape)
+                    LazyAppIcon(pkg = target.packageName.value, size = 36.dp, iconShape = iconShape)
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(start = 10.dp))
                     Text(
                         text = label,
@@ -312,7 +312,7 @@ private fun SwipeRow(
                 }
                 if (showPackageName) {
                     Text(
-                        text = pkg,
+                        text = if (target.isPrimaryUser) target.packageName.value else target.key,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,

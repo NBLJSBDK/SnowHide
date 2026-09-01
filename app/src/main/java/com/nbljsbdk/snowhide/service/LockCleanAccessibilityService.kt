@@ -1,8 +1,10 @@
 package com.nbljsbdk.snowhide.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.nbljsbdk.snowhide.app.CompositionRoot
+import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceConnectionState
 
 /**
  * 锁屏自动清理保活载体（AccessibilityService）
@@ -24,6 +26,7 @@ class LockCleanAccessibilityService : AccessibilityService() {
         // 服务常驻：在这里注册息屏/解锁广播（比 MainActivity 更可靠）
         LockCleanReceiver.register(this)
         recentSwipeController.onServiceConnected()
+        AccessibilityServiceConnectionState.markConnected()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -32,7 +35,13 @@ class LockCleanAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    override fun onUnbind(intent: Intent?): Boolean {
+        AccessibilityServiceConnectionState.markDisconnected()
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
+        AccessibilityServiceConnectionState.markDisconnected()
         recentSwipeController.onDestroy()
         LockCleanReceiver.unregister(this)
         super.onDestroy()

@@ -4,58 +4,75 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import com.nbljsbdk.snowhide.core.engine.EngineManager
+import com.nbljsbdk.snowhide.core.engine.TargetedPowerEngine
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 冻结状态共享存储（全局单例）
+ * 冻结状态共享存储。
  *
- * 背景：冻结/解冻操作分散在多个入口（主屏上划、增删界面「应用」按钮、
- * 快速启停磁贴、齿轮批量），各自改完系统状态后主屏的霜化/dock 过滤
- * 必须同步。集中在此：任意入口操作后调 [refresh]，订阅 [states] 的
- * UI 自动更新。
- *
- * 附带持久化缓存：启动瞬间先渲染上次状态（避免「开应用一瞬间
- * 全部无霜化/dock 全显示」），后台刷新后再校正。
+ * 旧包名 StateFlow 继续保留给 user 0 入口；新的 target StateFlow 才是主屏、
+ * 文件夹和分身操作的真实身份来源。未知状态不会被当作未冻结。
  */
 object FrozenStateStore {
 
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
+    private val stateLock = Any()
+    private val refreshMutex = Mutex()
+    private var mutationVersion = 0L
 
-    /** 初始化（MainActivity 启动时调用一次，与 GridRepository 同批） */
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         appContext = context.applicationContext
         prefs = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
-        // 启动先用缓存渲染（消灭闪烁），随后各入口会再 refresh
-        _states.value = loadCache()
-        _appStates.value = _states.value.mapValues { (_, frozen) ->
-            if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE
-        }
+        publishPairs(loadCache().mapValues { (_, frozen) ->
+            frozen to if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE
+        })
     }
 
+    private val _targetStates = MutableStateFlow<Map<AppTarget, Boolean>>(emptyMap())
+    /** 明确目标 → 是否冻结；只覆盖已添加目标。 */
+    val targetStates: StateFlow<Map<AppTarget, Boolean>> = _targetStates.asStateFlow()
+
     private val _states = MutableStateFlow<Map<String, Boolean>>(emptyMap())
-    /** pkg → 是否冻结（只覆盖已添加应用） */
+    /** user 0 兼容投影：包名 → 是否冻结。 */
     val states: StateFlow<Map<String, Boolean>> = _states.asStateFlow()
 
+    private val _targetAppStates = MutableStateFlow<Map<AppTarget, AppRuntimeState>>(emptyMap())
+    /** 明确目标 → 实际运行状态。 */
+    val targetAppStates: StateFlow<Map<AppTarget, AppRuntimeState>> = _targetAppStates.asStateFlow()
+
     private val _appStates = MutableStateFlow<Map<String, AppRuntimeState>>(emptyMap())
-    /** pkg → 系统实际状态（主屏、文件夹、Dock 共用） */
+    /** user 0 兼容投影：包名 → 实际运行状态。 */
     val appStates: StateFlow<Map<String, AppRuntimeState>> = _appStates.asStateFlow()
 
-    /** 命令成功后先更新内存和缓存，后台 refresh 再用系统真实状态校正。 */
+    /** 单个命令成功后立即更新内存，后台 refresh 再校正真实状态。 */
     fun applyCommandResult(pkg: String, frozen: Boolean) {
-        val states = _states.value + (pkg to frozen)
-        _states.value = states
-        _appStates.value = _appStates.value +
-            (pkg to if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE)
-        persistCache(states)
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()
+            ?.let { applyCommandResult(it, frozen) }
+    }
+
+    fun applyCommandResult(target: AppTarget, frozen: Boolean) {
+        synchronized(stateLock) {
+            mutationVersion++
+            val states = _targetStates.value + (target to frozen)
+            val appStates = _targetAppStates.value +
+                (target to if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE)
+            publishPairs(states.mapValues { (key, value) ->
+                value to (appStates[key] ?: AppRuntimeState.UNKNOWN)
+            })
+            persistCache(states)
+        }
     }
 
     data class StatusSyncResult(
@@ -65,49 +82,140 @@ object FrozenStateStore {
         val errorMessage: String? = null,
     )
 
-    /** 批量查询全部已添加应用的真实安装/冻结状态并更新缓存 */
-    suspend fun refresh(): StatusSyncResult = withContext(Dispatchers.IO) {
-        val pkgs = GridRepository.allAddedPackages()
-        if (pkgs.isEmpty()) {
-            _states.value = emptyMap()
-            _appStates.value = emptyMap()
-            persistCache(emptyMap())
-            return@withContext StatusSyncResult(true, 0, 0)
-        }
-        val installed = pkgs.associateWith { isInstalled(it) }
-        val frozenResult = EngineManager.primaryEngine.value
-            ?.listFrozenPackages()
-            ?: Result.failure(IllegalStateException("没有可用的权限引擎"))
-        val frozen = frozenResult.getOrElse { error ->
-            val unknown = installed.mapValues { (_, exists) ->
-                if (exists) AppRuntimeState.UNKNOWN else AppRuntimeState.MISSING
+    /** 查询全部已添加目标的真实安装/冻结状态。 */
+    suspend fun refresh(): StatusSyncResult = refreshMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val refreshVersion = synchronized(stateLock) { mutationVersion }
+            val targets = GridRepository.allAddedTargets()
+            if (targets.isEmpty()) {
+                synchronized(stateLock) {
+                    if (mutationVersion == refreshVersion) {
+                        publish(emptyMap<AppTarget, Boolean>())
+                        persistCache(emptyMap())
+                    }
+                }
+                return@withContext StatusSyncResult(true, 0, 0)
             }
-            _appStates.value = unknown
-            return@withContext StatusSyncResult(
-                success = false,
-                missingCount = unknown.count { it.value == AppRuntimeState.MISSING },
-                correctedCount = 0,
-                errorMessage = error.message,
-            )
+            val engine = EngineManager.primaryEngine.value
+                ?: return@withContext publishUnknown(targets, "没有可用的权限引擎")
+
+        val observed = linkedMapOf<AppTarget, Pair<Boolean, AppRuntimeState>>()
+        var firstError: Throwable? = null
+
+        val primaryTargets = targets.filter { it.isPrimaryUser }
+        val primaryFrozen = engine.listFrozenPackages().getOrElse {
+            firstError = it
+            emptyList()
         }.toSet()
-        val appStates = installed.mapValues { (pkg, exists) ->
-            when {
+        primaryTargets.forEach { target ->
+            val exists = isInstalled(target.packageName.value)
+            val state = when {
                 !exists -> AppRuntimeState.MISSING
-                pkg in frozen -> AppRuntimeState.FROZEN
+                firstError != null -> AppRuntimeState.UNKNOWN
+                target.packageName.value in primaryFrozen -> AppRuntimeState.FROZEN
                 else -> AppRuntimeState.ACTIVE
             }
+            observed[target] = stateToPair(target, state)
         }
-        val map = installed.mapValues { (pkg, exists) -> exists && pkg in frozen }
-        val previous = _states.value
-        val correctedCount = map.count { (pkg, value) -> previous[pkg] != null && previous[pkg] != value }
-        _states.value = map
-        _appStates.value = appStates
-        persistCache(map)
-        StatusSyncResult(
-            success = true,
-            missingCount = appStates.count { it.value == AppRuntimeState.MISSING },
-            correctedCount = correctedCount,
+
+        val cloneTargets = targets.filterNot { it.isPrimaryUser }
+        val targeted = engine as? TargetedPowerEngine
+        if (cloneTargets.isNotEmpty() && targeted == null) {
+            firstError = firstError ?: IllegalStateException("当前权限引擎不支持用户空间操作")
+        }
+        cloneTargets.groupBy { it.userId }.forEach { (userId, userTargets) ->
+            if (targeted == null) {
+                userTargets.forEach { observed[it] = stateToPair(it, AppRuntimeState.UNKNOWN) }
+                return@forEach
+            }
+            val installed = targeted.listInstalledPackages(userId).getOrElse {
+                firstError = firstError ?: it
+                emptyList()
+            }.toSet()
+            val frozen = targeted.listFrozenPackages(userId).getOrElse {
+                firstError = firstError ?: it
+                emptyList()
+            }.toSet()
+            userTargets.forEach { target ->
+                val state = when {
+                    target.packageName.value !in installed -> AppRuntimeState.MISSING
+                    firstError != null -> AppRuntimeState.UNKNOWN
+                    target.packageName.value in frozen -> AppRuntimeState.FROZEN
+                    else -> AppRuntimeState.ACTIVE
+                }
+                observed[target] = stateToPair(target, state)
+            }
+        }
+
+            val currentTargets = GridRepository.allAddedTargets().toSet()
+            val actual = observed
+                .filterKeys { it in currentTargets }
+                .mapValues { it.value.first }
+            val actualStates = observed
+                .filterKeys { it in currentTargets }
+                .mapValues { it.value.second }
+            synchronized(stateLock) {
+                if (mutationVersion != refreshVersion) {
+                    // 命令在查询期间已改变状态，旧结果不能覆盖命令的即时结果。
+                    return@withContext StatusSyncResult(true, 0, 0)
+                }
+                val previous = _targetStates.value
+                publish(actual, actualStates)
+                persistCache(actual)
+                StatusSyncResult(
+                    success = firstError == null,
+                    missingCount = actualStates.count { it.value == AppRuntimeState.MISSING },
+                    correctedCount = actual.count { (target, frozen) -> previous[target] != null && previous[target] != frozen },
+                    errorMessage = firstError?.message,
+                )
+            }
+        }
+    }
+
+    private fun publishUnknown(
+        targets: List<AppTarget>,
+        errorMessage: String,
+    ): StatusSyncResult {
+        val states = targets.associateWith { target ->
+            val previous = _targetStates.value[target] ?: false
+            previous to AppRuntimeState.UNKNOWN
+        }
+        publishPairs(states)
+        return StatusSyncResult(false, 0, 0, errorMessage)
+    }
+
+    private fun stateToPair(target: AppTarget, state: AppRuntimeState): Pair<Boolean, AppRuntimeState> {
+        val frozen = when (state) {
+            AppRuntimeState.FROZEN -> true
+            AppRuntimeState.ACTIVE, AppRuntimeState.MISSING -> false
+            AppRuntimeState.UNKNOWN -> _targetStates.value[target] ?: false
+        }
+        return frozen to state
+    }
+
+    private fun publishPairs(
+        states: Map<AppTarget, Pair<Boolean, AppRuntimeState>>,
+    ) {
+        publish(
+            states.mapValues { it.value.first },
+            states.mapValues { it.value.second },
         )
+    }
+
+    private fun publish(
+        states: Map<AppTarget, Boolean>,
+        appStates: Map<AppTarget, AppRuntimeState> = states.mapValues { (_, frozen) ->
+            if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE
+        },
+    ) {
+        _targetStates.value = states
+        _targetAppStates.value = appStates
+        _states.value = states
+            .filterKeys { it.isPrimaryUser }
+            .mapKeys { it.key.packageName.value }
+        _appStates.value = appStates
+            .filterKeys { it.isPrimaryUser }
+            .mapKeys { it.key.packageName.value }
     }
 
     private fun isInstalled(pkg: String): Boolean = runCatching {
@@ -115,16 +223,21 @@ object FrozenStateStore {
         true
     }.getOrDefault(false)
 
-    private fun persistCache(map: Map<String, Boolean>) {
+    private fun persistCache(map: Map<AppTarget, Boolean>) {
         if (!::prefs.isInitialized) return
         val arr = JSONArray()
-        map.forEach { (pkg, frozen) ->
-            arr.put(JSONObject().put("p", pkg).put("f", frozen))
+        map.forEach { (target, frozen) ->
+            arr.put(
+                JSONObject()
+                    .put("p", target.packageName.value)
+                    .put("u", target.userId)
+                    .put("f", frozen),
+            )
         }
         prefs.edit().putString(KEY_CACHE, arr.toString()).apply()
     }
 
-    private fun loadCache(): Map<String, Boolean> {
+    private fun loadCache(): Map<AppTarget, Boolean> {
         if (!::prefs.isInitialized) return emptyMap()
         val json = prefs.getString(KEY_CACHE, "[]") ?: "[]"
         return runCatching {
@@ -132,7 +245,11 @@ object FrozenStateStore {
                 buildMap {
                     for (i in 0 until arr.length()) {
                         val obj = arr.getJSONObject(i)
-                        put(obj.getString("p"), obj.getBoolean("f"))
+                        val pkg = obj.optString("p")
+                        val userId = obj.optInt("u", AppTarget.PRIMARY_USER_ID)
+                        AppTarget.create(pkg, userId).getOrNull()?.let {
+                            put(it, obj.optBoolean("f", false))
+                        }
                     }
                 }
             }

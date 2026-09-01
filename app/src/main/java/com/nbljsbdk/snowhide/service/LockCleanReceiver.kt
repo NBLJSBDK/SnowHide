@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import android.content.IntentFilter
 import android.os.Build
 import android.os.SystemClock
@@ -99,29 +100,31 @@ class LockCleanReceiver : BroadcastReceiver() {
         CompositionRoot.init(context)
         val useCase = CompositionRoot.appContainer(context).freezeUseCase
         Thread {
-            val cleanedPackages = runCatching { runBlocking { useCase.quickCleanPackages() } }
+            val cleanedTargets = runCatching { runBlocking { useCase.quickCleanTargets() } }
                 .getOrNull()?.getOrNull()
             runCatching { runBlocking { FrozenStateStore.refresh() } }
             if (prefs(context).getBoolean(KEY_NOTIFY, true)) {
-                notifyResult(context, cleanedPackages)
+                notifyResult(context, cleanedTargets)
             }
         }.start()
     }
 
     /** 清理结果通知（后台 Toast 被吞，通知兜底） */
-    private fun notifyResult(context: Context, cleanedPackages: List<String>?) {
+    private fun notifyResult(context: Context, cleanedTargets: List<AppTarget>?) {
         runCatching {
             val nm = context.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "锁屏自动清理", NotificationManager.IMPORTANCE_DEFAULT)
             )
             val message = when {
-                cleanedPackages == null -> "清理执行失败"
-                cleanedPackages.isEmpty() -> "没有需要停用的应用"
-                cleanedPackages.size <= 3 -> {
-                    "已停用：" + cleanedPackages.joinToString("、") { appLabel(context, it) }
+                cleanedTargets == null -> "清理执行失败"
+                cleanedTargets.isEmpty() -> "没有需要停用的应用"
+                cleanedTargets.size <= 3 -> {
+                    "已停用：" + cleanedTargets.joinToString("、") {
+                        appLabel(context, it.packageName.value)
+                    }
                 }
-                else -> "已停用 ${cleanedPackages.size} 个应用"
+                else -> "已停用 ${cleanedTargets.size} 个应用"
             }
             val notification = android.app.Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_snowflake)

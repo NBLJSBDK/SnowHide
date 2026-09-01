@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.domain
 
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.core.operation.PmCommand
 import com.nbljsbdk.snowhide.core.operation.PmOperation
 import com.nbljsbdk.snowhide.data.repo.BatchProgress
@@ -44,6 +45,56 @@ suspend fun PowerEngine.execBatched(
         Result.success(success)
     } else {
         // 失败汇总：数量 + 前 5 个明细 + 成功数（避免 113 个包名拼成长串）
+        val preview = failures.take(5).joinToString("；")
+        val tail = if (failures.size > 5) " 等 ${failures.size} 个失败" else ""
+        Result.failure(IllegalStateException("部分失败：$preview$tail（成功 $success 个）"))
+    }
+}
+
+/**
+ * 带用户空间的批量执行入口。
+ *
+ * 与旧包名入口分开命名，避免 Kotlin/JVM 泛型擦除冲突；user 0 保持旧命令
+ * 语义，非 user 0 的启用也必须使用明确的 `--user`。
+ */
+suspend fun PowerEngine.execBatchedTargets(
+    targets: List<AppTarget>,
+    operation: PmOperation,
+    verb: String,
+): Result<Int> {
+    if (targets.isEmpty()) return Result.success(0)
+    val distinctTargets = targets.distinct()
+    val total = distinctTargets.size
+    BatchProgress.begin(total, verb)
+    var success = 0
+    val failures = mutableListOf<String>()
+    try {
+        distinctTargets.forEachIndexed { index, target ->
+            val targetOperation = when {
+                target.isPrimaryUser -> operation
+                operation == PmOperation.ENABLE -> PmOperation.ENABLE_USER
+                else -> operation
+            }
+            PmCommand.build(
+                targetOperation,
+                target.packageName.value,
+                target.userId,
+            ).fold(
+                onSuccess = { command ->
+                    exec(command)
+                        .onSuccess { success++ }
+                        .onFailure { failures.add("${target.key}: ${it.message}") }
+                },
+                onFailure = { failures.add("${target.key}: ${it.message}") },
+            )
+            BatchProgress.update(index + 1, total)
+        }
+    } finally {
+        BatchProgress.end()
+    }
+    return if (failures.isEmpty()) {
+        Result.success(success)
+    } else {
         val preview = failures.take(5).joinToString("；")
         val tail = if (failures.size > 5) " 等 ${failures.size} 个失败" else ""
         Result.failure(IllegalStateException("部分失败：$preview$tail（成功 $success 个）"))

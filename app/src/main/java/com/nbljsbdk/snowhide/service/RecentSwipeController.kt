@@ -14,6 +14,7 @@ import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.RecentCalibrationRepository
 import com.nbljsbdk.snowhide.data.repo.RecentFreezeQueueRepository
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentAccessibilitySnapshot
 import com.nbljsbdk.snowhide.domain.recent.RecentFreezePolicy
@@ -59,6 +60,7 @@ internal class RecentSwipeController(
     private var manualToastPending = false
 
     private var candidatePackages = emptySet<String>()
+    private var candidateTargets = emptySet<AppTarget>()
     private var candidateLabels = emptyMap<String, String>()
     private var candidatesRefreshedAt = 0L
     private var launcherPackage: String? = null
@@ -75,8 +77,8 @@ internal class RecentSwipeController(
     private lateinit var freezeUseCase: FreezeUseCase
 
     private data class RecentFreezeOutcome(
-        val handled: List<String>,
-        val successful: List<String>,
+        val handled: List<AppTarget>,
+        val successful: List<AppTarget>,
         val failures: List<String>,
     )
 
@@ -311,7 +313,7 @@ internal class RecentSwipeController(
         taskSnapshotInFlight = true
         taskSnapshotRefreshPending = false
         val generation = sessionGeneration
-        val candidates = candidatePackages
+        val candidates = candidateTargets
         scope.launch {
             val result = RecentTaskSnapshotProvider.query(candidates, service.packageName)
             handler.post {
@@ -334,15 +336,15 @@ internal class RecentSwipeController(
         }
     }
 
-    private fun applyTaskSnapshot(packages: Set<String>) {
+    private fun applyTaskSnapshot(targets: Set<AppTarget>) {
         val now = SystemClock.elapsedRealtime()
-        val update = sessionState.initializeOrDiffTaskSnapshot(packages, now)
+        val update = sessionState.initializeOrDiffTaskSnapshot(targets, now)
         sessionState = update.state
         if (update.baselineEstablished) {
-            if (calibrationMode && packages.isNotEmpty()) {
+            if (calibrationMode && targets.isNotEmpty()) {
                 completeCalibration(
                     RecentTaskParser.Snapshot(
-                        packages = packages,
+                        packages = targets.map { it.packageName.value }.toSet(),
                         windowPackage = recentWindowPackage.orEmpty(),
                         windowClass = recentWindowClass.orEmpty(),
                     ),
@@ -359,16 +361,16 @@ internal class RecentSwipeController(
     }
 
     /** 划卡确认后立即入队，避免依赖离开 Recent 的时序。 */
-    private fun freezePackagesImmediately(packages: Collection<String>) {
-        val targets = RecentFreezePolicy.eligiblePackages(
-            packages = packages,
-            addedPackages = GridRepository.allAddedPackages().toSet(),
-            lockedPackages = GridRepository.lockedPackages.value,
+    private fun freezePackagesImmediately(targets: Collection<AppTarget>) {
+        val eligible = RecentFreezePolicy.eligibleTargets(
+            targets = targets,
+            addedTargets = GridRepository.allAddedTargets().toSet(),
+            lockedTargets = GridRepository.lockedTargets.value,
             ownPackage = service.packageName,
         )
-        if (targets.isEmpty()) return
+        if (eligible.isEmpty()) return
         scope.launch {
-            RecentFreezeQueueRepository.enqueue(targets)
+            RecentFreezeQueueRepository.enqueueTargets(eligible)
             handler.post(::drainQueuedFreezes)
         }
     }
@@ -382,7 +384,7 @@ internal class RecentSwipeController(
         }
         val now = SystemClock.elapsedRealtime()
         if (now - queueDrainAttemptedAt < QUEUE_RETRY_INTERVAL_MS) return
-        val queued = RecentFreezeQueueRepository.peek()
+        val queued = RecentFreezeQueueRepository.peekTargets()
         if (queued.isEmpty()) return
 
         queueDrainAttemptedAt = now
@@ -394,8 +396,8 @@ internal class RecentSwipeController(
             }
             handler.post {
                 queueDrainInFlight = false
-                outcome.successful.forEach { pkg ->
-                    FeedbackRegistry.toast("已停用：${appLabel(pkg)}")
+                outcome.successful.forEach { target ->
+                    FeedbackRegistry.toast("已停用：${appLabel(target)}")
                 }
                 if (outcome.failures.isNotEmpty()) {
                     FeedbackRegistry.notifyFailure(
@@ -403,7 +405,7 @@ internal class RecentSwipeController(
                         outcome.failures.take(5).joinToString("；"),
                     )
                 }
-                if (RecentFreezeQueueRepository.peek().isNotEmpty()) {
+                if (RecentFreezeQueueRepository.peekTargets().isNotEmpty()) {
                     queueDrainAttemptedAt = 0L
                     handler.post(::drainQueuedFreezes)
                 }
@@ -412,40 +414,40 @@ internal class RecentSwipeController(
     }
 
     /** Recent 专用逐包执行，不进入全局 BatchProgress。 */
-    private suspend fun executeRecentFreezes(packages: List<String>): RecentFreezeOutcome {
-        val handled = mutableListOf<String>()
-        val successful = mutableListOf<String>()
+    private suspend fun executeRecentFreezes(targets: List<AppTarget>): RecentFreezeOutcome {
+        val handled = mutableListOf<AppTarget>()
+        val successful = mutableListOf<AppTarget>()
         val failures = mutableListOf<String>()
-        val eligible = RecentFreezePolicy.eligiblePackages(
-            packages = packages,
-            addedPackages = GridRepository.allAddedPackages().toSet(),
-            lockedPackages = GridRepository.lockedPackages.value,
+        val eligible = RecentFreezePolicy.eligibleTargets(
+            targets = targets,
+            addedTargets = GridRepository.allAddedTargets().toSet(),
+            lockedTargets = GridRepository.lockedTargets.value,
             ownPackage = service.packageName,
         ).toSet()
-        packages.forEach { pkg ->
-            if (pkg !in eligible || !GridRepository.isAppAdded(pkg) || GridRepository.isLocked(pkg)) {
-                handled += pkg
+        targets.forEach { target ->
+            if (target !in eligible || !GridRepository.isAppAdded(target) || GridRepository.isLocked(target)) {
+                handled += target
                 return@forEach
             }
-            val result = runCatching { freezeUseCase.freezeApp(pkg) }
+            val result = runCatching { freezeUseCase.freezeApp(target) }
             if (result.isSuccess) {
-                handled += pkg
-                successful += pkg
+                handled += target
+                successful += target
             } else {
-                failures += "$pkg: ${result.exceptionOrNull()?.message ?: "未知错误"}"
+                failures += "${target.key}: ${result.exceptionOrNull()?.message ?: "未知错误"}"
             }
         }
-        if (handled.isNotEmpty()) RecentFreezeQueueRepository.remove(handled)
+        if (handled.isNotEmpty()) RecentFreezeQueueRepository.removeTargets(handled)
         return RecentFreezeOutcome(handled, successful, failures)
     }
 
-    private fun appLabel(pkg: String): String = runCatching {
+    private fun appLabel(target: AppTarget): String = runCatching {
         val info = service.packageManager.getApplicationInfo(
-            pkg,
+            target.packageName.value,
             android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS,
         )
         service.packageManager.getApplicationLabel(info).toString()
-    }.getOrDefault(pkg)
+    }.getOrDefault(target.packageName.value)
 
     private fun scheduleSessionExit() {
         if (!recentSessionActive) return
@@ -506,10 +508,12 @@ internal class RecentSwipeController(
     private fun refreshCandidates(now: Long) {
         if (now - candidatesRefreshedAt < CANDIDATE_REFRESH_INTERVAL_MS) return
         candidatesRefreshedAt = now
-        val packages = GridRepository.allAddedPackages()
-            .filterNot { it == service.packageName }
+        val targets = GridRepository.allAddedTargets()
+            .filterNot { it.packageName.value == service.packageName }
             .toSet()
-        if (packages == candidatePackages) return
+        val packages = targets.map { it.packageName.value }.toSet()
+        if (targets == candidateTargets && packages == candidatePackages) return
+        candidateTargets = targets
         candidatePackages = packages
         candidateLabels = packages.associateWith { pkg ->
             runCatching {

@@ -277,8 +277,9 @@ object BackupRepository {
             "grid_items" -> validateGridItems(raw)
             "folders" -> validateFolders(raw)
             "folder_apps" -> validateFolderApps(raw)
-            "locked_packages", "quick_toggle_members", "swipe_recent_packages" ->
-                validatePackageArray(raw, key)
+            "locked_packages" -> validateLockedTargets(raw)
+            "quick_toggle_members" -> validateTargetArray(raw, key)
+            "swipe_recent_packages" -> validatePackageArray(raw, key)
             "app_manage_added_order", "app_manage_removed_order",
             "quick_toggle_added_order", "quick_toggle_removed_order" ->
                 validateOrderMap(raw, key)
@@ -293,7 +294,7 @@ object BackupRepository {
 
     private fun validateGridItems(raw: String) {
         val array = parseArray(raw, "grid_items")
-        val allowed = setOf("id", "type", "pkg", "folderId", "sortOrder", "frozenMode", "locked")
+        val allowed = setOf("id", "type", "pkg", "folderId", "sortOrder", "frozenMode", "locked", "userId")
         for (index in 0 until array.length()) {
             val obj = array.opt(index) as? JSONObject
                 ?: throw IllegalArgumentException("grid_items[$index] 必须是对象")
@@ -304,6 +305,7 @@ object BackupRepository {
             optionalString(obj, "type", "grid_items[$index]")
             optionalString(obj, "frozenMode", "grid_items[$index]")
             optionalBoolean(obj, "locked", "grid_items[$index]")
+            optionalInteger(obj, "userId", "grid_items[$index]")
             if (obj.has("pkg") && !obj.isNull("pkg")) {
                 val pkg = obj.opt("pkg") as? String
                     ?: throw IllegalArgumentException("grid_items[$index].pkg 类型错误")
@@ -327,7 +329,7 @@ object BackupRepository {
 
     private fun validateFolderApps(raw: String) {
         val array = parseArray(raw, "folder_apps")
-        val allowed = setOf("folderId", "pkg", "sortOrder")
+        val allowed = setOf("folderId", "pkg", "sortOrder", "userId")
         for (index in 0 until array.length()) {
             val obj = array.opt(index) as? JSONObject
                 ?: throw IllegalArgumentException("folder_apps[$index] 必须是对象")
@@ -335,6 +337,7 @@ object BackupRepository {
             requiredInteger(obj, "folderId", "folder_apps[$index]")
             requirePackage(requiredString(obj, "pkg", "folder_apps[$index]"), "folder_apps[$index].pkg")
             requiredInteger(obj, "sortOrder", "folder_apps[$index]")
+            optionalInteger(obj, "userId", "folder_apps[$index]")
         }
     }
 
@@ -344,6 +347,51 @@ object BackupRepository {
             val pkg = array.opt(index) as? String
                 ?: throw IllegalArgumentException("$field[$index] 类型错误")
             requirePackage(pkg, "$field[$index]")
+        }
+    }
+
+    /** 快速启停旧格式是包名数组，新格式允许带 userId 的目标对象。 */
+    private fun validateTargetArray(raw: String, field: String) {
+        val array = parseArray(raw, field)
+        for (index in 0 until array.length()) {
+            when (val value = array.opt(index)) {
+                is String -> requirePackage(value, "$field[$index]")
+                is JSONObject -> {
+                    val allowed = setOf("pkg", "userId")
+                    validateKeys(value, allowed, "$field[$index]")
+                    requirePackage(requiredString(value, "pkg", "$field[$index]"), "$field[$index].pkg")
+                    val userId = value.opt("userId")
+                    if (userId != null) {
+                        val parsed = integerValue(userId, "$field[$index].userId")
+                        if (parsed < 0L) throw IllegalArgumentException("$field[$index].userId 非法")
+                    }
+                }
+                else -> throw IllegalArgumentException("$field[$index] 类型错误")
+            }
+        }
+    }
+
+    /** locked_packages 旧格式是字符串数组，新格式允许带 userId 的对象。 */
+    private fun validateLockedTargets(raw: String) {
+        val array = parseArray(raw, "locked_packages")
+        for (index in 0 until array.length()) {
+            when (val value = array.opt(index)) {
+                is String -> requirePackage(value, "locked_packages[$index]")
+                is JSONObject -> {
+                    val allowed = setOf("pkg", "userId")
+                    validateKeys(value, allowed, "locked_packages[$index]")
+                    requirePackage(
+                        requiredString(value, "pkg", "locked_packages[$index]"),
+                        "locked_packages[$index].pkg",
+                    )
+                    val userId = value.opt("userId")
+                    if (userId != null) {
+                        val parsed = integerValue(userId, "locked_packages[$index].userId")
+                        if (parsed < 0L) throw IllegalArgumentException("locked_packages[$index].userId 非法")
+                    }
+                }
+                else -> throw IllegalArgumentException("locked_packages[$index] 类型错误")
+            }
         }
     }
 
@@ -364,8 +412,21 @@ object BackupRepository {
         val obj = runCatching { JSONObject(raw) }
             .getOrElse { throw IllegalArgumentException("$field 不是合法对象", it) }
         keys(obj).forEach { pkg ->
-            requirePackage(pkg, "$field.$pkg")
+            requireTargetKey(pkg, "$field.$pkg")
             integerValue(obj.opt(pkg), "$field.$pkg")
+        }
+    }
+
+    private fun requireTargetKey(key: String, field: String) {
+        val separator = key.indexOf(':')
+        if (separator <= 0) {
+            requirePackage(key, field)
+            return
+        }
+        val userId = key.substring(0, separator).toIntOrNull()
+            ?: throw IllegalArgumentException("$field 用户 ID 非法")
+        if (userId < 0 || !PackageName.isValid(key.substring(separator + 1))) {
+            throw IllegalArgumentException("$field 目标身份非法")
         }
     }
 

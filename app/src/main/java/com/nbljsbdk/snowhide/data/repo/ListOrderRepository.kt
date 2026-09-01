@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.data.repo
 
 import android.content.Context
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,6 +76,22 @@ object ListOrderRepository {
         }
     }
 
+    /** 为目标版成员数组补一份稳定的加入顺序。 */
+    fun seedQuickToggleTargets(targets: Collection<AppTarget>) {
+        var current = _quickToggleAdded.value
+        var changed = false
+        targets.distinct().forEach { target ->
+            if (target.key !in current) {
+                current = current + (target.key to nextOrder())
+                changed = true
+            }
+        }
+        if (changed) {
+            _quickToggleAdded.value = current
+            persist()
+        }
+    }
+
     private fun record(flow: MutableStateFlow<Map<String, Long>>, pkg: String) {
         if (pkg.isBlank()) return
         flow.value = flow.value + (pkg to nextOrder())
@@ -91,9 +108,19 @@ object ListOrderRepository {
         val json = prefs.getString(key, "{}") ?: "{}"
         return runCatching {
             val obj = JSONObject(json)
-            obj.keys().asSequence().associateWith { obj.optLong(it, 0L) }
+            obj.keys().asSequence().associate { rawKey ->
+                normalizeTargetKey(rawKey) to obj.optLong(rawKey, 0L)
+            }
         }.getOrDefault(emptyMap())
     }
+
+    /** 旧版排序记录直接保存包名，统一投影到 user 0 目标键。 */
+    private fun normalizeTargetKey(key: String): String =
+        if (key.substringBefore(':', missingDelimiterValue = "").isNotEmpty()) {
+            key
+        } else {
+            AppTarget.create(key, AppTarget.PRIMARY_USER_ID).getOrNull()?.key ?: key
+        }
 
     private fun encode(values: Map<String, Long>): String {
         val obj = JSONObject()

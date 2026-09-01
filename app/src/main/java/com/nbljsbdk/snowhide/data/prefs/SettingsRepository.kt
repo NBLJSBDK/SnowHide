@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.data.prefs
 
 import android.content.Context
+import com.nbljsbdk.snowhide.core.accessibility.AccessibilityFeatureSettings
 import com.nbljsbdk.snowhide.core.feedback.HapticType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,7 @@ import org.json.JSONArray
  * 布局设置为全局通用一套（主屏与所有文件夹共用，用户拍板）。
  * 单例设计：全工程共享同一实例。
  */
-object SettingsRepository {
+object SettingsRepository : AccessibilityFeatureSettings {
 
     private lateinit var prefs: android.content.SharedPreferences
 
@@ -159,7 +160,7 @@ object SettingsRepository {
         getBool(KEY_SWIPE_DISABLE, DefaultSettings.SWIPE_DISABLE_ENABLED),
     )
     /** 划掉 Recent 卡片后，立即冻结已添加且未锁定应用。 */
-    val swipeDisableEnabled: StateFlow<Boolean> = _swipeDisableEnabled.asStateFlow()
+    override val swipeDisableEnabled: StateFlow<Boolean> = _swipeDisableEnabled.asStateFlow()
 
     fun setSwipeDisableEnabled(enabled: Boolean) {
         _swipeDisableEnabled.value = enabled
@@ -261,7 +262,7 @@ object SettingsRepository {
 
     private val _lockCleanEnabled = MutableStateFlow(getBool(KEY_LOCK_CLEAN, DefaultSettings.LOCK_CLEAN_ENABLED))
     /** 锁屏后自动清理开关 */
-    val lockCleanEnabled: StateFlow<Boolean> = _lockCleanEnabled.asStateFlow()
+    override val lockCleanEnabled: StateFlow<Boolean> = _lockCleanEnabled.asStateFlow()
 
     private val _lockCleanDelay = MutableStateFlow(getInt(KEY_LOCK_CLEAN_DELAY, DefaultSettings.LOCK_CLEAN_DELAY))
     /** 息屏后延迟分钟（0=立即，10 分钟一档 0..120） */

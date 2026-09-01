@@ -2,17 +2,21 @@ package com.nbljsbdk.snowhide.feature.appmanage
 
 import android.app.Application
 import android.content.Context
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
+import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
+import com.nbljsbdk.snowhide.domain.appclone.AppCloneSnapshot
+import com.nbljsbdk.snowhide.domain.appclone.AppCloneUseCase
+import com.nbljsbdk.snowhide.domain.appclone.AppCloneUser
 import com.nbljsbdk.snowhide.domain.appmanage.AppManageFreezePlanner
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,55 +24,61 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** 增删应用列表项：本体和分身都使用明确的用户空间目标。 */
+data class AppManageItem(
+    val target: AppTarget,
+    val label: String,
+    val isSystem: Boolean,
+    val installTime: Long,
+    val frozen: Boolean,
+) {
+    val userId: Int
+        get() = target.userId
+
+    val pkg: String
+        get() = target.packageName.value
+}
+
 /**
- * 增删应用界面 ViewModel（设计文档 §3.8 左右分栏，用户拍板终版）
+ * 增删应用界面 ViewModel。
  *
- * - 左栏「未添加应用」：默认安装时间倒序（新装最前），左下排序选项
- * - 右栏「已添加应用」：默认名称正序，右下排序选项
- * - 排序 5 档：时间正序/倒序、名字正序/倒序、最近添加（排序档位不持久化）
- * - 滑动移动：左栏右滑=加入；右栏左滑=解冻并移出
- * - 系统应用按钮（默认隐藏，关于页版本号 7 次解锁）：
- *   未解锁 → 只显示用户应用；解锁后按钮选中=只显示系统应用，不选=只显示用户应用
- *
- * 列表用 combine 派生 StateFlow 直接驱动 UI（滑动后立即刷新；
- * 触发器方案被 Compose 强跳过优化掉，不可用）。
+ * 分身模式只改变当前列表使用的用户空间；左右栏、系统筛选、排序、加入/移出
+ * 和“应用”按钮对 user 0 与分身完全相同。目标身份始终贯穿到 Grid 和冻结用例。
  */
 class AppManageViewModel(
     application: Application,
     private val freezeUseCase: FreezeUseCase,
+    private val appCloneUseCase: AppCloneUseCase,
 ) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
-    private var initialPackages: Set<String>? = null
+    private var initialTargets: Set<AppTarget>? = null
 
-    /**
-     * ViewModel 工厂由组合根持有业务用例，页面只负责传入依赖。
-     */
     class Factory(
         private val application: Application,
         private val freezeUseCase: FreezeUseCase,
+        private val appCloneUseCase: AppCloneUseCase,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(AppManageViewModel::class.java)) {
-                return AppManageViewModel(application, freezeUseCase) as T
+                return AppManageViewModel(application, freezeUseCase, appCloneUseCase) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }
 
-    /** 排序方式（左右栏各自独立，不持久化） */
     enum class SortMode {
-        TIME_DESC,  // 安装时间倒序（默认左栏）
-        TIME_ASC,   // 安装时间正序
-        NAME_DESC,  // 名字倒序
-        NAME_ASC,   // 名字正序（默认右栏）
-        RECENT_DESC, // 最近进入当前列表倒序
+        TIME_DESC,
+        TIME_ASC,
+        NAME_DESC,
+        NAME_ASC,
+        RECENT_DESC,
     }
 
-    /** 过滤参数聚合（combine 输入合并用） */
     private data class Filter(
         val query: String,
         val systemUnlocked: Boolean,
@@ -77,17 +87,41 @@ class AppManageViewModel(
         val rightSort: SortMode,
     )
 
+    private data class UserZeroCatalog(
+        val apps: List<AppManageItem>,
+        val added: Set<AppTarget>,
+    )
+
     private val _showPackageName = MutableStateFlow(false)
-    /** 显示隐藏包名（按钮切换：应用名下方追加一行包名） */
     val showPackageName: StateFlow<Boolean> = _showPackageName.asStateFlow()
 
-    /** 一次性提示（移出成功等，UI Snackbar） */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
     fun consumeMessage() {
         _message.value = null
     }
+
+    private val _cloneMode = MutableStateFlow(false)
+    val cloneMode: StateFlow<Boolean> = _cloneMode.asStateFlow()
+
+    private val _cloneSnapshot = MutableStateFlow(
+        AppCloneSnapshot(users = emptyList(), selectedUserId = null, apps = emptyList()),
+    )
+    val cloneUsers: StateFlow<List<AppCloneUser>> = _cloneSnapshot
+        .map { it.users }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val selectedCloneUserId: StateFlow<Int?> = _cloneSnapshot
+        .map { it.selectedUserId }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    private val _cloneLoading = MutableStateFlow(false)
+    private val _cloneError = MutableStateFlow<String?>(null)
+    /** 左滑移出期间的乐观 UI 状态；解冻失败时恢复到右栏。 */
+    private val _pendingRemovalTargets = MutableStateFlow<Set<AppTarget>>(emptySet())
+    private var cloneJob: Job? = null
+
+    val cloneLoading: StateFlow<Boolean> = _cloneLoading.asStateFlow()
+    val cloneError: StateFlow<String?> = _cloneError.asStateFlow()
 
     private val _filter = MutableStateFlow(
         Filter(
@@ -97,144 +131,188 @@ class AppManageViewModel(
             showSystemOnly = false,
             leftSort = SortMode.TIME_DESC,
             rightSort = SortMode.NAME_ASC,
-        )
+        ),
     )
 
-    /** 左栏：未添加应用（combine 派生，滑动加入/移出即时生效） */
-    val leftApps: StateFlow<List<AppListRepository.AppInfo>> = combine(
+    private val userZeroCatalog: StateFlow<UserZeroCatalog> = combine(
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
-        _filter,
-    ) { apps, items, folderApps, filter ->
-        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
-        sortApps(
-            apps.filter { app ->
-                systemOk(app, filter) && queryOk(app, filter.query) && app.pkg !in added
+        FrozenStateStore.targetStates,
+    ) { apps, _, _, frozenStates ->
+        UserZeroCatalog(
+            apps = apps.mapNotNull { app ->
+                AppTarget.create(app.pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let { target ->
+                    AppManageItem(
+                        target,
+                        app.label,
+                        app.isSystem,
+                        app.installTime,
+                        frozenStates[target] == true,
+                    )
+                }
             },
-            filter.leftSort,
-            recentOrder = { ListOrderRepository.appManageRemoved.value[it] ?: 0L },
+            // 必须包含全部用户空间目标：分身加入 Grid 时，左右栏也要立即重新计算。
+            added = GridRepository.allAddedTargets().toSet(),
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, UserZeroCatalog(emptyList(), emptySet()))
 
-    /** 右栏：已添加应用（combine 派生，滑动加入/移出即时生效） */
-    val rightApps: StateFlow<List<AppListRepository.AppInfo>> = combine(
-        AppListRepository.installedApps,
-        GridRepository.gridItems,
-        GridRepository.folderApps,
+    /** 当前用户空间的未添加列表；分身模式下仍然是左栏。 */
+    val leftApps: StateFlow<List<AppManageItem>> = combine(
+        userZeroCatalog,
+        _cloneMode,
+        _cloneSnapshot,
         _filter,
-    ) { apps, items, folderApps, filter ->
-        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
-        sortApps(
-            apps.filter { app ->
-                systemOk(app, filter) && queryOk(app, filter.query) && app.pkg in added
-            },
-            filter.rightSort,
-            recentOrder = { ListOrderRepository.appManageAdded.value[it] ?: 0L },
-        )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    private fun systemOk(app: AppListRepository.AppInfo, filter: Filter): Boolean {
-        return if (!filter.systemUnlocked) {
-            !app.isSystem
-        } else if (filter.showSystemOnly) {
-            app.isSystem
+        _pendingRemovalTargets,
+    ) { userZero, cloneMode, snapshot, filter, pendingRemovals ->
+        val all = if (cloneMode) cloneItems(snapshot) else userZero.apps
+        val added = (if (cloneMode) {
+            userZero.added.filter { it.userId == snapshot.selectedUserId }.toSet()
         } else {
-            !app.isSystem
-        }
-    }
+            userZero.added.filter { it.isPrimaryUser }.toSet()
+        }) - pendingRemovals
+        sortItems(
+            all.filter { systemOk(it.isSystem, filter) && queryOk(it, filter.query) && it.target !in added },
+            filter.leftSort,
+            recentOrder = { ListOrderRepository.appManageRemoved.value[it.key] ?: 0L },
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private fun queryOk(app: AppListRepository.AppInfo, query: String): Boolean =
-        query.isEmpty() || app.label.contains(query, ignoreCase = true) ||
-            app.pkg.contains(query, ignoreCase = true)
+    /** 当前用户空间的已添加列表；分身和系统筛选同样影响右栏。 */
+    val rightApps: StateFlow<List<AppManageItem>> = combine(
+        userZeroCatalog,
+        _cloneMode,
+        _cloneSnapshot,
+        _filter,
+        _pendingRemovalTargets,
+    ) { userZero, cloneMode, snapshot, filter, pendingRemovals ->
+        val all = if (cloneMode) cloneItems(snapshot) else userZero.apps
+        val added = (if (cloneMode) {
+            userZero.added.filter { it.userId == snapshot.selectedUserId }.toSet()
+        } else {
+            userZero.added.filter { it.isPrimaryUser }.toSet()
+        }) - pendingRemovals
+        sortItems(
+            all.filter { systemOk(it.isSystem, filter) && queryOk(it, filter.query) && it.target in added },
+            filter.rightSort,
+            recentOrder = { ListOrderRepository.appManageAdded.value[it.key] ?: 0L },
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private fun sortApps(
-        list: List<AppListRepository.AppInfo>,
-        mode: SortMode,
-        recentOrder: (String) -> Long,
-    ): List<AppListRepository.AppInfo> =
-        when (mode) {
-            SortMode.TIME_DESC -> list.sortedByDescending { it.installTime }
-            SortMode.TIME_ASC -> list.sortedBy { it.installTime }
-            SortMode.NAME_DESC -> list.sortedByDescending { it.label }
-            SortMode.NAME_ASC -> list.sortedBy { it.label }
-            // 没有滑动记录的旧数据按包名自然倒序兜底。
-            SortMode.RECENT_DESC -> list.sortedWith(
-                compareByDescending<AppListRepository.AppInfo> { recentOrder(it.pkg) }
-                    .thenByDescending { it.pkg },
-            )
-        }
-
-    init {
-        // 数据源走全局 AppListRepository（MainActivity 启动时已预加载，
-        // 解决首次打开界面空白问题）
-    }
+    val searchQuery: StateFlow<String> = _filter
+        .map { it.query }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+    val systemUnlocked: StateFlow<Boolean> = _filter
+        .map { it.systemUnlocked }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _filter.value.systemUnlocked)
+    val showSystemOnly: StateFlow<Boolean> = _filter
+        .map { it.showSystemOnly }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val leftSort: StateFlow<SortMode> = _filter
+        .map { it.leftSort }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SortMode.TIME_DESC)
+    val rightSort: StateFlow<SortMode> = _filter
+        .map { it.rightSort }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SortMode.NAME_ASC)
 
     fun setSearchQuery(q: String) {
-        _filter.value = _filter.value.copy(query = q)
+        _filter.update { it.copy(query = q) }
+    }
+
+    fun setCloneMode(enabled: Boolean) {
+        if (_cloneMode.value == enabled) return
+        _cloneMode.value = enabled
+        _filter.update { it.copy(query = "") }
+        if (enabled) refreshCloneApps()
+    }
+
+    fun refreshCloneApps() {
+        loadCloneSnapshot { appCloneUseCase.refresh() }
+    }
+
+    fun selectCloneUser(userId: Int) {
+        loadCloneSnapshot { appCloneUseCase.selectUser(userId) }
+    }
+
+    private fun cloneItems(snapshot: AppCloneSnapshot): List<AppManageItem> {
+        val metadata = AppListRepository.installedApps.value.associateBy { it.pkg }
+        return snapshot.apps.map { app ->
+            val info = metadata[app.packageName]
+            AppManageItem(
+                target = app.target,
+                label = info?.label ?: app.packageName,
+                isSystem = app.isSystem,
+                installTime = info?.installTime ?: 0L,
+                frozen = app.frozen,
+            )
+        }
+    }
+
+    private fun systemOk(isSystem: Boolean, filter: Filter): Boolean = when {
+        !filter.systemUnlocked -> !isSystem
+        filter.showSystemOnly -> isSystem
+        else -> !isSystem
+    }
+
+    private fun queryOk(item: AppManageItem, query: String): Boolean =
+        query.isEmpty() || item.label.contains(query, ignoreCase = true) ||
+            item.pkg.contains(query, ignoreCase = true)
+
+    private fun sortItems(
+        list: List<AppManageItem>,
+        mode: SortMode,
+        recentOrder: (AppTarget) -> Long,
+    ): List<AppManageItem> = when (mode) {
+        SortMode.TIME_DESC -> list.sortedWith(compareByDescending<AppManageItem> { it.installTime }.thenBy { it.pkg })
+        SortMode.TIME_ASC -> list.sortedWith(compareBy<AppManageItem> { it.installTime }.thenBy { it.pkg })
+        SortMode.NAME_DESC -> list.sortedWith(compareByDescending<AppManageItem> { it.label }.thenBy { it.target.key })
+        SortMode.NAME_ASC -> list.sortedWith(compareBy<AppManageItem> { it.label }.thenBy { it.target.key })
+        SortMode.RECENT_DESC -> list.sortedWith(
+            compareByDescending<AppManageItem> { recentOrder(it.target) }.thenByDescending { it.target.key },
+        )
+    }
+
+    private fun loadCloneSnapshot(load: suspend () -> Result<AppCloneSnapshot>) {
+        if (cloneJob?.isActive == true) return
+        cloneJob = viewModelScope.launch {
+            _cloneLoading.value = true
+            _cloneError.value = null
+            load().fold(
+                onSuccess = { _cloneSnapshot.value = it },
+                onFailure = { _cloneError.value = it.message ?: "读取用户空间应用失败" },
+            )
+            _cloneLoading.value = false
+        }
     }
 
     fun toggleShowPackageName() {
         _showPackageName.value = !_showPackageName.value
     }
 
-    /** 关于页彩蛋：解锁系统应用按钮（持久化） */
     fun unlockSystemApps() {
         if (_filter.value.systemUnlocked) return
-        _filter.value = _filter.value.copy(systemUnlocked = true)
+        _filter.update { it.copy(systemUnlocked = true) }
         context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_SYSTEM_UNLOCKED, true).apply()
     }
 
-    /** 关于页彩蛋：再次 7 次关闭（持久化） */
     fun relockSystemApps() {
         if (!_filter.value.systemUnlocked) return
-        _filter.value = _filter.value.copy(systemUnlocked = false, showSystemOnly = false)
+        _filter.update { it.copy(systemUnlocked = false, showSystemOnly = false) }
         context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_SYSTEM_UNLOCKED, false).apply()
     }
 
-    /** 切换系统应用按钮（选中=只显示系统应用，不选=只显示用户应用） */
     fun toggleSystemOnly() {
-        _filter.value = _filter.value.copy(showSystemOnly = !_filter.value.showSystemOnly)
+        _filter.update { it.copy(showSystemOnly = !_filter.value.showSystemOnly) }
     }
 
-    /** 搜索词（TextField 双向绑定用） */
-    val searchQuery: StateFlow<String> =
-        _filter.map { it.query }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, "")
-
-    /** 系统应用按钮解锁状态（关于页 UI 展示用） */
-    val systemUnlocked: StateFlow<Boolean> =
-        _filter.map { it.systemUnlocked }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, _filter.value.systemUnlocked)
-
-    /** 系统应用按钮选中状态 */
-    val showSystemOnly: StateFlow<Boolean> =
-        _filter.map { it.showSystemOnly }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    /** 左栏排序状态 */
-    val leftSort: StateFlow<SortMode> =
-        _filter.map { it.leftSort }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, SortMode.TIME_DESC)
-
-    /** 右栏排序状态 */
-    val rightSort: StateFlow<SortMode> =
-        _filter.map { it.rightSort }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, SortMode.NAME_ASC)
-
     fun cycleLeftSort() {
-        _filter.value = _filter.value.copy(leftSort = _filter.value.leftSort.next())
+        _filter.update { it.copy(leftSort = it.leftSort.next()) }
     }
 
     fun cycleRightSort() {
-        _filter.value = _filter.value.copy(rightSort = _filter.value.rightSort.next())
-    }
-
-    /** 每次进入增删页建立基线，避免「应用」误处理之前已存在的应用。 */
-    fun beginSession() {
-        initialPackages = GridRepository.allAddedPackages().toSet()
+        _filter.update { it.copy(rightSort = it.rightSort.next()) }
     }
 
     private fun SortMode.next(): SortMode = when (this) {
@@ -245,40 +323,71 @@ class AppManageViewModel(
         SortMode.RECENT_DESC -> SortMode.TIME_DESC
     }
 
-    /** 右滑加入（即时落盘，列表立即更新） */
-    fun addApp(pkg: String) {
-        GridRepository.addAppToHome(pkg)
+    /** 每次进入增删页建立本体和分身的完整目标基线。 */
+    fun beginSession() {
+        initialTargets = GridRepository.allAddedTargets().toSet()
+        _cloneMode.value = false
+        _filter.update { it.copy(query = "") }
     }
 
-    /** 左滑移出（即时解冻并移出，列表立即更新，toast 提示） */
-    fun removeApp(pkg: String) {
-        val name = AppListRepository.installedApps.value
-            .firstOrNull { it.pkg == pkg }?.label ?: pkg
+    /** 左栏右滑：本体或分身都写入主屏 Grid。 */
+    fun addApp(item: AppManageItem) {
+        if (item.target in _pendingRemovalTargets.value) return
+        GridRepository.addTargetToHome(item.target)
+        FrozenStateStore.applyCommandResult(
+            item.target,
+            frozen = FrozenStateStore.targetStates.value[item.target] ?: item.frozen,
+        )
+    }
+
+    /** 右栏左滑：立即移出右栏并显示到左栏，后台解冻；失败时恢复右栏。 */
+    fun removeApp(item: AppManageItem) {
+        if (item.target in _pendingRemovalTargets.value) return
+        _pendingRemovalTargets.update { it + item.target }
         viewModelScope.launch {
-            freezeUseCase.unfreezeApp(pkg)
-            GridRepository.removeApp(pkg)
-            com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
-            _message.value = "已移除并解冻：$name"
+            runCatching { freezeUseCase.unfreezeApp(item.target) }
+                .getOrElse { Result.failure(it) }
+                .onSuccess {
+                    GridRepository.removeTarget(item.target)
+                    FrozenStateStore.applyCommandResult(item.target, frozen = false)
+                    _cloneSnapshot.update { snapshot ->
+                        snapshot.copy(
+                            apps = snapshot.apps.map { app ->
+                                if (app.target == item.target) app.copy(frozen = false) else app
+                            },
+                        )
+                    }
+                    FrozenStateStore.refresh()
+                    _pendingRemovalTargets.update { it - item.target }
+                    _message.value = "已移除并解冻：${item.label}"
+                }
+                .onFailure {
+                    _pendingRemovalTargets.update { it - item.target }
+                    _message.value = "解冻失败：${it.message ?: item.pkg}"
+                }
         }
     }
 
-    /**
-     * 「应用」按钮：只冻结本次进入页面后新增且未冻结的应用。
-     * 移出是即时生效的，本按钮不处理已有应用。
-     */
+    /** “应用”：只冻结本次进入页面后新增、且当前未冻结的目标。 */
     fun applyAndFreeze() {
         viewModelScope.launch {
-            val initial = initialPackages ?: return@launch
-            val states = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value
-            val targets = AppManageFreezePlanner.newlyAddedUnfrozenPackages(
-                initialPackages = initial,
-                currentPackages = GridRepository.allAddedPackages(),
-                frozenStates = states,
+            val initial = initialTargets ?: return@launch
+            val targets = AppManageFreezePlanner.newlyAddedUnfrozenTargets(
+                initialTargets = initial,
+                currentTargets = GridRepository.allAddedTargets(),
+                frozenStates = FrozenStateStore.targetStates.value,
             )
-            targets.forEach { pkg -> freezeUseCase.freezeApp(pkg) }
-            com.nbljsbdk.snowhide.data.repo.FrozenStateStore.refresh()
+            freezeUseCase.freezeTargets(targets)
+                .onSuccess {
+                    targets.forEach { target ->
+                        FrozenStateStore.applyCommandResult(target, frozen = true)
+                    }
+                }
+            FrozenStateStore.refresh()
         }
     }
+
+    fun displayLabel(item: AppManageItem): String = item.label
 
     companion object {
         private const val KEY_SYSTEM_UNLOCKED = "system_apps_unlocked"

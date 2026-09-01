@@ -1,11 +1,12 @@
 package com.nbljsbdk.snowhide.data.repo
 
 import android.content.Context
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.core.model.FreezeTargetStore
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.FolderApp
 import com.nbljsbdk.snowhide.data.model.GridItem
-import com.nbljsbdk.snowhide.data.model.migrateLegacyLockedItems
+import com.nbljsbdk.snowhide.data.model.migrateLegacyLockedTargets
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,7 +40,7 @@ object GridRepository : FreezeTargetStore {
         // 清理历史重复的文件夹成员（同文件夹同 pkg 只保留 sortOrder 最小的——
         // 重复会导致 FolderScreen LazyGrid key 崩溃，真机实锤）
         val cleanedApps = _folderApps.value
-            .groupBy { it.folderId to it.pkg }
+            .groupBy { it.folderId to (it.userId to it.pkg) }
             .mapValues { (_, list) -> list.minByOrNull { it.sortOrder }!! }
             .values
             .toList()
@@ -48,11 +49,11 @@ object GridRepository : FreezeTargetStore {
             persistFolderApps()
         }
         // 锁定集：独立存储（覆盖文件夹内应用）；旧版 GridItem.locked=true 迁移进来
-        val persistedLocked = loadLockedPackages()
+        val persistedLocked = loadLockedTargets()
         val hadLegacyLockedField = _gridItems.value.any { it.locked }
-        val lockMigration = migrateLegacyLockedItems(_gridItems.value, persistedLocked)
+        val lockMigration = migrateLegacyLockedTargets(_gridItems.value, persistedLocked)
         _gridItems.value = lockMigration.items
-        _lockedPackages.value = lockMigration.lockedPackages
+        setLockedTargets(lockMigration.lockedTargets)
         if (hadLegacyLockedField) {
             persistLocked()
             persist()
@@ -83,8 +84,12 @@ object GridRepository : FreezeTargetStore {
     /** 全部文件夹成员关系（按 sortOrder 升序） */
     val folderApps: StateFlow<List<FolderApp>> = _folderApps.asStateFlow()
 
+    private val _lockedTargets = MutableStateFlow<Set<AppTarget>>(emptySet())
+    /** 锁定应用目标集合（覆盖主屏与文件夹成员，持久化） */
+    val lockedTargets: StateFlow<Set<AppTarget>> = _lockedTargets.asStateFlow()
+
     private val _lockedPackages = MutableStateFlow<Set<String>>(emptySet())
-    /** 锁定应用包名集合（覆盖主屏与文件夹成员，持久化） */
+    /** 旧 user 0 锁定包名投影，Recent 等旧入口继续使用。 */
     val lockedPackages: StateFlow<Set<String>> = _lockedPackages.asStateFlow()
 
     // ═══════════════════════════════════════
@@ -92,20 +97,33 @@ object GridRepository : FreezeTargetStore {
     // ═══════════════════════════════════════
 
     /** 应用是否已添加（主屏或任一文件夹） */
-    override fun isAppAdded(pkg: String): Boolean =
-        _gridItems.value.any { it.pkg == pkg } || _folderApps.value.any { it.pkg == pkg }
+    override fun isAppAdded(pkg: String): Boolean {
+        val target = AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull() ?: return false
+        return isAppAdded(target)
+    }
+
+    /** 目标应用是否已添加（userId + packageName 必须同时匹配）。 */
+    override fun isAppAdded(target: AppTarget): Boolean =
+        _gridItems.value.any { it.type == "app" && it.target() == target } ||
+            _folderApps.value.any { it.target() == target }
 
     /** 添加应用到主屏末尾 */
     fun addAppToHome(pkg: String) {
-        if (isAppAdded(pkg)) return
-        ListOrderRepository.recordAppManageAdded(pkg)
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::addTargetToHome)
+    }
+
+    /** 添加明确用户空间的应用到主屏末尾。 */
+    fun addTargetToHome(target: AppTarget) {
+        if (isAppAdded(target)) return
+        ListOrderRepository.recordAppManageAdded(target.key)
         val items = _gridItems.value.toMutableList()
         items.add(
             GridItem(
                 id = nextId(),
                 type = "app",
-                pkg = pkg,
+                pkg = target.packageName.value,
                 sortOrder = (items.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+                userId = target.userId,
             )
         )
         _gridItems.value = items
@@ -114,9 +132,18 @@ object GridRepository : FreezeTargetStore {
 
     /** 从宫格体系完全移除应用（移除应用界面：解冻并移出） */
     fun removeApp(pkg: String) {
-        if (isAppAdded(pkg)) ListOrderRepository.recordAppManageRemoved(pkg)
-        _gridItems.value = _gridItems.value.filterNot { it.pkg == pkg }
-        _folderApps.value = _folderApps.value.filterNot { it.pkg == pkg }
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::removeTarget)
+    }
+
+    /** 从宫格体系完全移除明确目标，不能误删同包名的其他用户目标。 */
+    fun removeTarget(target: AppTarget) {
+        if (isAppAdded(target)) ListOrderRepository.recordAppManageRemoved(target.key)
+        _gridItems.value = _gridItems.value.filterNot { it.type == "app" && it.target() == target }
+        _folderApps.value = _folderApps.value.filterNot { it.target() == target }
+        if (target in _lockedTargets.value) {
+            setLockedTargets(_lockedTargets.value - target)
+            persistLocked()
+        }
         persist()
     }
 
@@ -167,6 +194,7 @@ object GridRepository : FreezeTargetStore {
                     type = "app",
                     pkg = member.pkg,
                     sortOrder = maxSort,
+                    userId = member.userId,
                 )
             )
         }
@@ -197,14 +225,21 @@ object GridRepository : FreezeTargetStore {
 
     /** 文件夹内应用移位（区内排序，不循环） */
     fun shiftFolderApp(folderId: Long, pkg: String, step: Int) {
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let {
+            shiftFolderApp(folderId, it, step)
+        }
+    }
+
+    /** 文件夹内明确目标移位（同包名多用户互不串位）。 */
+    fun shiftFolderApp(folderId: Long, target: AppTarget, step: Int) {
         val members = _folderApps.value.filter { it.folderId == folderId }.sortedBy { it.sortOrder }.toMutableList()
-        val index = members.indexOfFirst { it.pkg == pkg }
-        val target = index + step
-        if (index < 0 || target < 0 || target >= members.size) return
+        val index = members.indexOfFirst { it.target() == target }
+        val targetIndex = index + step
+        if (index < 0 || targetIndex < 0 || targetIndex >= members.size) return
         val a = members[index]
-        val b = members[target]
+        val b = members[targetIndex]
         members[index] = b
-        members[target] = a
+        members[targetIndex] = a
         val others = _folderApps.value.filter { it.folderId != folderId }
         _folderApps.value = others + members.mapIndexed { i, m -> m.copy(sortOrder = i) }
         persist()
@@ -212,32 +247,47 @@ object GridRepository : FreezeTargetStore {
 
     /** 上/下跨区转移：主屏 app 加入文件夹最后（下键） */
     fun moveAppToFolder(pkg: String, folderId: Long) {
-        _gridItems.value = _gridItems.value.filterNot { it.pkg == pkg }
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let {
+            moveAppToFolder(it, folderId)
+        }
+    }
+
+    /** 将明确目标从主屏移入文件夹。 */
+    fun moveAppToFolder(target: AppTarget, folderId: Long) {
+        _gridItems.value = _gridItems.value.filterNot { it.type == "app" && it.target() == target }
         // 防重：目标文件夹已存在该成员则跳过（重复 pkg 会导致
         // FolderScreen 的 LazyGrid key 重复崩溃，真机实锤）
-        if (_folderApps.value.any { it.folderId == folderId && it.pkg == pkg }) {
+        if (_folderApps.value.any { it.folderId == folderId && it.target() == target }) {
             persist()
             return
         }
         val members = _folderApps.value.filter { it.folderId == folderId }
         _folderApps.value = _folderApps.value + FolderApp(
             folderId = folderId,
-            pkg = pkg,
+            pkg = target.packageName.value,
             sortOrder = (members.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+            userId = target.userId,
         )
         persist()
     }
 
     /** 上/下跨区转移：文件夹内 app 移回主屏最后（上键） */
     fun moveAppToHome(pkg: String) {
-        _folderApps.value = _folderApps.value.filterNot { it.pkg == pkg }
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::moveAppToHome)
+    }
+
+    /** 将明确目标从文件夹移回主屏最后。 */
+    fun moveAppToHome(target: AppTarget) {
+        val member = _folderApps.value.firstOrNull { it.target() == target } ?: return
+        _folderApps.value = _folderApps.value.filterNot { it.target() == target }
         val items = _gridItems.value.toMutableList()
         items.add(
             GridItem(
                 id = nextId(),
                 type = "app",
-                pkg = pkg,
+                pkg = target.packageName.value,
                 sortOrder = (items.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+                userId = member.userId,
             )
         )
         _gridItems.value = items
@@ -250,31 +300,68 @@ object GridRepository : FreezeTargetStore {
 
     /** 切换底部图标栏锁定（持久化，豁免快速清理/磁贴熄灭冻回） */
     fun toggleLock(pkg: String) {
-        _lockedPackages.value = if (pkg in _lockedPackages.value) {
-            _lockedPackages.value - pkg
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::toggleLock)
+    }
+
+    /** 切换明确目标的 Dock 锁定状态。 */
+    fun toggleLock(target: AppTarget) {
+        setLockedTargets(if (target in _lockedTargets.value) {
+            _lockedTargets.value - target
         } else {
-            _lockedPackages.value + pkg
-        }
+            _lockedTargets.value + target
+        })
         persistLocked()
     }
 
     /** 查询应用锁定状态（主屏与文件夹成员通用） */
-    override fun isLocked(pkg: String): Boolean = pkg in _lockedPackages.value
+    override fun isLocked(pkg: String): Boolean =
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::isLocked) == true
+
+    override fun isLocked(target: AppTarget): Boolean = target in _lockedTargets.value
+
+    private fun setLockedTargets(targets: Set<AppTarget>) {
+        _lockedTargets.value = targets
+        _lockedPackages.value = targets
+            .filter { it.isPrimaryUser }
+            .map { it.packageName.value }
+            .toSet()
+    }
 
     /** 锁定集持久化 */
     private fun persistLocked() {
         if (!::prefs.isInitialized) return
         val arr = org.json.JSONArray()
-        _lockedPackages.value.forEach { arr.put(it) }
+        _lockedTargets.value.forEach { target ->
+            if (target.isPrimaryUser) {
+                arr.put(target.packageName.value)
+            } else {
+                arr.put(
+                    JSONObject()
+                        .put("pkg", target.packageName.value)
+                        .put("userId", target.userId),
+                )
+            }
+        }
         prefs.edit().putString(KEY_LOCKED, arr.toString()).apply()
     }
 
-    private fun loadLockedPackages(): Set<String> {
+    private fun loadLockedTargets(): Set<AppTarget> {
         if (!::prefs.isInitialized) return emptySet()
         val json = prefs.getString(KEY_LOCKED, "[]") ?: "[]"
         return runCatching {
             org.json.JSONArray(json).let { arr ->
-                (0 until arr.length()).map { arr.getString(it) }.toSet()
+                buildSet {
+                    for (i in 0 until arr.length()) {
+                        when (val value = arr.opt(i)) {
+                            is String -> AppTarget.create(value, AppTarget.PRIMARY_USER_ID)
+                                .getOrNull()?.let(::add)
+                            is JSONObject -> AppTarget.create(
+                                value.optString("pkg"),
+                                value.optInt("userId", AppTarget.PRIMARY_USER_ID),
+                            ).getOrNull()?.let(::add)
+                        }
+                    }
+                }
             }
         }.getOrDefault(emptySet())
     }
@@ -283,12 +370,28 @@ object GridRepository : FreezeTargetStore {
     // 循环滑动序列（设计文档 §3.2）
     // ═══════════════════════════════════════
 
-    /** 已添加的全部应用包名（底部图标栏数据源：已添加且解冻的应用） */
+    /** user 0 已添加包名投影，供 Recent/旧入口使用。 */
     override fun allAddedPackages(): List<String> =
-        (_gridItems.value.mapNotNull { it.pkg } + _folderApps.value.map { it.pkg }).distinct()
+        allAddedTargets()
+            .filter { it.isPrimaryUser }
+            .map { it.packageName.value }
+            .distinct()
+
+    /** 已添加的全部明确目标。 */
+    override fun allAddedTargets(): List<AppTarget> =
+        (_gridItems.value.mapNotNull { it.target() } + _folderApps.value.mapNotNull { it.target() })
+            .distinct()
 
     override fun folderPackages(folderId: Long): List<String> =
-        _folderApps.value.filter { it.folderId == folderId }.map { it.pkg }
+        folderTargets(folderId)
+            .filter { it.isPrimaryUser }
+            .map { it.packageName.value }
+
+    override fun folderTargets(folderId: Long): List<AppTarget> =
+        _folderApps.value
+            .filter { it.folderId == folderId }
+            .sortedBy { it.sortOrder }
+            .mapNotNull { it.target() }
 
     // ═══════════════════════════════════════
     // 持久化（SharedPreferences + JSON）
@@ -312,16 +415,18 @@ object GridRepository : FreezeTargetStore {
                 obj.put("id", item.id)
                     .put("type", item.type)
                     .put("pkg", item.pkg ?: JSONObject.NULL)
-                    .put("folderId", item.folderId ?: JSONObject.NULL)
-                    .put("sortOrder", item.sortOrder)
-                    .put("frozenMode", item.frozenMode)
-                    .put("locked", item.locked)
+                     .put("folderId", item.folderId ?: JSONObject.NULL)
+                     .put("sortOrder", item.sortOrder)
+                     .put("frozenMode", item.frozenMode)
+                     .put("locked", item.locked)
+                     .put("userId", item.userId)
             })
             .putString(KEY_FOLDERS, toJson(_folders.value) { obj, folder ->
                 obj.put("id", folder.id).put("name", folder.name).put("sortOrder", folder.sortOrder)
             })
             .putString(KEY_FOLDER_APPS, toJson(_folderApps.value) { obj, fa ->
-                obj.put("folderId", fa.folderId).put("pkg", fa.pkg).put("sortOrder", fa.sortOrder)
+                obj.put("folderId", fa.folderId).put("pkg", fa.pkg)
+                    .put("sortOrder", fa.sortOrder).put("userId", fa.userId)
             })
             .apply()
     }
@@ -331,7 +436,8 @@ object GridRepository : FreezeTargetStore {
         if (!::prefs.isInitialized) return
         prefs.edit()
             .putString(KEY_FOLDER_APPS, toJson(_folderApps.value) { obj, fa ->
-                obj.put("folderId", fa.folderId).put("pkg", fa.pkg).put("sortOrder", fa.sortOrder)
+                obj.put("folderId", fa.folderId).put("pkg", fa.pkg)
+                    .put("sortOrder", fa.sortOrder).put("userId", fa.userId)
             })
             .apply()
     }
@@ -345,6 +451,7 @@ object GridRepository : FreezeTargetStore {
             sortOrder = obj.optInt("sortOrder"),
             frozenMode = obj.optString("frozenMode", "FREEZE"),
             locked = obj.optBoolean("locked", false),
+            userId = obj.optInt("userId", AppTarget.PRIMARY_USER_ID),
         )
     }
 
@@ -353,7 +460,12 @@ object GridRepository : FreezeTargetStore {
     }
 
     private fun loadFolderApps(): List<FolderApp> = load(KEY_FOLDER_APPS) { obj ->
-        FolderApp(obj.optLong("folderId"), obj.optString("pkg"), obj.optInt("sortOrder"))
+        FolderApp(
+            folderId = obj.optLong("folderId"),
+            pkg = obj.optString("pkg"),
+            sortOrder = obj.optInt("sortOrder"),
+            userId = obj.optInt("userId", AppTarget.PRIMARY_USER_ID),
+        )
     }
 
     private fun <T> load(key: String, parse: (JSONObject) -> T): List<T> {
@@ -377,4 +489,11 @@ object GridRepository : FreezeTargetStore {
     private const val KEY_FOLDERS = "folders"
     private const val KEY_FOLDER_APPS = "folder_apps"
     private const val KEY_LOCKED = "locked_packages"
+
+    private fun GridItem.target(): AppTarget? = if (type == "app" && pkg != null) {
+        AppTarget.create(pkg, userId).getOrNull()
+    } else null
+
+    private fun FolderApp.target(): AppTarget? =
+        AppTarget.create(pkg, userId).getOrNull()
 }

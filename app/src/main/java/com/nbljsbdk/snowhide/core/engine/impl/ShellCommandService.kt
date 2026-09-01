@@ -82,8 +82,11 @@ class ShellCommandService : Binder {
 
     /** 只允许当前 P0 已验证的固定查询和受控 PM 命令。 */
     private fun isAllowedCommand(command: String): Boolean {
-        if (command == "pm list packages -d" || command == "dumpsys activity recents") return true
-        return command.matches(pmPackageCommand) || command.matches(pmUserPackageCommand)
+        if (command == "pm list users" ||
+            command == "dumpsys activity recents"
+        ) return true
+        return command.matches(pmUserPackageCommand) ||
+            command.matches(pmUserQueryCommand)
     }
 
     private fun readTask(task: Future<String>): String =
@@ -131,10 +134,10 @@ class ShellCommandService : Binder {
         private const val MAX_OUTPUT_CHARS = 64 * 1024
         private const val PACKAGE_NAME_PATTERN =
             "[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*"
-        private val pmPackageCommand =
-            Regex("^pm (enable|disable) ($PACKAGE_NAME_PATTERN)\\z")
         private val pmUserPackageCommand =
-            Regex("^pm (disable-user|uninstall) --user ([0-9]+) ($PACKAGE_NAME_PATTERN)\\z")
+            Regex("^pm (disable-user|enable|disable|uninstall) --user ([0-9]+) ($PACKAGE_NAME_PATTERN)\\z")
+        private val pmUserQueryCommand =
+            Regex("^pm list packages --user ([0-9]+)( -(d|s))?\\z")
 
         private val streamExecutor = Executors.newCachedThreadPool { runnable ->
             Thread(runnable, "snowhide-shell-stream").apply { isDaemon = true }

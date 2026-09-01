@@ -5,15 +5,11 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- 用户空间 ID 只对当前设备有效，不随云备份迁移。 -->
+        <exclude domain="sharedpref" path="snowhide_app_clone.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- 用户空间 ID 只对当前设备有效，不随设备迁移。 -->
+        <exclude domain="sharedpref" path="snowhide_app_clone.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

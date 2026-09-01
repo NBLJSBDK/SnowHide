@@ -6,8 +6,6 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- 用户空间 ID 只对当前设备有效，不随系统自动备份迁移。 -->
+    <exclude domain="sharedpref" path="snowhide_app_clone.xml" />
 </full-backup-content>

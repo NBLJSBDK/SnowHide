@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nbljsbdk.snowhide.data.model.Folder
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 
 /**
@@ -15,6 +16,7 @@ import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 fun HomeRoute(
     modifier: Modifier = Modifier,
     onRequestShizuku: () -> Unit = {},
+    onOpenAccessibilitySettings: () -> Unit = {},
     viewModel: HomeViewModel,
 ) {
     val gridItems by viewModel.gridItems.collectAsState()
@@ -25,12 +27,13 @@ fun HomeRoute(
     val folderPageLoopEnabled by viewModel.folderPageLoopEnabled.collectAsState()
     val excludedFolderIds by viewModel.excludedFolderIds.collectAsState()
     val frozenStates by viewModel.frozenStates.collectAsState()
-    val pendingFreezePackages by viewModel.pendingFreezePackages.collectAsState()
+    val pendingFreezeTargets by viewModel.pendingFreezeTargets.collectAsState()
     val appStates by viewModel.appStates.collectAsState()
-    val lockedPackages by viewModel.lockedPackages.collectAsState()
+    val lockedTargets by viewModel.lockedTargets.collectAsState()
     val labels by viewModel.labels.collectAsState()
     val engineReady by viewModel.engineReady.collectAsState()
     val shizukuRunning by viewModel.shizukuRunning.collectAsState()
+    val accessibilityRequirement by viewModel.accessibilityRequirement.collectAsState()
     val columns by viewModel.columns.collectAsState()
     val iconSize by viewModel.iconSize.collectAsState()
     val verticalSpace by viewModel.verticalSpace.collectAsState()
@@ -63,12 +66,13 @@ fun HomeRoute(
         folderPageLoopEnabled = folderPageLoopEnabled,
         excludedFolderIds = excludedFolderIds,
         frozenStates = frozenStates,
-        pendingFreezePackages = pendingFreezePackages,
+        pendingFreezeTargets = pendingFreezeTargets,
         appStates = appStates,
-        lockedPackages = lockedPackages,
+        lockedTargets = lockedTargets,
         labels = labels,
         engineReady = engineReady,
         shizukuRunning = shizukuRunning,
+        accessibilityRequirement = accessibilityRequirement,
         columns = columns,
         iconSize = iconSize,
         verticalSpace = verticalSpace,
@@ -97,6 +101,7 @@ fun HomeRoute(
     HomeContent(
         modifier = modifier,
         onRequestShizuku = onRequestShizuku,
+        onOpenAccessibilitySettings = onOpenAccessibilitySettings,
         state = state,
         actions = actions,
     )
@@ -105,7 +110,7 @@ fun HomeRoute(
 private class HomeViewModelActions(
     private val viewModel: HomeViewModel,
 ) : HomeActions {
-    override fun openApp(pkg: String) = viewModel.openApp(pkg)
+    override fun openApp(target: AppTarget) = viewModel.openApp(target)
     override fun consumeMessage() = viewModel.consumeMessage()
     override fun syncActualStatus(silent: Boolean) = viewModel.syncActualStatus(silent)
     override fun refreshFrozenStates() = viewModel.refreshFrozenStates()
@@ -120,13 +125,14 @@ private class HomeViewModelActions(
     override fun openSettings() = viewModel.openSettings()
     override fun openAbout() = viewModel.openAbout()
     override fun refreshEngineStatus() = viewModel.refreshEngineStatus()
+    override fun refreshAccessibilityStatus() = viewModel.refreshAccessibilityStatus()
     override fun quickClean() = viewModel.quickClean()
-    override fun toggleLock(pkg: String) = viewModel.toggleLock(pkg)
+    override fun toggleLock(target: AppTarget) = viewModel.toggleLock(target)
     override fun renameFolder(folderId: Long, name: String) = viewModel.renameFolder(folderId, name)
     override fun deleteFolder(folderId: Long) = viewModel.deleteFolder(folderId)
-    override fun removeApp(pkg: String) = viewModel.removeApp(pkg)
-    override fun uninstallApp(pkg: String) = viewModel.uninstallApp(pkg)
-    override fun toggleFreeze(pkg: String) = viewModel.toggleFreeze(pkg)
+    override fun removeApp(target: AppTarget) = viewModel.removeApp(target)
+    override fun uninstallApp(target: AppTarget) = viewModel.uninstallApp(target)
+    override fun toggleFreeze(target: AppTarget) = viewModel.toggleFreeze(target)
     override fun freezeFolder(folder: Folder) = viewModel.freezeFolder(folder)
     override fun unfreezeFolder(folder: Folder) = viewModel.unfreezeFolder(folder)
     override fun applyIconPack(pkg: String) = viewModel.applyIconPack(pkg)

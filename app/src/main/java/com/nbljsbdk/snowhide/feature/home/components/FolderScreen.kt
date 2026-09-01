@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nbljsbdk.snowhide.R
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
@@ -53,10 +55,10 @@ private const val RETURN_HOME_KEY = "__return_home__"
 @Composable
 fun FolderScreen(
     folder: Folder,
-    memberPackages: List<String>,
+    memberTargets: List<AppTarget>,
     icons: Map<String, ImageBitmap>,
-    frozenStates: Map<String, Boolean>,
-    appStates: Map<String, AppRuntimeState> = emptyMap(),
+    frozenStates: Map<AppTarget, Boolean>,
+    appStates: Map<AppTarget, AppRuntimeState> = emptyMap(),
     columns: Int,
     iconSize: Dp,
     verticalSpace: Int,
@@ -66,9 +68,9 @@ fun FolderScreen(
     showAppName: Boolean,
     showReturnHomeButton: Boolean,
     onBackToHome: () -> Unit,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppTarget) -> Unit,
     onAppLongClick: (GridItem) -> Unit,
-    onAppLabel: (String) -> String,
+    onAppLabel: (AppTarget) -> String,
     onBlankLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -98,25 +100,26 @@ fun FolderScreen(
                 }
             }
             // distinct 兜底：历史数据可能同文件夹重复 pkg（LazyGrid key 崩溃防御）
-            items(memberPackages.distinct(), key = { "app:$it" }) { pkg ->
-                val runtimeState = appStates[pkg]
+            items(memberTargets.distinct(), key = { "app:${it.key}" }) { target ->
+                val runtimeState = appStates[target]
                 val frozen = runtimeState == AppRuntimeState.FROZEN ||
                     ((runtimeState == null || runtimeState == AppRuntimeState.UNKNOWN) &&
-                        frozenStates[pkg] == true)
+                        frozenStates[target] == true)
                 val missing = runtimeState == AppRuntimeState.MISSING
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .combinedClickable(
-                            onClick = { onAppClick(pkg) },
+                            onClick = { onAppClick(target) },
                             onLongClick = {
                                 onAppLongClick(
                                     GridItem(
-                                        id = pkg.hashCode().toLong(),
+                                        id = target.key.hashCode().toLong(),
                                         type = "app",
-                                        pkg = pkg,
+                                        pkg = target.packageName.value,
                                         sortOrder = 0,
+                                        userId = target.userId,
                                     )
                                 )
                             },
@@ -124,10 +127,10 @@ fun FolderScreen(
                         .padding(4.dp),
                 ) {
                     Box(contentAlignment = Alignment.TopStart) {
-                        icons[pkg]?.let { bmp ->
-                            Image(
-                                bitmap = bmp,
-                                contentDescription = pkg,
+                            icons[target.packageName.value]?.let { bmp ->
+                                Image(
+                                    bitmap = bmp,
+                                    contentDescription = target.packageName.value,
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .size(iconSize)
@@ -156,11 +159,23 @@ fun FolderScreen(
                                 modifier = Modifier.size(iconSize * 0.38f),
                             )
                         }
+                        if (!target.isPrimaryUser) {
+                            Text(
+                                text = "分身${target.userId}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+                                    .padding(horizontal = 2.dp, vertical = 1.dp),
+                            )
+                        }
                     }
                     if (showAppName) {
                         // 白字黑边（壁纸透明背景下可读）
                         com.nbljsbdk.snowhide.ui.components.OutlinedText(
-                            text = onAppLabel(pkg),
+                            text = onAppLabel(target),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }

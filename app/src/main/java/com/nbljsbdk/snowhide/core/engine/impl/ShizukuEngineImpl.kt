@@ -10,9 +10,13 @@ import android.os.Parcel
 import com.nbljsbdk.snowhide.core.engine.BinderConnectionEvent
 import com.nbljsbdk.snowhide.core.engine.BinderConnectionState
 import com.nbljsbdk.snowhide.core.engine.PowerEngine
+import com.nbljsbdk.snowhide.core.engine.TargetedPowerEngine
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.core.model.PackageName
 import com.nbljsbdk.snowhide.core.operation.PmCommand
 import com.nbljsbdk.snowhide.core.operation.PmOperation
+import com.nbljsbdk.snowhide.core.operation.PmOutputParser
+import com.nbljsbdk.snowhide.core.operation.PmQuery
 import com.nbljsbdk.snowhide.core.engine.reduceBinderConnectionState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +40,7 @@ import kotlin.coroutines.resumeWithException
  * 重构约定：将来换集成方式（Binder 直调/TCP），只重写本文件。
  * 所有 Shizuku 相关 import 只允许出现在本文件。
  */
-class ShizukuEngineImpl(private val context: Context) : PowerEngine {
+class ShizukuEngineImpl(private val context: Context) : PowerEngine, TargetedPowerEngine {
 
     override val id: String = "shizuku"
     override val displayName: String = "Shizuku"
@@ -66,22 +70,75 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
     override suspend fun isFrozen(pkg: String): Result<Boolean> =
         PackageName.parse(pkg).fold(
             onSuccess = {
-                runCatching {
-                    exec("pm list packages -d").getOrThrow()
-                        .lineSequence()
-                        .mapNotNull { line -> line.removePrefix("package:").trim() }
-                        .any { it == pkg }
-                }
+                PmQuery.listPackages(PRIMARY_USER_ID, frozenOnly = true).fold(
+                    onSuccess = { command ->
+                        exec(command).map { output ->
+                            output.lineSequence()
+                                .mapNotNull { line -> line.removePrefix("package:").trim() }
+                                .any { it == pkg }
+                        }
+                    },
+                    onFailure = { Result.failure(it) },
+                )
             },
             onFailure = { Result.failure(it) },
         )
 
     override suspend fun listFrozenPackages(): Result<List<String>> = runCatching {
-        exec("pm list packages -d").getOrThrow()
-            .lineSequence()
-            .mapNotNull { line -> line.removePrefix("package:").trim() }
-            .filter { it.isNotEmpty() }
-            .toList()
+        PmQuery.listPackages(PRIMARY_USER_ID, frozenOnly = true).getOrThrow()
+    }.fold(
+        onSuccess = { command ->
+            exec(command).map { output ->
+                output.lineSequence()
+                    .mapNotNull { line -> line.removePrefix("package:").trim() }
+                    .filter { it.isNotEmpty() }
+                    .toList()
+            }
+        },
+        onFailure = { Result.failure(it) },
+    )
+
+    override suspend fun listUsers(): Result<List<com.nbljsbdk.snowhide.core.model.UserProfile>> =
+        exec(PmQuery.listUsers()).map(PmOutputParser::users)
+
+    override suspend fun listInstalledPackages(userId: Int): Result<List<String>> =
+        PmQuery.listPackages(userId).fold(
+            onSuccess = { command -> exec(command).map(PmOutputParser::packages) },
+            onFailure = { Result.failure(it) },
+        )
+
+    override suspend fun listFrozenPackages(userId: Int): Result<List<String>> =
+        PmQuery.listPackages(userId, frozenOnly = true).fold(
+            onSuccess = { command -> exec(command).map(PmOutputParser::packages) },
+            onFailure = { Result.failure(it) },
+        )
+
+    override suspend fun listSystemPackages(userId: Int): Result<List<String>> =
+        PmQuery.listPackages(userId, systemOnly = true).fold(
+            onSuccess = { command -> exec(command).map(PmOutputParser::packages) },
+            onFailure = { Result.failure(it) },
+        )
+
+    override suspend fun disableApp(target: AppTarget): Result<Unit> =
+        executeTargeted(PmOperation.DISABLE_USER, target)
+
+    override suspend fun enableApp(target: AppTarget): Result<Unit> =
+        executeTargeted(PmOperation.ENABLE_USER, target)
+
+    private suspend fun executeTargeted(
+        operation: PmOperation,
+        target: AppTarget,
+    ): Result<Unit> {
+        if (target.packageName.value == context.packageName) {
+            return Result.failure(IllegalArgumentException("不能操作雪藏自身"))
+        }
+        if (target.userId == PRIMARY_USER_ID) {
+            return Result.failure(IllegalArgumentException("应用分身不操作主用户 user 0"))
+        }
+        return PmCommand.build(operation, target.packageName.value, target.userId).fold(
+            onSuccess = { command -> exec(command).map { } },
+            onFailure = { Result.failure(it) },
+        )
     }
 
     /**
@@ -288,5 +345,6 @@ class ShizukuEngineImpl(private val context: Context) : PowerEngine {
 
     private companion object {
         private const val BINDER_BIND_TIMEOUT_MS = 8_000L
+        private const val PRIMARY_USER_ID = 0
     }
 }

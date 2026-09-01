@@ -1,19 +1,22 @@
 package com.nbljsbdk.snowhide.data.repo
 
 import android.content.Context
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Recent 划卡后的短期停用队列。
  *
- * 只保存包名，不保存应用文件；用于无障碍服务重连后补执行上一次已确认的划卡动作。
+ * 保存明确的应用目标，不保存应用文件；用于无障碍服务重连后补执行上一次已确认的
+ * 划卡动作。旧的包名-only 队列会在版本迁移时清除，避免把分身误映射到 user 0。
  */
 object RecentFreezeQueueRepository {
 
     private const val PREFS_NAME = "snowhide_settings"
     private const val KEY_QUEUE = "swipe_freeze_queue"
     private const val KEY_SCHEMA = "swipe_freeze_queue_schema"
-    private const val CURRENT_SCHEMA = 1
+    private const val CURRENT_SCHEMA = 2
 
     private lateinit var prefs: android.content.SharedPreferences
 
@@ -30,19 +33,19 @@ object RecentFreezeQueueRepository {
     }
 
     @Synchronized
-    fun enqueue(packages: Collection<String>) {
+    fun enqueueTargets(targets: Collection<AppTarget>) {
         if (!::prefs.isInitialized) return
-        val merged = read().toMutableSet().apply { addAll(packages) }
+        val merged = read().toMutableSet().apply { addAll(targets) }
         write(merged)
     }
 
     @Synchronized
-    fun peek(): List<String> = if (::prefs.isInitialized) read() else emptyList()
+    fun peekTargets(): List<AppTarget> = if (::prefs.isInitialized) read() else emptyList()
 
     @Synchronized
-    fun remove(packages: Collection<String>) {
+    fun removeTargets(targets: Collection<AppTarget>) {
         if (!::prefs.isInitialized) return
-        val remaining = read().toMutableSet().apply { removeAll(packages.toSet()) }
+        val remaining = read().toMutableSet().apply { removeAll(targets.toSet()) }
         write(remaining)
     }
 
@@ -51,21 +54,33 @@ object RecentFreezeQueueRepository {
         if (::prefs.isInitialized) prefs.edit().remove(KEY_QUEUE).commit()
     }
 
-    private fun read(): List<String> {
+    private fun read(): List<AppTarget> {
         val json = prefs.getString(KEY_QUEUE, "[]") ?: "[]"
         return runCatching {
             JSONArray(json).let { array ->
                 (0 until array.length())
-                    .map { array.getString(it) }
-                    .filter { it.isNotBlank() }
+                    .mapNotNull { index ->
+                        val value = array.opt(index)
+                        if (value !is JSONObject) return@mapNotNull null
+                        AppTarget.create(
+                            value.optString("pkg"),
+                            value.optInt("userId", AppTarget.PRIMARY_USER_ID),
+                        ).getOrNull()
+                    }
                     .distinct()
             }
         }.getOrDefault(emptyList())
     }
 
-    private fun write(packages: Collection<String>) {
+    private fun write(targets: Collection<AppTarget>) {
         val array = JSONArray()
-        packages.filter { it.isNotBlank() }.distinct().forEach(array::put)
+        targets.distinct().forEach { target ->
+            array.put(
+                JSONObject()
+                    .put("pkg", target.packageName.value)
+                    .put("userId", target.userId),
+            )
+        }
         prefs.edit().putString(KEY_QUEUE, array.toString()).commit()
     }
 }

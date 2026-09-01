@@ -6,12 +6,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.app.CompositionRoot
+import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceConnectionState
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.app.AppShell
 import com.nbljsbdk.snowhide.ui.theme.SnowHideTheme
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
 
 /**
@@ -25,6 +30,11 @@ import rikka.shizuku.Shizuku
  * **不是** onRequestPermissionsResult 转发（那是旧 API 的做法）。
  */
 class MainActivity : ComponentActivity() {
+
+    private val appContainer by lazy {
+        CompositionRoot.appContainer(applicationContext)
+    }
+    private var accessibilityConnectionCheckJob: Job? = null
 
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         if (requestCode == REQUEST_SHIZUKU) {
@@ -41,7 +51,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CompositionRoot.initActivity(applicationContext)
-        val appContainer = CompositionRoot.appContainer(applicationContext)
         registerDynamicShortcuts()
         requestNotificationPermissionIfNeeded()
         applyTransparentWallpaper()
@@ -65,11 +74,18 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     },
+                    onOpenAccessibilitySettings = {
+                        startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS),
+                        )
+                    },
                     backupUseCase = appContainer.backupUseCase,
                     freezeUseCase = appContainer.freezeUseCase,
                     recentCalibrationUseCase = appContainer.recentCalibrationUseCase,
                     appearanceSettingsUseCase = appContainer.appearanceSettingsUseCase,
                     folderPageSettingsUseCase = appContainer.folderPageSettingsUseCase,
+                    appCloneUseCase = appContainer.appCloneUseCase,
+                    accessibilityRequirementUseCase = appContainer.accessibilityRequirementUseCase,
                 )
             }
         }
@@ -79,6 +95,13 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        AccessibilityServiceConnectionState.markChecking()
+        appContainer.accessibilityRequirementUseCase.refreshSystemState()
+        accessibilityConnectionCheckJob?.cancel()
+        accessibilityConnectionCheckJob = lifecycleScope.launch {
+            delay(ACCESSIBILITY_CONNECTION_GRACE_MS)
+            AccessibilityServiceConnectionState.markDisconnectedIfChecking()
+        }
         applyTransparentWallpaper()
     }
 
@@ -100,6 +123,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        accessibilityConnectionCheckJob?.cancel()
         Shizuku.removeRequestPermissionResultListener(permissionListener)
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         super.onPause()
@@ -177,5 +201,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQUEST_SHIZUKU = 1000
         private const val REQUEST_NOTIFICATION = 1001
+        private const val ACCESSIBILITY_CONNECTION_GRACE_MS = 1_500L
     }
 }

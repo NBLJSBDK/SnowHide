@@ -7,6 +7,7 @@ import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,7 +50,7 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     private val context get() = getApplication<Application>()
 
     /** 快速启停成员（仓库唯一数据源） */
-    val members: StateFlow<List<String>> = QuickToggleRepository.members
+    val members: StateFlow<List<AppTarget>> = QuickToggleRepository.members
 
     private val _filter = MutableStateFlow(
         Filter(
@@ -67,45 +68,45 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     val showPackageName: StateFlow<Boolean> = _showPackageName.asStateFlow()
 
     /** 左栏：已添加但未加入快速启停（combine 派生，数据变化立即刷新） */
-    val leftApps: StateFlow<List<String>> = combine(
+    val leftApps: StateFlow<List<AppTarget>> = combine(
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
         QuickToggleRepository.members,
         _filter,
     ) { apps, items, folderApps, members, filter ->
-        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
+        val added = (items.mapNotNull { it.appTarget } + folderApps.mapNotNull { it.appTarget }).toSet()
         val infoByPkg = apps.associateBy { it.pkg }
-        sortPackages(
-            packages = added.filter { it !in members }
-                .filter { pkg -> queryOk(pkg, filter.query, infoByPkg) },
+        sortTargets(
+            targets = added.filter { it !in members }
+                .filter { target -> queryOk(target, filter.query, infoByPkg) },
             infoByPkg = infoByPkg,
             mode = filter.leftSort,
-            recentOrder = { ListOrderRepository.quickToggleRemoved.value[it] ?: 0L },
+            recentOrder = { ListOrderRepository.quickToggleRemoved.value[it.key] ?: 0L },
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 右栏：快速启停成员（已添加里移出的自动剔除） */
-    val rightApps: StateFlow<List<String>> = combine(
+    val rightApps: StateFlow<List<AppTarget>> = combine(
         AppListRepository.installedApps,
         GridRepository.gridItems,
         GridRepository.folderApps,
         QuickToggleRepository.members,
         _filter,
     ) { apps, items, folderApps, members, filter ->
-        val added = (items.mapNotNull { it.pkg } + folderApps.map { it.pkg }).toSet()
+        val added = (items.mapNotNull { it.appTarget } + folderApps.mapNotNull { it.appTarget }).toSet()
         val infoByPkg = apps.associateBy { it.pkg }
-        sortPackages(
-            packages = members.filter { it in added }
-                .filter { pkg -> queryOk(pkg, filter.query, infoByPkg) },
+        sortTargets(
+            targets = members.filter { it in added }
+                .filter { target -> queryOk(target, filter.query, infoByPkg) },
             infoByPkg = infoByPkg,
             mode = filter.rightSort,
-            recentOrder = { ListOrderRepository.quickToggleAdded.value[it] ?: 0L },
+            recentOrder = { ListOrderRepository.quickToggleAdded.value[it.key] ?: 0L },
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
-        ListOrderRepository.seedQuickToggleAdded(QuickToggleRepository.members.value)
+        ListOrderRepository.seedQuickToggleTargets(QuickToggleRepository.members.value)
         // 数据一致性：宫格数据变化时同步剔除已移出成员并持久化
         viewModelScope.launch {
             GridRepository.gridItems.collect { _ -> syncMembers() }
@@ -117,13 +118,13 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 剔除已不在「已添加」里的成员 */
     private fun syncMembers() {
-        val added = GridRepository.allAddedPackages().toSet()
+        val added = GridRepository.allAddedTargets().toSet()
         val current = QuickToggleRepository.members.value
         val cleaned = current.filter { it in added }.distinct()
         if (cleaned.size != current.size) {
             current.filter { it !in cleaned }
-                .forEach { ListOrderRepository.recordQuickToggleRemoved(it) }
-            QuickToggleRepository.replaceMembers(cleaned)
+                .forEach { ListOrderRepository.recordQuickToggleRemoved(it.key) }
+            QuickToggleRepository.replaceTargetMembers(cleaned)
         }
     }
 
@@ -156,40 +157,41 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun queryOk(
-        pkg: String,
+        target: AppTarget,
         query: String,
         infoByPkg: Map<String, AppListRepository.AppInfo>,
     ): Boolean {
         if (query.isEmpty()) return true
-        return pkg.contains(query, ignoreCase = true) ||
-            infoByPkg[pkg]?.label?.contains(query, ignoreCase = true) == true
+        return target.packageName.value.contains(query, ignoreCase = true) ||
+            infoByPkg[target.packageName.value]?.label?.contains(query, ignoreCase = true) == true ||
+            (!target.isPrimaryUser && target.userId.toString().contains(query))
     }
 
-    private fun sortPackages(
-        packages: List<String>,
+    private fun sortTargets(
+        targets: List<AppTarget>,
         infoByPkg: Map<String, AppListRepository.AppInfo>,
         mode: SortMode,
-        recentOrder: (String) -> Long,
-    ): List<String> = when (mode) {
-        SortMode.TIME_DESC -> packages.sortedWith(
-            compareByDescending<String> { infoByPkg[it]?.installTime ?: 0L }
-                .thenByDescending { it },
+        recentOrder: (AppTarget) -> Long,
+    ): List<AppTarget> = when (mode) {
+        SortMode.TIME_DESC -> targets.sortedWith(
+            compareByDescending<AppTarget> { infoByPkg[it.packageName.value]?.installTime ?: 0L }
+                .thenByDescending { it.key },
         )
-        SortMode.TIME_ASC -> packages.sortedWith(
-            compareBy<String> { infoByPkg[it]?.installTime ?: 0L }
-                .thenBy { it },
+        SortMode.TIME_ASC -> targets.sortedWith(
+            compareBy<AppTarget> { infoByPkg[it.packageName.value]?.installTime ?: 0L }
+                .thenBy { it.key },
         )
-        SortMode.NAME_DESC -> packages.sortedWith(
-            compareByDescending<String> { infoByPkg[it]?.label ?: it }
-                .thenByDescending { it },
+        SortMode.NAME_DESC -> targets.sortedWith(
+            compareByDescending<AppTarget> { infoByPkg[it.packageName.value]?.label ?: it.packageName.value }
+                .thenByDescending { it.key },
         )
-        SortMode.NAME_ASC -> packages.sortedWith(
-            compareBy<String> { infoByPkg[it]?.label ?: it }
-                .thenBy { it },
+        SortMode.NAME_ASC -> targets.sortedWith(
+            compareBy<AppTarget> { infoByPkg[it.packageName.value]?.label ?: it.packageName.value }
+                .thenBy { it.key },
         )
-        SortMode.RECENT_DESC -> packages.sortedWith(
-            compareByDescending<String> { recentOrder(it) }
-                .thenByDescending { it },
+        SortMode.RECENT_DESC -> targets.sortedWith(
+            compareByDescending<AppTarget> { recentOrder(it) }
+                .thenByDescending { it.key },
         )
     }
 
@@ -198,26 +200,29 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /** 加入快速启停（左栏右滑） */
-    fun addMember(pkg: String) {
-        if (QuickToggleRepository.addMember(pkg)) {
-            ListOrderRepository.recordQuickToggleAdded(pkg)
+    fun addMember(target: AppTarget) {
+        if (QuickToggleRepository.addMember(target)) {
+            ListOrderRepository.recordQuickToggleAdded(target.key)
         }
     }
 
     /** 移出快速启停（右栏左滑） */
-    fun removeMember(pkg: String) {
-        if (QuickToggleRepository.removeMember(pkg)) {
-            ListOrderRepository.recordQuickToggleRemoved(pkg)
+    fun removeMember(target: AppTarget) {
+        if (QuickToggleRepository.removeMember(target)) {
+            ListOrderRepository.recordQuickToggleRemoved(target.key)
         }
     }
 
     /** 应用显示名（包名由 UI 追加显示在名称下方，不再二选一） */
-    fun displayLabel(pkg: String): String {
+    fun displayLabel(target: AppTarget): String {
+        val pkg = target.packageName.value
         return runCatching {
             val pm = context.packageManager
             val info = pm.getApplicationInfo(pkg, 0)
             pm.getApplicationLabel(info).toString()
-        }.getOrDefault(pkg)
+        }.getOrDefault(pkg).let { label ->
+            if (target.isPrimaryUser) label else "$label（用户 ${target.userId}）"
+        }
     }
 
 }

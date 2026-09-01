@@ -6,6 +6,7 @@ import com.nbljsbdk.snowhide.core.model.PackageName
 enum class PmOperation {
     DISABLE_USER,
     ENABLE,
+    ENABLE_USER,
     DISABLE,
     UNINSTALL,
 }
@@ -27,13 +28,18 @@ object PmCommand {
         if (userId < 0) {
             return Result.failure(IllegalArgumentException("非法用户 ID：$userId"))
         }
+        if ((operation == PmOperation.ENABLE || operation == PmOperation.DISABLE) && userId != 0) {
+            return Result.failure(
+                IllegalArgumentException("${operation.name} 必须使用明确的用户空间命令"),
+            )
+        }
         val pkg = parsed.value
         return Result.success(
             when (operation) {
                 PmOperation.DISABLE_USER -> "pm disable-user --user $userId $pkg"
-                // 保持 P0 已验证的原始命令格式；多用户启用在目标能力接入时单独扩展。
-                PmOperation.ENABLE -> "pm enable $pkg"
-                PmOperation.DISABLE -> "pm disable $pkg"
+                PmOperation.ENABLE -> "pm enable --user $userId $pkg"
+                PmOperation.ENABLE_USER -> "pm enable --user $userId $pkg"
+                PmOperation.DISABLE -> "pm disable --user $userId $pkg"
                 PmOperation.UNINSTALL -> "pm uninstall --user $userId $pkg"
             },
         )

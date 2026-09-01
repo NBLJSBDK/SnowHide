@@ -1,7 +1,7 @@
 package com.nbljsbdk.snowhide.data.repo
 
 import android.content.Context
-import com.nbljsbdk.snowhide.core.model.PackageName
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.core.model.QuickToggleStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,13 +22,13 @@ object QuickToggleRepository : QuickToggleStore {
 
     private lateinit var prefs: android.content.SharedPreferences
 
-    private val _members = MutableStateFlow<List<String>>(emptyList())
+    private val _members = MutableStateFlow<List<AppTarget>>(emptyList())
     /** 快速启停成员，保留用户加入顺序。 */
-    override val members: StateFlow<List<String>> = _members.asStateFlow()
+    override val members: StateFlow<List<AppTarget>> = _members.asStateFlow()
 
-    private val _opened = MutableStateFlow<List<String>>(emptyList())
+    private val _opened = MutableStateFlow<List<AppTarget>>(emptyList())
     /** 最近一次点亮动作实际解冻的应用快照。 */
-    override val opened: StateFlow<List<String>> = _opened.asStateFlow()
+    override val opened: StateFlow<List<AppTarget>> = _opened.asStateFlow()
 
     /** 初始化并读取旧 JSON 数据（幂等、线程安全）。 */
     @Synchronized
@@ -41,35 +41,50 @@ object QuickToggleRepository : QuickToggleStore {
 
     /** 加入成员，已存在时保持原顺序。 */
     @Synchronized
-    fun addMember(pkg: String): Boolean {
-        if (!PackageName.isValid(pkg) || pkg in _members.value) return false
-        _members.value = _members.value + pkg
+    fun addMember(target: AppTarget): Boolean {
+        if (target in _members.value) return false
+        _members.value = _members.value + target
         persist(KEY_MEMBERS, _members.value)
         return true
     }
+
+    /** 旧 user 0 调用适配，避免已保存设置和旧入口失效。 */
+    fun addMember(pkg: String): Boolean =
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::addMember) == true
 
     /** 移出成员。 */
     @Synchronized
-    fun removeMember(pkg: String): Boolean {
-        if (pkg !in _members.value) return false
-        _members.value = _members.value.filterNot { it == pkg }
+    fun removeMember(target: AppTarget): Boolean {
+        if (target !in _members.value) return false
+        _members.value = _members.value.filterNot { it == target }
         persist(KEY_MEMBERS, _members.value)
         return true
     }
 
+    /** 旧 user 0 调用适配。 */
+    fun removeMember(pkg: String): Boolean =
+        AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()?.let(::removeMember) == true
+
     /** 清理已从“已添加”体系移出的成员，并保留剩余顺序。 */
     @Synchronized
-    fun replaceMembers(packages: Collection<String>) {
-        val cleaned = packages.filter(PackageName::isValid).distinct()
+    fun replaceTargetMembers(targets: Collection<AppTarget>) {
+        val cleaned = targets.distinct()
         if (cleaned == _members.value) return
         _members.value = cleaned
         persist(KEY_MEMBERS, cleaned)
     }
 
+    /** 旧 user 0 成员数组适配。 */
+    fun replaceMembers(packages: Collection<String>) {
+        replaceTargetMembers(
+            packages.mapNotNull { AppTarget.create(it, AppTarget.PRIMARY_USER_ID).getOrNull() },
+        )
+    }
+
     /** 保存本次成功点亮的应用快照。 */
     @Synchronized
-    override fun setOpened(packages: Collection<String>) {
-        val cleaned = packages.filter(PackageName::isValid).distinct()
+    override fun setOpened(targets: Collection<AppTarget>) {
+        val cleaned = targets.distinct()
         _opened.value = cleaned
         persist(KEY_OPENED, cleaned)
     }
@@ -82,21 +97,41 @@ object QuickToggleRepository : QuickToggleStore {
         persist(KEY_OPENED, emptyList())
     }
 
-    private fun read(key: String): List<String> {
+    private fun read(key: String): List<AppTarget> {
         val json = prefs.getString(key, "[]") ?: "[]"
         return runCatching {
             JSONArray(json).let { array ->
                 (0 until array.length())
-                    .map { array.getString(it) }
-                    .filter(PackageName::isValid)
+                    .mapNotNull { parseTarget(array.opt(it)) }
                     .distinct()
             }
         }.getOrDefault(emptyList())
     }
 
-    private fun persist(key: String, packages: Collection<String>) {
+    private fun parseTarget(value: Any?): AppTarget? = when (value) {
+        is String -> AppTarget.create(value, AppTarget.PRIMARY_USER_ID).getOrNull()
+        is org.json.JSONObject -> {
+            val pkg = value.optString("pkg")
+            val userId = value.optInt("userId", AppTarget.PRIMARY_USER_ID)
+            AppTarget.create(pkg, userId).getOrNull()
+        }
+        else -> null
+    }
+
+    /** user 0 仍写旧字符串格式，分身写带 userId 的对象，兼容旧版本。 */
+    private fun persist(key: String, targets: Collection<AppTarget>) {
         val array = JSONArray()
-        packages.filter(PackageName::isValid).distinct().forEach(array::put)
+        targets.distinct().forEach { target ->
+            if (target.isPrimaryUser) {
+                array.put(target.packageName.value)
+            } else {
+                array.put(
+                    org.json.JSONObject()
+                        .put("pkg", target.packageName.value)
+                        .put("userId", target.userId),
+                )
+            }
+        }
         prefs.edit().putString(key, array.toString()).apply()
     }
 }

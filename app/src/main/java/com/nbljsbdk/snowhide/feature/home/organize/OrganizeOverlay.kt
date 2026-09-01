@@ -43,6 +43,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import com.nbljsbdk.snowhide.R
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
@@ -64,13 +65,13 @@ import com.nbljsbdk.snowhide.ui.theme.OrganizeMemberHighlight
 fun OrganizeOverlay(
     state: OrganizeState,
     folders: List<Folder>,
-    folderApps: List<String>,
+    folderApps: List<AppTarget>,
     icons: Map<String, ImageBitmap>,
     iconShape: String = "round",
     transparentBg: Boolean = false,
     onTapHomeApp: (GridItem) -> Unit,
     onTapFolder: (Folder) -> Unit,
-    onTapFolderApp: (String) -> Unit,
+    onTapFolderApp: (AppTarget) -> Unit,
     onShift: (Int) -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -78,7 +79,7 @@ fun OrganizeOverlay(
     onDelete: () -> Unit,
     onNameChange: (String) -> Unit,
     onNameCommit: () -> Unit,
-    onAppLabel: (String) -> String,
+    onAppLabel: (AppTarget) -> String,
 ) {
     // 状态机 → 键位可用性（设计文档 §3.10）
     val homeAppSelected = state is OrganizeState.HomeAppSelected
@@ -167,23 +168,23 @@ fun OrganizeOverlay(
                             .horizontalScroll(rememberScrollState())
                             .padding(vertical = 4.dp),
                     ) {
-                        folderApps.forEach { pkg ->
+                        folderApps.forEach { target ->
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onTapFolderApp(pkg) }
+                                    .clickable { onTapFolderApp(target) }
                                     .padding(4.dp)
                                     .background(
-                                        if (folderSelected.subFolderAppPkg == pkg)
+                                        if (folderSelected.subFolderAppTarget == target)
                                             OrganizeMemberHighlight.copy(alpha = 0.5f)
                                         else androidx.compose.ui.graphics.Color.Transparent,
                                     ),
                             ) {
-                                icons[pkg]?.let { bmp ->
+                                icons[target.packageName.value]?.let { bmp ->
                                     Image(
                                         bitmap = bmp,
-                                        contentDescription = pkg,
+                                        contentDescription = target.packageName.value,
                                         contentScale = ContentScale.Fit,
                                         modifier = Modifier
                                             .size(40.dp)
@@ -194,7 +195,7 @@ fun OrganizeOverlay(
                                     )
                                 }
                                 OutlinedText(
-                                    text = onAppLabel(pkg),
+                                    text = onAppLabel(target),
                                     style = MaterialTheme.typography.labelSmall,
                                 )
                             }

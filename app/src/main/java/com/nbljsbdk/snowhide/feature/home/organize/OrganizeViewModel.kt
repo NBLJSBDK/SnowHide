@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import androidx.lifecycle.ViewModel
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.repo.GridRepository
@@ -58,14 +59,14 @@ class OrganizeViewModel : ViewModel() {
      * 当前选中文件夹的成员（响应式 StateFlow：移动/增删后自动刷新，
      * 普通 getter 无法驱动 Compose 重组——移动后横排顺序不更新的根因）
      */
-    val currentFolderApps: StateFlow<List<String>> = combine(
+    val currentFolderApps: StateFlow<List<AppTarget>> = combine(
         _state,
         GridRepository.folderApps,
     ) { s, folderApps ->
-        val sel = s as? OrganizeState.FolderSelected ?: return@combine emptyList()
-        folderApps.filter { it.folderId == sel.folderId }
-            .sortedBy { it.sortOrder }
-            .map { it.pkg }
+            val sel = s as? OrganizeState.FolderSelected ?: return@combine emptyList()
+            folderApps.filter { it.folderId == sel.folderId }
+                .sortedBy { it.sortOrder }
+                .mapNotNull { it.appTarget }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 当前选中文件夹 */
@@ -84,7 +85,7 @@ class OrganizeViewModel : ViewModel() {
         val pkg = item.pkg ?: return
         _state.value = OrganizeReducer.reduce(
             _state.value,
-            OrganizeIntent.TapHomeApp(OrganizeAppRef(item.id, pkg)),
+            OrganizeIntent.TapHomeApp(OrganizeAppRef(item.id, pkg, item.userId)),
         )
     }
 
@@ -104,6 +105,13 @@ class OrganizeViewModel : ViewModel() {
         )
     }
 
+    fun tapFolderApp(target: AppTarget) {
+        _state.value = OrganizeReducer.reduce(
+            _state.value,
+            OrganizeIntent.TapFolderApp(target.packageName.value, target.userId),
+        )
+    }
+
     // ═══════════════════════════════════════
     // 键位操作
     // ═══════════════════════════════════════
@@ -119,7 +127,7 @@ class OrganizeViewModel : ViewModel() {
                     SelectionFocus.HOME_APP -> s.subHomeApp?.let {
                         GridRepository.shiftItem(it.id, step)
                     }
-                    SelectionFocus.FOLDER_APP -> s.subFolderAppPkg?.let {
+                    SelectionFocus.FOLDER_APP -> s.subFolderAppTarget?.let {
                         GridRepository.shiftFolderApp(s.folderId, it, step)
                     }
                     SelectionFocus.FOLDER -> {
@@ -138,19 +146,20 @@ class OrganizeViewModel : ViewModel() {
     fun moveDown() {
         val s = _state.value as? OrganizeState.FolderSelected ?: return
         val app = s.subHomeApp ?: return
-        GridRepository.moveAppToFolder(app.pkg, s.folderId)
+        val target = app.target ?: return
+        GridRepository.moveAppToFolder(target, s.folderId)
         // 移动完成后自动聚焦文件夹下栏中刚加入的应用。
         _state.value = OrganizeReducer.reduce(
             _state.value,
-            OrganizeIntent.MoveDownCompleted(app.pkg),
+            OrganizeIntent.MoveDownCompleted(target.packageName.value, target.userId),
         )
     }
 
     /** 上键：选中的文件夹内 app 移回主屏最后 */
     fun moveUp() {
         val s = _state.value as? OrganizeState.FolderSelected ?: return
-        val pkg = s.subFolderAppPkg ?: return
-        GridRepository.moveAppToHome(pkg)
+        val target = s.subFolderAppTarget ?: return
+        GridRepository.moveAppToHome(target)
         _state.value = OrganizeReducer.reduce(
             _state.value,
             OrganizeIntent.MoveUpCompleted,

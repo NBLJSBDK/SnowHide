@@ -1,9 +1,11 @@
 package com.nbljsbdk.snowhide.feature.home
 
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.FolderApp
 import com.nbljsbdk.snowhide.data.model.GridItem
+import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementState
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
 import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 
@@ -16,13 +18,14 @@ data class HomeUiState(
     val folderPagePlan: FolderPagePlan,
     val folderPageLoopEnabled: Boolean,
     val excludedFolderIds: Set<Long>,
-    val frozenStates: Map<String, Boolean>,
-    val pendingFreezePackages: Set<String>,
-    val appStates: Map<String, AppRuntimeState>,
-    val lockedPackages: Set<String>,
-    val labels: Map<String, String>,
+    val frozenStates: Map<AppTarget, Boolean>,
+    val pendingFreezeTargets: Set<AppTarget>,
+    val appStates: Map<AppTarget, AppRuntimeState>,
+    val lockedTargets: Set<AppTarget>,
+    val labels: Map<AppTarget, String>,
     val engineReady: Boolean,
     val shizukuRunning: Boolean,
+    val accessibilityRequirement: AccessibilityRequirementState,
     val columns: Int,
     val iconSize: Int,
     val verticalSpace: Int,
@@ -50,7 +53,7 @@ data class HomeUiState(
 
 /** HomeContent 的业务回调端口；具体 ViewModel 只在 Route 层出现。 */
 interface HomeActions {
-    fun openApp(pkg: String)
+    fun openApp(target: AppTarget)
     fun consumeMessage()
     fun syncActualStatus(silent: Boolean = false)
     fun refreshFrozenStates()
@@ -65,13 +68,14 @@ interface HomeActions {
     fun openSettings()
     fun openAbout()
     fun refreshEngineStatus()
+    fun refreshAccessibilityStatus()
     fun quickClean()
-    fun toggleLock(pkg: String)
+    fun toggleLock(target: AppTarget)
     fun renameFolder(folderId: Long, name: String)
     fun deleteFolder(folderId: Long)
-    fun removeApp(pkg: String)
-    fun uninstallApp(pkg: String)
-    fun toggleFreeze(pkg: String)
+    fun removeApp(target: AppTarget)
+    fun uninstallApp(target: AppTarget)
+    fun toggleFreeze(target: AppTarget)
     fun freezeFolder(folder: Folder)
     fun unfreezeFolder(folder: Folder)
     fun applyIconPack(pkg: String)

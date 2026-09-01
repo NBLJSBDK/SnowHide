@@ -93,6 +93,9 @@ import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.core.feedback.HapticType
+import com.nbljsbdk.snowhide.core.model.AppTarget
+import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementState
+import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementStatus
 import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
 import com.nbljsbdk.snowhide.domain.folder.FolderPageOption
@@ -119,6 +122,7 @@ import com.nbljsbdk.snowhide.ui.util.HapticController
 fun HomeContent(
     modifier: Modifier = Modifier,
     onRequestShizuku: () -> Unit = {},
+    onOpenAccessibilitySettings: () -> Unit = {},
     state: HomeUiState,
     actions: HomeActions,
 ) {
@@ -127,7 +131,7 @@ fun HomeContent(
     val folderApps = state.folderApps
     val frozenStates = state.frozenStates
     val appStates = state.appStates
-    val lockedPackages = state.lockedPackages
+    val lockedTargets = state.lockedTargets
     var icons by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
     var loadedIconPack by remember { mutableStateOf<String?>(null) }
     val iconPackages = remember(gridItems, folderApps) {
@@ -136,6 +140,7 @@ fun HomeContent(
     val labels = state.labels
     val engineReady = state.engineReady
     val shizukuRunning = state.shizukuRunning
+    val accessibilityRequirement = state.accessibilityRequirement
     val columns = state.columns
     val iconSize = state.iconSize
     val verticalSpace = state.verticalSpace
@@ -173,18 +178,18 @@ fun HomeContent(
 
     // 长按菜单状态
     var longPressTarget by remember { mutableStateOf<GridItem?>(null) }
-    var invalidAppTarget by remember { mutableStateOf<String?>(null) }
-    fun appLocation(pkg: String): String {
-        if (gridItems.any { it.type == "app" && it.pkg == pkg }) {
+    var invalidAppTarget by remember { mutableStateOf<AppTarget?>(null) }
+    fun appLocation(target: AppTarget): String {
+        if (gridItems.any { it.type == "app" && it.appTarget == target }) {
             return "主屏幕"
         }
-        val folderId = folderApps.firstOrNull { it.pkg == pkg }?.folderId
+        val folderId = folderApps.firstOrNull { it.appTarget == target }?.folderId
         return folders.firstOrNull { it.id == folderId }?.name ?: "主屏幕"
     }
-    fun handleAppClick(pkg: String) {
-        when (appStates[pkg]) {
-            AppRuntimeState.MISSING, AppRuntimeState.UNKNOWN -> invalidAppTarget = pkg
-            else -> actions.openApp(pkg)
+    fun handleAppClick(target: AppTarget) {
+        when (appStates[target]) {
+            AppRuntimeState.MISSING, AppRuntimeState.UNKNOWN -> invalidAppTarget = target
+            else -> actions.openApp(target)
         }
     }
     // 文件夹重命名/删除弹窗状态
@@ -192,8 +197,8 @@ fun HomeContent(
     var renameText by remember { mutableStateOf("") }
     var deleteFolderTarget by remember { mutableStateOf<com.nbljsbdk.snowhide.data.model.Folder?>(null) }
     // 移除应用二级菜单 / 卸载二次确认
-    var removeAppTarget by remember { mutableStateOf<String?>(null) }
-    var uninstallTarget by remember { mutableStateOf<String?>(null) }
+    var removeAppTarget by remember { mutableStateOf<AppTarget?>(null) }
+    var uninstallTarget by remember { mutableStateOf<AppTarget?>(null) }
     // 布局设置透明浮框 / 主屏空白长按菜单 / 美化浮框
     var layoutPanelOpen by remember { mutableStateOf(false) }
     var blankMenuOpen by remember { mutableStateOf(false) }
@@ -398,7 +403,7 @@ fun HomeContent(
                             singleLine = true,
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(vertical = 4.dp)
+                                .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
                                 .focusRequester(searchFocusRequester),
                         )
                         TextButton(onClick = {
@@ -527,10 +532,10 @@ fun HomeContent(
                 directFolder?.let { folder ->
                     FolderScreen(
                         folder = folder,
-                        memberPackages = folderApps
+                        memberTargets = folderApps
                             .filter { it.folderId == folder.id }
                             .sortedBy { it.sortOrder }
-                            .map { it.pkg },
+                            .mapNotNull { it.appTarget },
                         icons = icons,
                         frozenStates = frozenStates,
                         columns = columns,
@@ -543,9 +548,9 @@ fun HomeContent(
                         appStates = appStates,
                         showReturnHomeButton = showReturnHomeButton,
                         onBackToHome = { directFolderId = null },
-                        onAppClick = { handleAppClick(it) },
+                         onAppClick = { handleAppClick(it) },
                         onAppLongClick = { item -> longPressTarget = item },
-                        onAppLabel = { pkg -> labels[pkg] ?: "" },
+                         onAppLabel = { target -> labels[target] ?: target.packageName.value },
                         onBlankLongPress = { blankMenuOpen = true },
                     )
                 }
@@ -560,6 +565,14 @@ fun HomeContent(
                             running = shizukuRunning,
                             onRequest = onRequestShizuku,
                              onRefresh = { actions.refreshEngineStatus() },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                    if (accessibilityRequirement.shouldPrompt) {
+                        AccessibilityGuideCard(
+                            state = accessibilityRequirement,
+                            onOpenSettings = onOpenAccessibilitySettings,
+                            onRefresh = actions::refreshAccessibilityStatus,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
@@ -584,16 +597,18 @@ fun HomeContent(
                         } else {
                             // 搜索范围 = 主屏项 + 文件夹内应用（文件夹成员也能搜到，结果点击直接打开）
                             // 成员 id 用负数索引绝对唯一（hash 32 位会碰撞导致 LazyGrid key 重复崩溃）
-                            val memberItems = folderApps.mapIndexed { index, fa ->
+                             val memberItems = folderApps.mapIndexed { index, fa ->
                                 GridItem(
                                     id = Long.MIN_VALUE + index,
                                     type = "app",
                                     pkg = fa.pkg,
                                     sortOrder = Int.MAX_VALUE,
+                                    userId = fa.userId,
                                 )
                             }
                             (gridItems + memberItems).filter { item ->
-                                val name = item.pkg?.let { labels[it] ?: it } ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
+                                val name = item.appTarget?.let { labels[it] ?: it.packageName.value }
+                                    ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
                                 name.contains(searchQuery, ignoreCase = true) ||
                                     (item.pkg?.contains(searchQuery, ignoreCase = true) == true)
                             }.sortedBy { it.sortOrder }
@@ -607,11 +622,11 @@ fun HomeContent(
                                             folderId = folder.id,
                                             name = folder.name,
                                             size = iconSize.dp,
-                                            previewPackages = folderApps
-                                                .filter { it.folderId == folder.id }
-                                                .sortedBy { it.sortOrder }
-                                                .map { it.pkg }
-                                                .take(if (folderPreview >= 3) 9 else 4),
+                                             previewTargets = folderApps
+                                                 .filter { it.folderId == folder.id }
+                                                 .sortedBy { it.sortOrder }
+                                                 .mapNotNull { it.appTarget }
+                                                 .take(if (folderPreview >= 3) 9 else 4),
                                             icons = icons,
                                             frozenStates = frozenStates,
                                             appStates = appStates,
@@ -650,14 +665,15 @@ fun HomeContent(
                                         )
                                     }
                                 }
-                                item.pkg != null -> {
-                                    AppCell(
-                                        pkg = item.pkg,
-                                        label = labels[item.pkg] ?: "",
-                                        size = iconSize.dp,
-                                        frozen = frozenStates[item.pkg] == true,
-                                        missing = appStates[item.pkg] == AppRuntimeState.MISSING,
-                                         icon = icons[item.pkg],
+                                 item.appTarget != null -> {
+                                      val target = item.appTarget!!
+                                     AppCell(
+                                         target = target,
+                                         label = labels[target] ?: target.packageName.value,
+                                         size = iconSize.dp,
+                                         frozen = frozenStates[target] == true,
+                                         missing = appStates[target] == AppRuntimeState.MISSING,
+                                          icon = icons[target.packageName.value],
                                          showName = showAppName,
                                          freezeStyle = freezeStyle,
                                          frostAnimationDurationMillis = animationDurationMillis,
@@ -671,7 +687,7 @@ fun HomeContent(
                                         } else null,
                                         onClick = {
                                             if (organizing) organizeViewModel.tapHomeApp(item)
-                                            else handleAppClick(item.pkg)
+                                             else handleAppClick(target)
                                         },
                                         onLongPress = {
                                             if (!organizing) longPressTarget = item
@@ -687,10 +703,10 @@ fun HomeContent(
                 val folder = sortedFolders[idx - 1]
                 FolderScreen(
                     folder = folder,
-                    memberPackages = folderApps
-                        .filter { it.folderId == folder.id }
-                        .sortedBy { it.sortOrder }
-                        .map { it.pkg },
+                             memberTargets = folderApps
+                                 .filter { it.folderId == folder.id }
+                                 .sortedBy { it.sortOrder }
+                                 .mapNotNull { it.appTarget },
                     icons = icons,
                     frozenStates = frozenStates,
                     columns = columns,
@@ -710,7 +726,7 @@ fun HomeContent(
                     },
                     onAppClick = { handleAppClick(it) },
                     onAppLongClick = { item -> longPressTarget = item },
-                    onAppLabel = { pkg -> labels[pkg] ?: "" },
+                     onAppLabel = { target -> labels[target] ?: target.packageName.value },
                     onBlankLongPress = { blankMenuOpen = true },
                 )
             }
@@ -756,7 +772,7 @@ fun HomeContent(
                 transparentBg = transparentBg,
                 onTapHomeApp = { item -> organizeViewModel.tapHomeApp(item) },
                 onTapFolder = { folder -> organizeViewModel.tapFolder(folder) },
-                onTapFolderApp = { pkg -> organizeViewModel.tapFolderApp(pkg) },
+                onTapFolderApp = { target -> organizeViewModel.tapFolderApp(target) },
                 onShift = { step ->
                     organizeViewModel.shift(step)
                     HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
@@ -779,13 +795,13 @@ fun HomeContent(
                 },
                 onNameChange = { name -> organizeViewModel.updateFolderName(name) },
                 onNameCommit = { organizeViewModel.commitFolderName() },
-                onAppLabel = { pkg -> labels[pkg] ?: "" },
+                onAppLabel = { target -> labels[target] ?: target.packageName.value },
             )
         } else {
             DockBar(
-                packages = dockPackages(gridItems, folderApps, frozenStates, appStates)
-                    .filterNot { it in state.pendingFreezePackages },
-                lockedPackages = lockedPackages,
+                targets = dockTargets(gridItems, folderApps, frozenStates, appStates)
+                    .filterNot { it in state.pendingFreezeTargets },
+                lockedTargets = lockedTargets,
                 icons = icons,
                 iconSize = dockIconSize.dp,
                 actionIconSize = dockActionIconSize.dp,
@@ -794,11 +810,11 @@ fun HomeContent(
                 animationDurationMillis = animationDurationMillis,
                 onQuickClean = { actions.quickClean() },
                 onAppClick = { handleAppClick(it) },
-                onAppLongClick = { pkg ->
-                     actions.toggleLock(pkg)
+                onAppLongClick = { target ->
+                      actions.toggleLock(target)
                     HapticController.vibrate(context, HapticType.FREEZE_LOCK)
                 },
-                 onAppSwipeUp = { pkg -> actions.toggleFreeze(pkg) },
+                  onAppSwipeUp = { target -> actions.toggleFreeze(target) },
             )
         }
         }
@@ -863,19 +879,19 @@ fun HomeContent(
     }
 
     // 移除应用二级菜单（设计文档 §3.4）
-    removeAppTarget?.let { pkg ->
+    removeAppTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { removeAppTarget = null },
             title = { Text("移除应用") },
             text = {
                 Column {
                     DialogAction("是否移除该应用（解冻并移出）") {
-                         actions.removeApp(pkg)
+                         actions.removeApp(target)
                         removeAppTarget = null
                     }
                     DialogAction("移除并卸载（⚠️ 会删除应用数据）") {
                         removeAppTarget = null
-                        uninstallTarget = pkg
+                         uninstallTarget = target
                     }
                     DialogAction("取消") { removeAppTarget = null }
                 }
@@ -885,14 +901,14 @@ fun HomeContent(
     }
 
     // 卸载二次确认（安全特例）
-    uninstallTarget?.let { pkg ->
+    uninstallTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { uninstallTarget = null },
             title = { Text("确认卸载") },
-            text = { Text("确定要卸载 ${labels[pkg] ?: pkg} 吗？\n\n⚠️ 这会删除该应用及其全部数据，且不可恢复。") },
+            text = { Text("确定要卸载 ${labels[target] ?: target.packageName.value} 吗？\n\n⚠️ 这会删除该应用及其全部数据，且不可恢复。") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                     actions.uninstallApp(pkg)
+                     actions.uninstallApp(target)
                     uninstallTarget = null
                 }) { Text("卸载", color = MaterialTheme.colorScheme.error) }
             },
@@ -903,17 +919,17 @@ fun HomeContent(
     }
 
     // 系统实际状态异常：已删除或暂时无法确认时，点击只提示，不尝试启动
-    invalidAppTarget?.let { pkg ->
-        val missing = appStates[pkg] == AppRuntimeState.MISSING
+    invalidAppTarget?.let { target ->
+        val missing = appStates[target] == AppRuntimeState.MISSING
         AlertDialog(
             onDismissRequest = { invalidAppTarget = null },
             title = { Text(if (missing) "应用已不存在" else "无法确认应用状态") },
             text = {
                 Text(
                     if (missing) {
-                        "${labels[pkg] ?: pkg} 已被系统删除，请在长按菜单中移除雪藏记录。"
+                        "${labels[target] ?: target.packageName.value} 已被系统删除，请在长按菜单中移除雪藏记录。"
                     } else {
-                        "${labels[pkg] ?: pkg} 的冻结状态暂时无法确认，请先同步状态或检查 Shizuku。"
+                        "${labels[target] ?: target.packageName.value} 的冻结状态暂时无法确认，请先同步状态或检查 Shizuku。"
                     }
                 )
             },
@@ -929,16 +945,16 @@ fun HomeContent(
     longPressTarget?.let { target ->
         ContextMenu(
             item = target,
-            frozen = target.pkg?.let { frozenStates[it] == true } ?: false,
+            frozen = target.appTarget?.let { frozenStates[it] == true } ?: false,
             folderName = folders.find { it.id == target.folderId }?.name ?: "",
-            appLabel = target.pkg?.let { labels[it] ?: it } ?: "",
-            locationName = target.pkg?.let(::appLocation) ?: "",
+            appLabel = target.appTarget?.let { labels[it] ?: it.packageName.value } ?: "",
+            locationName = target.appTarget?.let(::appLocation) ?: "",
             targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
-             onToggleFreeze = { pkg -> actions.toggleFreeze(pkg); longPressTarget = null },
-            onOpen = { pkg -> handleAppClick(pkg); longPressTarget = null },
-            onRemove = { pkg ->
-                removeAppTarget = pkg
+             onToggleFreeze = { target -> actions.toggleFreeze(target); longPressTarget = null },
+            onOpen = { target -> handleAppClick(target); longPressTarget = null },
+            onRemove = { target ->
+                removeAppTarget = target
                 longPressTarget = null
             },
             onRenameFolder = { id ->
@@ -1068,16 +1084,38 @@ fun HomeContent(
     }
 }
 
-/** 底部图标栏显示的应用 = 已添加且解冻的应用（设计文档 §3.6） */
-private fun dockPackages(
+/** 底部图标栏显示的应用 = 已添加且解冻的明确目标（设计文档 §3.6） */
+private fun dockTargets(
     gridItems: List<GridItem>,
     folderApps: List<com.nbljsbdk.snowhide.data.model.FolderApp>,
-    frozenStates: Map<String, Boolean>,
-    appStates: Map<String, AppRuntimeState>,
-): List<String> {
-    val all = (gridItems.mapNotNull { it.pkg } + folderApps.map { it.pkg }).distinct()
+    frozenStates: Map<AppTarget, Boolean>,
+    appStates: Map<AppTarget, AppRuntimeState>,
+): List<AppTarget> {
+    val all = (gridItems.mapNotNull { it.appTarget } + folderApps.mapNotNull { it.appTarget }).distinct()
     return all.filter {
         appStates[it] != AppRuntimeState.MISSING && frozenStates[it] != true
+    }
+}
+
+/** 分身图标角标；冻结雪花仍固定在左上角。 */
+@Composable
+private fun TargetBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(if (compact) 4.dp else 6.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+            .padding(horizontal = if (compact) 2.dp else 3.dp, vertical = 1.dp),
+    ) {
+        Text(
+            text = text,
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimary,
+            maxLines = 1,
+        )
     }
 }
 
@@ -1125,10 +1163,56 @@ private fun ShizukuGuideCard(
     }
 }
 
+/** 无障碍状态只做提示，不禁用 Shizuku 冻结、宫格或 Dock。 */
+@Composable
+private fun AccessibilityGuideCard(
+    state: AccessibilityRequirementState,
+    onOpenSettings: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val features = buildList {
+        if (state.swipeDisableEnabled) add("划卡停用")
+        if (state.lockCleanEnabled) add("锁屏自动清理")
+    }.joinToString("、")
+    val reconnect = state.status == AccessibilityRequirementStatus.ENABLED_NOT_CONNECTED
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = FrostCard),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = if (reconnect) "无障碍服务需要重新激活" else "需要开启无障碍服务",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (reconnect) {
+                    "系统显示已开启，但雪藏服务未连接。请在无障碍设置中关闭后重新开启。"
+                } else {
+                    "$features 已启用，需要雪藏无障碍服务；基础冻结功能不受影响。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.Button(onClick = onOpenSettings) {
+                    Text("打开无障碍设置")
+                }
+                androidx.compose.material3.OutlinedButton(onClick = onRefresh) {
+                    Text("刷新状态")
+                }
+            }
+        }
+    }
+}
+
 /** 应用宫格单元 */
 @Composable
 private fun AppCell(
-    pkg: String,
+    target: AppTarget,
     label: String,
     size: androidx.compose.ui.unit.Dp,
     frozen: Boolean,
@@ -1156,7 +1240,7 @@ private fun AppCell(
             if (icon != null) {
                 androidx.compose.foundation.Image(
                     bitmap = icon,
-                    contentDescription = label,
+                     contentDescription = label,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .size(size)
@@ -1194,7 +1278,13 @@ private fun AppCell(
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.error),
                     modifier = Modifier
                         .size(size * 0.38f)
-                        .align(Alignment.TopStart),
+                    .align(Alignment.TopStart),
+                )
+            }
+            if (!target.isPrimaryUser) {
+                TargetBadge(
+                    text = "分身${target.userId}",
+                    modifier = Modifier.align(Alignment.TopEnd),
                 )
             }
         }
@@ -1215,10 +1305,10 @@ private fun FolderCell(
     folderId: Long,
     name: String,
     size: androidx.compose.ui.unit.Dp,
-    previewPackages: List<String>,
+    previewTargets: List<AppTarget>,
     icons: Map<String, ImageBitmap>,
-    frozenStates: Map<String, Boolean> = emptyMap(),
-    appStates: Map<String, AppRuntimeState> = emptyMap(),
+    frozenStates: Map<AppTarget, Boolean> = emptyMap(),
+    appStates: Map<AppTarget, AppRuntimeState> = emptyMap(),
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE,
     frostAnimationDurationMillis: Int = 300,
     previewSize: Int = 2,
@@ -1239,7 +1329,7 @@ private fun FolderCell(
             ),
     ) {
         // 文件夹 2×2 / 3×3 拼贴预览（前 4/9 个成员，空文件夹显示空外框）
-        if (previewPackages.isEmpty()) {
+        if (previewTargets.isEmpty()) {
             // 空文件夹沿用非空文件夹的外框，只是不绘制内部应用。
             Box(
                 modifier = Modifier
@@ -1261,22 +1351,22 @@ private fun FolderCell(
                         Row {
                             for (col in 0 until grid) {
                                 val idx = row * grid + col
-                                val pkg = previewPackages.getOrNull(idx)
+                                 val target = previewTargets.getOrNull(idx)
                                 Box(
                                     contentAlignment = Alignment.Center,
                                     modifier = Modifier.size(size / grid),
                                 ) {
-                                    if (pkg != null) {
-                                        val runtimeState = appStates[pkg]
-                                        val frozen = runtimeState == AppRuntimeState.FROZEN ||
-                                            ((runtimeState == null || runtimeState == AppRuntimeState.UNKNOWN) &&
-                                                frozenStates[pkg] == true)
-                                        val missing = runtimeState == AppRuntimeState.MISSING
-                                        Box(contentAlignment = Alignment.TopStart) {
-                                            icons[pkg]?.let { bmp ->
-                                                androidx.compose.foundation.Image(
-                                                    bitmap = bmp,
-                                                    contentDescription = pkg,
+                                     if (target != null) {
+                                         val runtimeState = appStates[target]
+                                         val frozen = runtimeState == AppRuntimeState.FROZEN ||
+                                             ((runtimeState == null || runtimeState == AppRuntimeState.UNKNOWN) &&
+                                                 frozenStates[target] == true)
+                                         val missing = runtimeState == AppRuntimeState.MISSING
+                                         Box(contentAlignment = Alignment.TopStart) {
+                                             icons[target.packageName.value]?.let { bmp ->
+                                                 androidx.compose.foundation.Image(
+                                                     bitmap = bmp,
+                                                     contentDescription = target.packageName.value,
                                                     contentScale = ContentScale.Fit,
                                                     modifier = Modifier
                                                         .size(size / grid * 0.88f)
@@ -1296,15 +1386,22 @@ private fun FolderCell(
                                                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(TianyiBlue),
                                                     modifier = Modifier.size(size / grid * 0.32f),
                                                 )
-                                            } else if (missing) {
+                                             } else if (missing) {
                                                 androidx.compose.foundation.Image(
                                                     painter = painterResource(R.drawable.ic_trash),
                                                     contentDescription = "应用已删除",
                                                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.error),
                                                     modifier = Modifier.size(size / grid * 0.32f),
                                                 )
-                                            }
-                                        }
+                                             }
+                                             if (!target.isPrimaryUser) {
+                                                 TargetBadge(
+                                                     text = "${target.userId}",
+                                                     modifier = Modifier.align(Alignment.TopEnd),
+                                                     compact = true,
+                                                 )
+                                             }
+                                         }
                                     }
                                 }
                             }
@@ -1327,8 +1424,8 @@ private fun FolderCell(
 /** 底部图标栏（已添加且解冻的应用横排 + 快速清理，设计文档 §3.6） */
 @Composable
 private fun DockBar(
-    packages: List<String>,
-    lockedPackages: Set<String>,
+    targets: List<AppTarget>,
+    lockedTargets: Set<AppTarget>,
     icons: Map<String, ImageBitmap>,
     iconSize: androidx.compose.ui.unit.Dp,
     actionIconSize: androidx.compose.ui.unit.Dp,
@@ -1336,9 +1433,9 @@ private fun DockBar(
     transparentBg: Boolean = false,
     animationDurationMillis: Int,
     onQuickClean: () -> Unit,
-    onAppClick: (String) -> Unit,
-    onAppLongClick: (String) -> Unit,
-    onAppSwipeUp: (String) -> Unit,
+    onAppClick: (AppTarget) -> Unit,
+    onAppLongClick: (AppTarget) -> Unit,
+    onAppSwipeUp: (AppTarget) -> Unit,
 ) {
     val boundedActionIconSize = actionIconSize.coerceAtMost((iconSize.value - 8f).coerceAtLeast(12f).dp)
 
@@ -1363,17 +1460,17 @@ private fun DockBar(
                 start = iconSize / 2 + 6.dp,
             ),
         ) {
-            items(packages, key = { it }) { pkg ->
-                icons[pkg]?.let { bitmap ->
+            items(targets, key = { it.key }) { target ->
+                icons[target.packageName.value]?.let { bitmap ->
                     DockIcon(
-                        pkg = pkg,
+                        target = target,
                         bitmap = bitmap,
                         iconSize = iconSize,
                         animationDurationMillis = animationDurationMillis,
-                        locked = pkg in lockedPackages,
-                        onClick = { onAppClick(pkg) },
-                        onLongClick = { onAppLongClick(pkg) },
-                        onSwipeUp = { onAppSwipeUp(pkg) },
+                        locked = target in lockedTargets,
+                        onClick = { onAppClick(target) },
+                        onLongClick = { onAppLongClick(target) },
+                        onSwipeUp = { onAppSwipeUp(target) },
                     )
                 }
             }
@@ -1410,7 +1507,7 @@ private fun DockBar(
  */
 @Composable
 private fun DockIcon(
-    pkg: String,
+    target: AppTarget,
     bitmap: ImageBitmap,
     iconSize: androidx.compose.ui.unit.Dp,
     animationDurationMillis: Int,
@@ -1445,7 +1542,7 @@ private fun DockIcon(
     Box {
         androidx.compose.foundation.Image(
             bitmap = bitmap,
-            contentDescription = pkg,
+                contentDescription = target.packageName.value,
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .graphicsLayer {
@@ -1458,7 +1555,7 @@ private fun DockIcon(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .pointerInput(pkg, animationDurationMillis) {
+                .pointerInput(target.key, animationDurationMillis) {
                     detectVerticalDragGestures(
                         onDragStart = { _ -> settleJob?.cancel() },
                         onVerticalDrag = { change, amount ->
@@ -1488,10 +1585,17 @@ private fun DockIcon(
                     .size(iconSize * 0.42f),
             )
         }
+        if (!target.isPrimaryUser) {
+            TargetBadge(
+                text = "分身${target.userId}",
+                modifier = Modifier.align(Alignment.TopEnd),
+                compact = true,
+            )
+        }
     }
 }
 
-/** 齿轮二级菜单（设计文档 §3.7 八项，P0 接入核心四项） */
+/** 齿轮二级菜单（设计文档 §3.7，P0 接入核心功能） */
 @Composable
 private fun GearMenu(
     expanded: Boolean,
@@ -1505,7 +1609,7 @@ private fun GearMenu(
     onAbout: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        // 用户拍板：整理目录第一、增删应用第二
+        // 用户拍板：分身能力并入增删应用，不再占用独立入口。
         DropdownMenuItem(
             text = { Text("整理目录") },
             onClick = { onDismiss(); onOrganize() },
@@ -1547,9 +1651,9 @@ private fun ContextMenu(
     locationName: String,
     targetFolder: com.nbljsbdk.snowhide.data.model.Folder?,
     onDismiss: () -> Unit,
-    onToggleFreeze: (String) -> Unit,
-    onOpen: (String) -> Unit,
-    onRemove: (String) -> Unit,
+    onToggleFreeze: (AppTarget) -> Unit,
+    onOpen: (AppTarget) -> Unit,
+    onRemove: (AppTarget) -> Unit,
     onRenameFolder: (Long) -> Unit,
     onDeleteFolder: (Long) -> Unit,
     onFreezeFolder: (com.nbljsbdk.snowhide.data.model.Folder) -> Unit,
@@ -1589,10 +1693,10 @@ private fun ContextMenu(
                     DialogAction("重命名") { item.folderId?.let(onRenameFolder) }
                     DialogAction("删除文件夹") { item.folderId?.let(onDeleteFolder) }
                 } else {
-                    val pkg = item.pkg ?: return@Column
-                    DialogAction(if (frozen) "解冻" else "冻结") { onToggleFreeze(pkg) }
-                    DialogAction("打开应用") { onOpen(pkg) }
-                    DialogAction("移除应用") { onRemove(pkg) }
+                    val target = item.appTarget ?: return@Column
+                    DialogAction(if (frozen) "解冻" else "冻结") { onToggleFreeze(target) }
+                    DialogAction("打开应用") { onOpen(target) }
+                    DialogAction("移除应用") { onRemove(target) }
                 }
             }
         },

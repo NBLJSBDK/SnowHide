@@ -4,6 +4,7 @@ package com.nbljsbdk.snowhide.feature.appmanage
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,12 +14,16 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -50,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.nbljsbdk.snowhide.data.repo.AppListRepository
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 import com.nbljsbdk.snowhide.core.feedback.HapticType
+import com.nbljsbdk.snowhide.domain.appclone.AppCloneUser
 import com.nbljsbdk.snowhide.ui.components.LazyAppIcon
 import com.nbljsbdk.snowhide.ui.util.HapticController
 
@@ -78,6 +84,11 @@ fun AppManageScreen(
     val iconShape by SettingsRepository.iconShape.collectAsState()
     val leftApps by viewModel.leftApps.collectAsState()
     val rightApps by viewModel.rightApps.collectAsState()
+    val cloneMode by viewModel.cloneMode.collectAsState()
+    val cloneUsers by viewModel.cloneUsers.collectAsState()
+    val selectedCloneUserId by viewModel.selectedCloneUserId.collectAsState()
+    val cloneLoading by viewModel.cloneLoading.collectAsState()
+    val cloneError by viewModel.cloneError.collectAsState()
     val loaded by AppListRepository.loaded.collectAsState()
     val context = LocalContext.current
 
@@ -87,6 +98,7 @@ fun AppManageScreen(
 
     // 顶栏弹窗：apply / help-confirm / help-apply
     var dialog by remember { mutableStateOf<String?>(null) }
+    var cloneUserMenuOpen by remember { mutableStateOf(false) }
 
     // 移出成功提示 Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -107,6 +119,19 @@ fun AppManageScreen(
             TopAppBar(
                 title = { Text("增删应用", fontWeight = FontWeight.Bold) },
                 actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { viewModel.setCloneMode(!cloneMode) }
+                            .padding(horizontal = 2.dp),
+                    ) {
+                        Checkbox(
+                            checked = cloneMode,
+                            onCheckedChange = viewModel::setCloneMode,
+                            modifier = Modifier.size(36.dp),
+                        )
+                        Text("分身应用", style = MaterialTheme.typography.labelSmall)
+                    }
                     // 两按钮：确认=退出；应用=只冻结本次新增且未冻结的应用并退出（长按=说明）
                     TopBarAction("确认", onClick = { onClose() },
                         onLongClick = { dialog = "help-confirm" })
@@ -127,6 +152,57 @@ fun AppManageScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 12.dp),
         ) {
+            if (cloneMode) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "分身用户",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Box {
+                        val selectedUser = cloneUsers.firstOrNull { it.id == selectedCloneUserId }
+                        TextButton(
+                            onClick = { cloneUserMenuOpen = true },
+                            enabled = !cloneLoading && cloneUsers.isNotEmpty(),
+                        ) {
+                            Text(selectedUser?.displayName() ?: "未发现用户空间")
+                        }
+                        DropdownMenu(
+                            expanded = cloneUserMenuOpen,
+                            onDismissRequest = { cloneUserMenuOpen = false },
+                        ) {
+                            cloneUsers.forEach { user ->
+                                DropdownMenuItem(
+                                    text = { Text(user.displayName()) },
+                                    onClick = {
+                                        cloneUserMenuOpen = false
+                                        viewModel.selectCloneUser(user.id)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    if (cloneLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(
+                        onClick = viewModel::refreshCloneApps,
+                        enabled = !cloneLoading,
+                    ) { Text("刷新") }
+                }
+                cloneError?.let { error ->
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+
             // 顶行：搜索 + 系统应用切换（解锁后显示）+ 显示包名
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -167,22 +243,30 @@ fun AppManageScreen(
                         .padding(end = 4.dp),
                 ) {
                     ColumnLabel("未添加应用（右滑加入）", leftApps.size)
-                    if (!loaded && leftApps.isEmpty()) {
+                    if ((cloneMode && cloneLoading && leftApps.isEmpty()) ||
+                        (!cloneMode && !loaded && leftApps.isEmpty())) {
                         CircularProgressIndicator(modifier = Modifier.padding(24.dp))
                     }
+                    if (cloneMode && !cloneLoading && cloneUsers.isEmpty()) {
+                        Text(
+                            text = "未发现非 user 0 用户空间",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(leftApps, key = { it.pkg }) { app ->
+                        items(leftApps, key = { it.target.key }) { app ->
                             SwipeableAppRow(
-                                label = app.label,
-                                pkg = app.pkg,
+                                item = app,
                                 showPackageName = showPackageName,
                                 iconShape = iconShape,
                                 background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 allowedDirection = SwipeToDismissBoxValue.StartToEnd,
-                                 onSwipe = {
-                                     viewModel.addApp(app.pkg)
-                                     HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
-                                 },
+                                onSwipe = {
+                                    viewModel.addApp(app)
+                                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                                },
                             )
                         }
                     }
@@ -198,18 +282,17 @@ fun AppManageScreen(
                 ) {
                     ColumnLabel("已添加应用（左滑移出）", rightApps.size)
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(rightApps, key = { it.pkg }) { app ->
+                        items(rightApps, key = { it.target.key }) { app ->
                             SwipeableAppRow(
-                                label = app.label,
-                                pkg = app.pkg,
+                                item = app,
                                 showPackageName = showPackageName,
                                 iconShape = iconShape,
                                 background = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 allowedDirection = SwipeToDismissBoxValue.EndToStart,
-                                 onSwipe = {
-                                     viewModel.removeApp(app.pkg)
-                                     HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
-                                 },
+                                onSwipe = {
+                                    viewModel.removeApp(app)
+                                    HapticController.vibrate(context, HapticType.ORGANIZE_LIST)
+                                },
                             )
                         }
                     }
@@ -280,6 +363,15 @@ private fun sortLabel(mode: AppManageViewModel.SortMode): String = when (mode) {
     AppManageViewModel.SortMode.RECENT_DESC -> "最近添加"
 }
 
+private fun AppCloneUser.displayName(): String = buildString {
+    append(name.ifBlank { "用户 $id" })
+    append(" (user ")
+    append(id)
+    append(')')
+    if (isManagedProfile) append(" 工作资料")
+    if (!running) append(" 未运行")
+}
+
 /** 栏标题 + 数量 */
 @Composable
 private fun ColumnLabel(text: String, count: Int) {
@@ -308,8 +400,7 @@ private fun SortButton(label: String, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeableAppRow(
-    label: String,
-    pkg: String,
+    item: AppManageItem,
     showPackageName: Boolean,
     iconShape: String,
     background: androidx.compose.ui.graphics.Color,
@@ -346,20 +437,28 @@ private fun SwipeableAppRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    LazyAppIcon(pkg = pkg, size = 36.dp, iconShape = iconShape)
+                    LazyAppIcon(pkg = item.pkg, size = 36.dp, iconShape = iconShape)
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (!item.target.isPrimaryUser) {
+                            Text(
+                                text = "分身 user ${item.userId}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
                 if (showPackageName) {
                     Text(
-                        text = pkg,
+                        text = item.pkg,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,

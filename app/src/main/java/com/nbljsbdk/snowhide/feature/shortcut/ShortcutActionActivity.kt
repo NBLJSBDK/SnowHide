@@ -109,15 +109,15 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
         Thread {
             val result = when (action) {
                 ACTION_SMART_CLEAN -> {
-                    val r = runCatching { runBlocking { freezeUseCase.quickClean() } }
+                    val r = runCatching { runBlocking { freezeUseCase.quickCleanTargets() } }
                     Triple(
                         "智能清理",
-                        r.fold({ it.fold({ "已停用 $it 个应用" }, { null }) }, { null }),
+                        r.fold({ it.fold({ "已停用 ${it.size} 个应用" }, { null }) }, { null }),
                         r.fold({ it.fold({ null }, { "失败：${it.message}" }) }, { "失败：${it.message}" }),
                     )
                 }
                 ACTION_FREEZE_ALL -> {
-                    val r = runCatching { runBlocking { freezeUseCase.freezeAll(null, exceptLocked = false) } }
+                    val r = runCatching { runBlocking { freezeUseCase.freezeAllTargets(null, exceptLocked = false) } }
                     Triple(
                         "全部停用",
                         r.fold({ it.fold({ "已停用 $it 个应用" }, { null }) }, { null }),
@@ -133,7 +133,7 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
                     )
                 }
                 ACTION_ENABLE_ALL -> {
-                    val r = runCatching { runBlocking { freezeUseCase.unfreezeAll() } }
+                    val r = runCatching { runBlocking { freezeUseCase.unfreezeAllTargets() } }
                     Triple(
                         "启用全部",
                         r.fold({ it.fold({ "已启用 $it 个应用" }, { null }) }, { null }),

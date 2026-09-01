@@ -1,14 +1,19 @@
 package com.nbljsbdk.snowhide.feature.home
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.pm.LauncherActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.pm.LauncherApps
+import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.feedback.HapticType
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.FolderApp
@@ -19,6 +24,8 @@ import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.domain.FreezeUseCase
+import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementState
+import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementUseCase
 import com.nbljsbdk.snowhide.domain.folder.FolderPageInput
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
@@ -48,6 +55,7 @@ class HomeViewModel(
     private val freezeUseCase: FreezeUseCase,
     private val appearanceSettingsUseCase: AppearanceSettingsUseCase,
     private val folderPageSettingsUseCase: FolderPageSettingsUseCase,
+    private val accessibilityRequirementUseCase: AccessibilityRequirementUseCase,
 ) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
@@ -62,7 +70,7 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val folders: StateFlow<List<Folder>> = gridRepository.folders
     val folderApps: StateFlow<List<FolderApp>> = gridRepository.folderApps
-    val lockedPackages: StateFlow<Set<String>> = gridRepository.lockedPackages
+    val lockedTargets: StateFlow<Set<AppTarget>> = gridRepository.lockedTargets
     val folderPagePlan: StateFlow<FolderPagePlan> = combine(
         folders,
         homeFolderIds,
@@ -108,6 +116,7 @@ class HomeViewModel(
         private val freezeUseCase: FreezeUseCase,
         private val appearanceSettingsUseCase: AppearanceSettingsUseCase,
         private val folderPageSettingsUseCase: FolderPageSettingsUseCase,
+        private val accessibilityRequirementUseCase: AccessibilityRequirementUseCase,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -117,6 +126,7 @@ class HomeViewModel(
                     freezeUseCase,
                     appearanceSettingsUseCase,
                     folderPageSettingsUseCase,
+                    accessibilityRequirementUseCase,
                 ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
@@ -128,19 +138,18 @@ class HomeViewModel(
     // ═══════════════════════════════════════
 
     /** 冻结状态映射（pkg → 是否冻结，共享存储：磁贴/增删界面操作后同样刷新） */
-    val frozenStates: StateFlow<Map<String, Boolean>> =
-        FrozenStateStore.states
+    val frozenStates: StateFlow<Map<AppTarget, Boolean>> = FrozenStateStore.targetStates
 
     /** 正在执行冻结命令的应用，先从 Dock 隐藏，失败时恢复。 */
-    private val _pendingFreezePackages = MutableStateFlow<Set<String>>(emptySet())
-    val pendingFreezePackages: StateFlow<Set<String>> = _pendingFreezePackages.asStateFlow()
+    private val _pendingFreezeTargets = MutableStateFlow<Set<AppTarget>>(emptySet())
+    val pendingFreezeTargets: StateFlow<Set<AppTarget>> = _pendingFreezeTargets.asStateFlow()
 
     /** 应用系统实际状态（冻结/正常/已删除/无法确认） */
-    val appStates: StateFlow<Map<String, AppRuntimeState>> = FrozenStateStore.appStates
+    val appStates: StateFlow<Map<AppTarget, AppRuntimeState>> = FrozenStateStore.targetAppStates
 
     /** 应用显示名映射（pkg → 中文名，来自全局预加载列表） */
-    private val _labels = MutableStateFlow<Map<String, String>>(emptyMap())
-    val labels: StateFlow<Map<String, String>> = _labels.asStateFlow()
+    private val _labels = MutableStateFlow<Map<AppTarget, String>>(emptyMap())
+    val labels: StateFlow<Map<AppTarget, String>> = _labels.asStateFlow()
 
     /** 操作提示（Snackbar 文案） */
     private val _message = MutableStateFlow<String?>(null)
@@ -228,6 +237,13 @@ class HomeViewModel(
     private val _shizukuRunning = MutableStateFlow(EngineManager.shizukuBinderConnected.value)
     val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
 
+    val accessibilityRequirement: StateFlow<AccessibilityRequirementState> =
+        accessibilityRequirementUseCase.state.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            accessibilityRequirementUseCase.currentState(),
+        )
+
     init {
         AppIconLoader.iconPackPkg = settingsRepository.iconPack.value
         // 启动预热图标包 appfilter 解析（否则首图标触发时阻塞 2 秒）
@@ -240,7 +256,10 @@ class HomeViewModel(
                 AppListRepository.installedApps,
             ) { items, folderApps, apps ->
                 // 中文名映射（从预加载的全局应用列表取）
-                val labelMap = apps.associate { it.pkg to it.label }
+                val infoByPackage = apps.associateBy { it.pkg }
+                val labelMap = (items.mapNotNull { it.appTarget } + folderApps.mapNotNull { it.appTarget })
+                    .distinct()
+                    .associateWith { target -> infoByPackage[target.packageName.value]?.label ?: target.packageName.value }
                 _labels.value = labelMap
             }.collect { }
         }
@@ -255,6 +274,10 @@ class HomeViewModel(
     /** 手动刷新引擎状态（从 Shizuku 管理器返回后调用） */
     fun refreshEngineStatus() {
         EngineManager.refresh()
+    }
+
+    fun refreshAccessibilityStatus() {
+        accessibilityRequirementUseCase.refreshSystemState()
     }
 
     /** 刷新全部已添加应用的冻结状态（一次批量查询，共享存储） */
@@ -290,7 +313,7 @@ class HomeViewModel(
         AppIconLoader.clearCache()
     }
 
-    fun toggleLock(pkg: String) = gridRepository.toggleLock(pkg)
+    fun toggleLock(target: AppTarget) = gridRepository.toggleLock(target)
 
     fun renameFolder(folderId: Long, name: String) = gridRepository.renameFolder(folderId, name)
 
@@ -339,28 +362,28 @@ class HomeViewModel(
     // ═══════════════════════════════════════
 
     /** 切换冻结状态（长按菜单 / 底部栏上划） */
-    fun toggleFreeze(pkg: String) {
+    fun toggleFreeze(target: AppTarget) {
         viewModelScope.launch {
-            val frozen = com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value[pkg] ?: false
-            if (!frozen && pkg in _pendingFreezePackages.value) return@launch
+            val frozen = FrozenStateStore.targetStates.value[target] ?: false
+            if (!frozen && target in _pendingFreezeTargets.value) return@launch
             if (!frozen) {
-                _pendingFreezePackages.value = _pendingFreezePackages.value + pkg
+                _pendingFreezeTargets.value = _pendingFreezeTargets.value + target
             }
-            val result = if (frozen) freezeUseCase.unfreezeApp(pkg)
-            else freezeUseCase.freezeApp(pkg)
+            val result = if (frozen) freezeUseCase.unfreezeApp(target)
+            else freezeUseCase.freezeApp(target)
             result.onSuccess {
-                FrozenStateStore.applyCommandResult(pkg, frozen = !frozen)
+                FrozenStateStore.applyCommandResult(target, frozen = !frozen)
                 if (!frozen) {
-                    _pendingFreezePackages.value = _pendingFreezePackages.value - pkg
+                    _pendingFreezeTargets.value = _pendingFreezeTargets.value - target
                 }
                 refreshFrozenStates()
                 HapticController.vibrate(context, HapticType.FREEZE_LOCK)
                 // 冻结/解冻成功提示与智能清理统一使用系统 Toast
-                val name = _labels.value[pkg] ?: pkg
+                val name = _labels.value[target] ?: target.packageName.value
                 toast(if (frozen) "已启用：$name" else "已停用：$name")
             }.onFailure {
                 if (!frozen) {
-                    _pendingFreezePackages.value = _pendingFreezePackages.value - pkg
+                    _pendingFreezeTargets.value = _pendingFreezeTargets.value - target
                 }
                 showMessage("操作失败：${it.message}")
             }
@@ -368,26 +391,28 @@ class HomeViewModel(
     }
 
     /** 移除应用：先解冻再移出列表（设计文档 §3.4「解冻并移出」） */
-    fun removeApp(pkg: String) {
+    fun removeApp(target: AppTarget) {
         viewModelScope.launch {
-            freezeUseCase.unfreezeApp(pkg)
+            freezeUseCase.unfreezeApp(target)
+                .onSuccess {
+                    gridRepository.removeTarget(target)
+                    refreshFrozenStates()
+                    // 移除成功提示（含应用名）
+                    val name = _labels.value[target] ?: target.packageName.value
+                    showMessage("已移除并解冻：$name")
+                }
                 .onFailure { showMessage("解冻失败：${it.message}") }
-            gridRepository.removeApp(pkg)
-            refreshFrozenStates()
-            // 移除成功提示（含应用名）
-            val name = _labels.value[pkg] ?: pkg
-            showMessage("已移除并解冻：$name")
         }
     }
 
     /** ⚠️ 安全特例：移除并卸载（用户明确选择+二次确认后调用） */
-    fun uninstallApp(pkg: String) {
+    fun uninstallApp(target: AppTarget) {
         viewModelScope.launch {
-            freezeUseCase.uninstallApp(pkg)
+            freezeUseCase.uninstallApp(target)
                 .onSuccess {
-                    gridRepository.removeApp(pkg)
+                    gridRepository.removeTarget(target)
                     refreshFrozenStates()
-                    showMessage("已卸载并移除：$pkg")
+                    showMessage("已卸载并移除：${target.packageName.value}")
                 }
                 .onFailure { showMessage("卸载失败：${it.message}") }
         }
@@ -403,12 +428,12 @@ class HomeViewModel(
             return
         }
         viewModelScope.launch {
-            freezeUseCase.quickClean()
-                .onSuccess { n ->
+            freezeUseCase.quickCleanTargets()
+                .onSuccess { targets ->
                     refreshFrozenStates()
                     HapticController.vibrate(context, HapticType.BATCH)
                     // 批量结果用系统 Toast（Snackbar 在底部易被忽略）
-                    toast("智能清理：已停用 $n 个应用")
+                    toast("智能清理：已停用 ${targets.size} 个应用")
                 }
                 .onFailure { toast("智能清理失败：${it.message ?: "Shizuku 未运行或未授权"}") }
         }
@@ -418,7 +443,7 @@ class HomeViewModel(
     fun unfreezeAll() {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
-            freezeUseCase.unfreezeAll()
+            freezeUseCase.unfreezeAllTargets()
                 .onSuccess {
                     n ->
                     refreshFrozenStates()
@@ -433,7 +458,7 @@ class HomeViewModel(
     fun freezeAll() {
         if (com.nbljsbdk.snowhide.data.repo.BatchProgress.active) return // 批量进行中防重复
         viewModelScope.launch {
-            freezeUseCase.freezeAll(onlyFolderId = null, exceptLocked = false)
+            freezeUseCase.freezeAllTargets(onlyFolderId = null, exceptLocked = false)
                 .onSuccess {
                     n ->
                     refreshFrozenStates()
@@ -452,7 +477,7 @@ class HomeViewModel(
     /** 目录级批量：停用某文件夹内全部应用（文件夹长按菜单「停用目录」） */
     fun freezeFolder(folder: Folder) {
         viewModelScope.launch {
-            freezeUseCase.freezeAll(onlyFolderId = folder.id)
+            freezeUseCase.freezeAllTargets(onlyFolderId = folder.id)
                 .onSuccess {
                     n ->
                     refreshFrozenStates()
@@ -468,40 +493,54 @@ class HomeViewModel(
         viewModelScope.launch {
             val members = gridRepository.folderApps.value
                 .filter { it.folderId == folder.id }
-                .map { it.pkg }
-            var success = 0
-            var failures = 0
-            members.forEach { pkg ->
-                freezeUseCase.unfreezeApp(pkg)
-                    .onSuccess { success++ }
-                    .onFailure { failures++ }
-            }
-            refreshFrozenStates()
-            if (failures == 0) {
-                HapticController.vibrate(context, HapticType.BATCH)
-                toast("已启用目录「${folder.name}」（$success 个）")
-            } else {
-                showMessage("已启用目录「${folder.name}」（成功 $success 个，失败 $failures 个）")
-            }
+                .mapNotNull { it.appTarget }
+            freezeUseCase.unfreezeTargets(members)
+                .onSuccess { success ->
+                    refreshFrozenStates()
+                    HapticController.vibrate(context, HapticType.BATCH)
+                    toast("已启用目录「${folder.name}」（$success 个）")
+                }
+                .onFailure { showMessage("启用目录失败：${it.message}") }
         }
     }
 
     /** 打开应用（已冻结则临时解冻并启动） */
-    fun openApp(pkg: String) {
+    fun openApp(target: AppTarget) {
         viewModelScope.launch {
-            if (com.nbljsbdk.snowhide.data.repo.FrozenStateStore.states.value[pkg] == true) {
-                freezeUseCase.unfreezeApp(pkg)
+            if (FrozenStateStore.targetStates.value[target] == true) {
+                freezeUseCase.unfreezeApp(target)
                     .onSuccess { refreshFrozenStates() }
                     .onFailure { showMessage("临时解冻失败：${it.message}"); return@launch }
             }
-            val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-            if (intent != null) {
-                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
+            if (target.isPrimaryUser) {
+                val intent = context.packageManager.getLaunchIntentForPackage(target.packageName.value)
+                if (intent != null) {
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                } else {
+                    showMessage("应用无启动入口")
+                }
+                return@launch
+            }
+            val launcherApps = context.getSystemService(LauncherApps::class.java)
+            // UserHandle 在当前 SDK 只公开按 uid 获取的工厂；Android 的 uid
+            // 用户段固定为 100000，因此取该用户段的起始 uid。
+            val user = UserHandle.getUserHandleForUid(target.userId * USER_ID_RANGE)
+            val activity = runCatching {
+                launcherApps?.getActivityList(target.packageName.value, user)?.firstOrNull()
+            }.getOrNull()
+            if (launcherApps != null && activity != null) {
+                runCatching {
+                    launcherApps.startMainActivity(activity.componentName, user, null, null)
+                }.onFailure { showMessage("无法从雪藏启动分身：${it.message}") }
             } else {
-                showMessage("应用无启动入口")
+                showMessage("分身应用无可用启动入口")
             }
         }
+    }
+
+    private companion object {
+        private const val USER_ID_RANGE = 100_000
     }
 
     // ═══════════════════════════════════════

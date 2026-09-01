@@ -1,12 +1,14 @@
 package com.nbljsbdk.snowhide.domain.organize
 
+import com.nbljsbdk.snowhide.core.model.AppTarget
+
 /** 整理目录的纯状态转移意图。结构写入仍由 feature ViewModel 委托 Repository。 */
 sealed interface OrganizeIntent {
     data class Enter(val folderId: Long?, val folderName: String? = null) : OrganizeIntent
     data class TapHomeApp(val app: OrganizeAppRef) : OrganizeIntent
     data class TapFolder(val folderId: Long, val folderName: String) : OrganizeIntent
-    data class TapFolderApp(val pkg: String) : OrganizeIntent
-    data class MoveDownCompleted(val pkg: String) : OrganizeIntent
+    data class TapFolderApp(val pkg: String, val userId: Int = AppTarget.PRIMARY_USER_ID) : OrganizeIntent
+    data class MoveDownCompleted(val pkg: String, val userId: Int = AppTarget.PRIMARY_USER_ID) : OrganizeIntent
     data object MoveUpCompleted : OrganizeIntent
     data class FolderCreated(val folderId: Long, val folderName: String) : OrganizeIntent
     data object FolderDeleted : OrganizeIntent
@@ -51,6 +53,7 @@ object OrganizeReducer {
         is OrganizeIntent.TapFolderApp -> when (state) {
             is OrganizeState.FolderSelected -> state.copy(
                 subFolderAppPkg = intent.pkg,
+                subFolderAppTarget = AppTarget.create(intent.pkg, intent.userId).getOrNull(),
                 subHomeApp = null,
                 focus = SelectionFocus.FOLDER_APP,
             )
@@ -61,6 +64,7 @@ object OrganizeReducer {
             is OrganizeState.FolderSelected -> state.copy(
                 subHomeApp = null,
                 subFolderAppPkg = intent.pkg,
+                subFolderAppTarget = AppTarget.create(intent.pkg, intent.userId).getOrNull(),
                 focus = SelectionFocus.FOLDER_APP,
             )
             else -> state
@@ -69,6 +73,7 @@ object OrganizeReducer {
         OrganizeIntent.MoveUpCompleted -> when (state) {
             is OrganizeState.FolderSelected -> state.copy(
                 subFolderAppPkg = null,
+                subFolderAppTarget = null,
                 focus = SelectionFocus.FOLDER,
             )
             else -> state

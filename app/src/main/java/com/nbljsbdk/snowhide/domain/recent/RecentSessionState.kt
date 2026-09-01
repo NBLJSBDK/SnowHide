@@ -1,5 +1,7 @@
 package com.nbljsbdk.snowhide.domain.recent
 
+import com.nbljsbdk.snowhide.core.model.AppTarget
+
 /** Recent 解析器提供的纯快照事实。 */
 data class RecentAccessibilitySnapshot(
     val packages: Set<String>,
@@ -14,7 +16,7 @@ data class AccessibilitySnapshotUpdate(
 
 data class TaskSnapshotUpdate(
     val state: RecentSessionState,
-    val removed: Set<String>,
+    val removed: Set<AppTarget>,
     val baselineEstablished: Boolean,
 )
 
@@ -32,7 +34,7 @@ data class RecentSessionState(
     val lastRecentAt: Long = 0L,
     val emptySnapshotStreak: Int = 0,
     val calibrationMode: Boolean = false,
-    val taskSnapshot: Set<String> = emptySet(),
+    val taskSnapshot: Set<AppTarget> = emptySet(),
     val taskSnapshotInitialized: Boolean = false,
     val generation: Long = 0L,
 ) {
@@ -87,13 +89,13 @@ data class RecentSessionState(
     }
 
     fun initializeOrDiffTaskSnapshot(
-        packages: Set<String>,
+        targets: Set<AppTarget>,
         now: Long,
     ): TaskSnapshotUpdate {
         if (!taskSnapshotInitialized) {
             return TaskSnapshotUpdate(
                 state = copy(
-                    taskSnapshot = packages,
+                    taskSnapshot = targets,
                     taskSnapshotInitialized = true,
                 ),
                 removed = emptySet(),
@@ -101,12 +103,11 @@ data class RecentSessionState(
             )
         }
         return TaskSnapshotUpdate(
-            state = copy(
-                taskSnapshot = packages,
-                recentPackages = packages,
+                state = copy(
+                taskSnapshot = targets,
                 lastRecentAt = now,
             ),
-            removed = taskSnapshot - packages,
+            removed = taskSnapshot - targets,
             baselineEstablished = false,
         )
     }
