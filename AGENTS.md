@@ -71,7 +71,7 @@ This file is the single source of truth for resuming work in a fresh conversatio
   - 主屏幕混排宫格（应用+文件夹交错，透明壁纸背景）
   - 文件夹全屏打开（二级封顶不嵌套），左右滑动在主屏⇄文件夹间**循环**切换
   - 底部图标栏 = 已添加且解冻的应用（长按锁定、上划冻结、最右快速清理）
-  - 齿轮二级菜单 8 项（增加应用/移除应用/整理目录/启用全部/停用全部/快速启停/更多选项/关于）
+  - 齿轮二级菜单 7 项（整理目录/增删应用/启用全部/停用全部/快速启停/更多选项/关于）；应用分身并入增删应用左栏模式
 - **数据**：SharedPreferences + JSON（数据规模小，不用 Room——与设计文档 §4 的 Room 方案有出入，P0 拍板用 SP+JSON，以后数据量大再迁移）。
 
 ---
@@ -87,7 +87,8 @@ gradlew.bat assembleRelease
 /mnt/c/Windows/System32/cmd.exe /c "cd /d D:\GitHub\Android\SnowHide && build_release.bat"
 ```
 
-- 项目根有 `build_debug.bat` / `build_release.bat`（设置 `JAVA_HOME=jdk-17.0.5` 后调用 gradlew.bat）。
+- 项目根有 `build_debug.bat` / `build_release.bat`（设置 `JAVA_HOME=C:\Program Files\Java\jdk-17.0.5` 后调用 gradlew.bat）。
+- Windows/WSL 环境变更先阅读 `/home/wywy521/temp/环境变化说明.txt`；全局 Java 22 不改变 Android 构建固定使用 JDK 17 的规则。
 - **不要在 WSL 直接 `./gradlew`**（Windows java 读不了 `/mnt/d` 路径）。
 - 输出：`app/build/outputs/apk/debug/app-debug.apk` / `release/app-release.apk`。
 - 签名配置在 `local.properties`（gitignored）：`RELEASE_STORE_FILE`、`RELEASE_STORE_PASSWORD`、`RELEASE_ALIAS`、`RELEASE_KEY_PASSWORD`（MediaSync 同款）。
@@ -109,6 +110,7 @@ gradlew.bat assembleRelease
 
 - **`versionCode` 永远 = 1**（HARD RULE）：覆盖安装生命线，任何改动都是 bug；只有 `versionName` 可变。
 - `versionName` = 语义版本（当前正式版 `0.4.2`，上一正式版 `0.4.1`）；编译时间由 gradle 单独生成并展示，不能把编译时间混入版本号。
+- 当前开发目标版本为 `5.0`，开发阶段使用 `versionName = "5.0-dev"`；正式版本号和 `VersionHistory.kt` 在发布存档阶段再更新。
 - **开发版号**：开发阶段使用正式目标版本加 `-dev` 后缀，例如 `0.3.3-dev`；反复修改和重新编译可递增为 `0.3.3-dev.1`、`0.3.3-dev.2`，正式发布时去掉后缀恢复为 `0.3.3`。开发版号只用于区分安装包，不创建正式 Tag 或正式版本历史记录。
 - **Debug 变体**：`applicationIdSuffix = ".debug"` + `versionNameSuffix = "-debug"` + 应用名「雪藏D」（`app/src/debug/res/values/strings.xml` 覆盖）。
 - 覆盖安装要求同签名；debug/release 包名不同 = 两个独立 App 共存。
@@ -162,15 +164,20 @@ app/                  ★组合根
 core/                  ★核心抽象（P0 就位，扩展点全在这）
   engine/
     Engine.kt          — PowerEngine 接口（宪法，永不改签名；新能力=默认实现返回失败）
+    TargetedPowerEngine.kt — 按具体用户空间查询和冻结/解冻的可选能力
     EngineManager.kt   — 注册表 + 探测 + StateFlow（UI 注册表驱动渲染）
     impl/ShizukuEngineImpl.kt — P0 实现：Shizuku UserService 执行 pm 命令
     impl/RootEngineImpl.kt / DoEngineImpl.kt — 空壳（P3/P2）
     registry/EngineRegistry.kt — 唯一知道「有哪些引擎」的文件（加引擎=这里一行）
+  model/AppTarget.kt / UserProfile.kt — 包名+用户空间目标和用户信息模型
+  operation/PmQuery.kt / PmOutputParser.kt — 受控用户空间查询和输出解析
   mode/
     FreezeMode.kt      — 枚举（isImplemented 标志，未开放灰显）
     FreezeExecutor.kt  — 引擎×模式分发
   feedback/
     HapticType.kt      — 分场景震动反馈类型
+  accessibility/
+    AccessibilityServiceState.kt — 系统启用状态端口和服务实际连接状态
 
 data/
   model/GridModels.kt  — GridItem / Folder / FolderApp（type/parent 概念见设计文档 §4）
@@ -182,6 +189,7 @@ data/
   repo/QuickToggleRepository.kt — 快速启停成员和 opened 状态
   repo/RecentFreezeQueueRepository.kt — Recent 补执行短队列
   repo/RecentCalibrationRepository.kt — Recent 校准包名/窗口锚点（SP+StateFlow）
+  repo/AppCloneRepository.kt — 应用分身当前用户空间选择（SP+StateFlow）
   prefs/SettingsRepository.kt — 布局/壁纸/开关/图标包（SP 持久化）
 
 domain/
@@ -193,17 +201,23 @@ domain/
   folder/FolderPageSettingsUseCase.kt — 循环、排除和返回主屏设置入口
   settings/AppearanceSettingsUseCase.kt — 外观设置入口
   organize/            — 整理目录状态机与 Reducer
+  appclone/AppCloneUseCase.kt — 用户空间选择、状态查询和目标冻结/解冻
+  accessibility/AccessibilityRequirementUseCase.kt — 无障碍依赖提示规则（不作为冻结门禁）
   appmanage/           — 应用管理冻结规划
   QuickToggleUseCase.kt — 快速启停成员与执行规则
 
 feature/
   home/                — 主屏幕（HomeViewModel + HomeScreen + 宫格设置浮框）
-  folder/ organize/ appmanage/ settings/ about/ — 主功能页；划卡停用与版本历史在 settings/about
+    appmanage/           — user 0 与非 user 0 目标增删应用；左栏可切换已有分身
+  folder/ organize/ settings/ about/ — 主功能页；划卡停用与版本历史在 settings/about
 
 service/               — 锁屏清理与 Recent 划卡停用；未来扩展 tile
   LockCleanAccessibilityService.kt — 唯一无障碍服务入口
   RecentSwipeController.kt — Recent 会话快照、校准、差异和即时冻结
   RecentTaskParser.kt — Recent 无障碍节点解析
+
+platform/
+  accessibility/AndroidAccessibilityServiceSettingsReader.kt — 读取系统无障碍启用状态
 
 ui/
   util/AppIconLoader.kt — 图标包协议 + 系统回退 + 缓存
@@ -342,18 +356,32 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 - v0.4.1：美化设置新增四档动画速度；统一控制主屏/文件夹导航、重进主屏、搜索回主屏、Dock 回弹和冻结滤镜等显式动画；关闭时瞬时切换；备份兼容旧动画开关并补充回归测试
 - v0.4.2：修复 Dock 上划拖动帧排队导致的不跟手；释放后立即隐藏目标图标，失败恢复、成功即时更新共享状态并后台校准；增加重复冻结请求保护
 
-**未完成（候选下一步）**：
-1. 应用分身（pm --user 分用户冻结）
-2. P1：休眠模式（pm suspend）
-3. P1：壁纸图片选择器和图片背景实际渲染
-4. 锁屏自动清理例外目录（锁定应用豁免已完成）
-5. P2：固定桌面快捷方式（requestPinShortcut 接口已留；动态快捷方式已完成）
-6. P2：Device Owner / Dhizuku 引擎
-7. P3：root 引擎
-8. P2/P3：禁用/隐藏模式及多引擎身份一致性
-9. 应用桥（已完成调研，优先级最后）
-10. 批量停用/启用耗时和卡顿：Dock 单个上划拖动与即时反馈已在 v0.4.2 修复；批量操作仍需在不改变逐包进度、安全边界和 Binder IO 线程规则的前提下测量并优化
-11. 批量进度条的 Edge-to-Edge/挖孔适配：复现顶部摄像头区域黑边，以及横屏时摄像头区域与宫格栏颜色不一致
+**当前开发阶段（`5.0-dev`，2026-08-30）**：
+- 应用分身已并入「增删应用」：顶栏复选框只切换左栏数据源，按现有非 user 0 用户空间读取用户/系统应用和冻结状态；右滑将完整 `AppTarget` 加入右栏及主屏 Grid/文件夹体系，“应用”再按目标执行冻结，绝不回退 user 0。最终 Release 已覆盖安装，复选框、user 999 识别、用户/系统过滤、目标命令和 user 0 右栏隔离已通过真机验证。Recent 通过 shell `dumpsys activity recents` 保留任务 `userId`；缺少或无法唯一匹配用户空间时拒绝目标，不投影到 user 0。
+- 主屏搜索框已补左侧间距；当划卡停用或锁屏清理已选中、但无障碍未启用或宽限期后仍未连接时，主屏显示引导卡，基础冻结、宫格和 Dock 不受影响。
+- `pm list users` flags 按 Android 十六进制协议解析；分身目标命令在 UseCase 内串行排队，连续右滑不会静默丢操作。
+- 所有冻结/解冻命令和冻结状态查询均显式指定用户空间；Recent 队列保存 `AppTarget`，状态刷新不会用旧查询结果覆盖刚完成的命令。
+
+> P1/P2/P3 是当时制定的开发规划；现在根据开发进度和实际需求调整开发顺序，以下顺序为当前实际优先级。
+
+**未完成（按当前实际优先级）**：
+1. 应用分身（最高优先级）：代码、JVM 测试、Android Test 编译、Release 构建/安装及只读 UI 验证已完成，当前只待实际目标冻结真机验收。
+2. 批量停用/启用性能优化：Dock 单个上划拖动与即时反馈已在 v0.4.2 修复；仅优化批量操作，并保持逐包进度、安全边界和 Binder IO 线程规则。
+3. 批量进度条的挖孔、Edge-to-Edge 和横屏适配：处理顶部摄像头区域黑边，以及横屏时该区域与宫格栏颜色不一致。
+4. 锁屏自动清理例外目录（锁定应用豁免已完成）。
+
+**低优先级（当前用不到，后续再做）**：
+5. P1：休眠模式（`pm suspend`）。
+6. P1：壁纸图片选择器和图片背景实际渲染。
+7. P2：固定桌面快捷方式（`requestPinShortcut` 接口已留；动态快捷方式已完成）。
+8. P2：Device Owner / Dhizuku 引擎。
+9. P3：root 引擎。
+10. P2/P3：禁用/隐藏模式及多引擎身份一致性。
+11. 应用桥（已完成调研，低优先级）。
+12. 设置页整体视觉美化。
+
+**最后处理（低影响问题）**：
+- 只在超超超快速左右滑动时会触发交界处闪回；影响较小，战略性撤退，最后修复。
 
 **当前正式版（`0.4.2`，已完成 Release 编译、安装和用户确认）**：
 - Dock 上划拖动直接更新位移，不再为每个触摸事件启动协程；使用图层变换保持拖动跟手。
@@ -365,13 +393,16 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 1. **debug 包比 release 卡**：debug 无 R8 优化 + debuggable，大列表渲染差异明显——日常使用 release（正常）。
 2. **图标包覆盖不全**：未收录的应用回退系统图标（可配合「图标形状=圆形」统一视觉）。
-3. **Android instrumentation 已通过**：`connectedDebugAndroidTest` 在 RMX3888（Android 14）运行 6 个测试全部通过；测试使用独立 debug 包。
-4. **应用桥**：功能已研究清楚（黑白门 3.3.3 反编译实证），优先级最后；快速启停一定程度替代它。
+3. **Android instrumentation**：此前 `connectedDebugAndroidTest` 在 RMX3888（Android 14）运行 6 个测试全部通过；最近一次重跑在启动阶段超时，当前不作为待办，之后再处理。
+4. **应用桥**：功能已研究清楚（黑白门 3.3.3 反编译实证），当前用不到，低优先级；快速启停一定程度替代它。
 5. **调试日志已清空**：以后加日志用 `BuildConfig.DEBUG` 门控。
-6. **应用分身规格尚未细化**：正式实施前需补充用户空间选择、状态查询、数据模型和跨用户安全规则。
-7. **设置页整体美观待优化**：当前功能卡片层级已按类别整理，视觉协调性留待后期统一处理。
-8. **批量操作性能待调查**：Dock 单个上划拖动与即时反馈已在 v0.4.2 修复；“全部停用/启用”等批量操作仍需先采样 Binder、命令和 UI 等待时间，再决定是否优化。
-9. **挖孔与横屏显示待调查**：批量进度条附近出现摄像头挖孔区域黑边，横屏时该区域与宫格栏颜色不一致；需结合真实设备的 WindowInsets、DisplayCutout 和系统栏策略复现。
+6. **应用分身真机验证待完成**：RMX3888 的最终 Release 已识别运行中的 ColorOS `user 999 (MultiApp)`，复选框、筛选、目标右栏/Grid 和 user 0 隔离需继续复核；当前 user 999 唯一第三方应用已冻结，未擅自修改包状态，仍需用户准备或选择安全目标后验证目标冻结链路。
+7. **跨用户独有应用元数据**：Android 当前用户的 PackageManager 无法直接提供仅存在于其他用户空间的名称、图标和安装时间；此类目标暂以包名和系统图标回退，不为此引入未经验证的隐藏 API。
+8. **设置页整体美观待优化**：当前功能卡片层级已按类别整理，视觉协调性留待后期统一处理。
+9. **批量操作性能待调查（当前第二优先级）**：Dock 单个上划拖动与即时反馈已在 v0.4.2 修复；“全部停用/启用”等批量操作仍需先采样 Binder、命令和 UI 等待时间，再决定是否优化。
+10. **挖孔与横屏显示待调查（当前第三优先级）**：批量进度条附近出现摄像头挖孔区域黑边，横屏时该区域与宫格栏颜色不一致；需结合真实设备的 WindowInsets、DisplayCutout 和系统栏策略复现。
+11. **锁屏自动清理例外目录（当前第四优先级）**：锁定应用豁免已完成，尚需增加例外目录选择和清理候选过滤。
+12. **极高速左右滑动交界处闪回（最后处理）**：只在超超超快速左右滑动时触发，影响较小，当前战略性撤退。
 
 ---
 
@@ -395,7 +426,7 @@ f91a1f6 feat: 快捷方式长条冒泡进度弹窗（逐个 exec 平滑+1）
 
 ## 14. adb usage
 
-- adb 位置：`C:\Users\nbljsbdk\AppData\Local\Android\Sdk\platform-tools\adb.exe`（WSL 全路径调用）。
+- adb 位置：`C:\toolpath\platform-tools\adb.exe`（WSL 对应 `/mnt/c/toolpath/platform-tools/adb.exe`）。
 - **Shizuku 激活固定使用此命令**：`adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh`
 - **纪律**：编译完成后 agent 可自动执行 `adb install -r` 覆盖安装验证 APK（不清除应用数据）；卸载、清数据和修改设备包管理器状态等危险操作仍须先征得用户同意。
 - 无线调试：配对端口 ≠ 连接端口（动态）；offline 用 `kill-server` 清除；多设备加 `-s <ip:port>`。
@@ -565,7 +596,7 @@ feature  ✕→ ShizukuEngineImpl / RootEngineImpl 等具体实现
 - parser 负责识别，snapshot provider 负责事实，domain 负责差异和策略，controller 负责时序。
 - 新增 `domain/recent/RecentSessionState.kt`，先抽纯 Kotlin 状态，不先搬 Android Handler。
 - 新增 `domain/recent/RecentSwipeUseCase.kt`，逐步收回候选过滤、锁定判断、队列和逐包冻结。
-- `RecentFreezeQueueRepository` 继续只保存包名短队列；读写、schema、成功移除和失败保留必须保持安全。
+- `RecentFreezeQueueRepository` 保存带 `userId` 的短目标队列；读写、schema、成功移除和失败保留必须保持安全，旧包名-only 队列不得映射到分身。
 - 雪藏自身在候选、任务快照、队列和执行入口全部排除。
 
 **QuickToggle**
