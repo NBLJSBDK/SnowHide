@@ -5,6 +5,7 @@ import com.nbljsbdk.snowhide.domain.organize.OrganizeIntent
 import com.nbljsbdk.snowhide.domain.organize.OrganizeReducer
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
 import com.nbljsbdk.snowhide.domain.organize.SelectionFocus
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -39,5 +40,20 @@ class OrganizeReducerTest {
 
         val afterDelete = OrganizeReducer.reduce(created, OrganizeIntent.FolderDeleted)
         assertEquals(OrganizeState.Empty, afterDelete)
+    }
+
+    @Test
+    fun folderTransitionsKeepCloneUserIdentity() {
+        val app = OrganizeAppRef(7L, "com.example.app", userId = 999)
+        var state: OrganizeState = OrganizeState.Empty
+        state = OrganizeReducer.reduce(state, OrganizeIntent.TapHomeApp(app))
+        state = OrganizeReducer.reduce(state, OrganizeIntent.TapFolder(9L, "工具"))
+        state = OrganizeReducer.reduce(
+            state,
+            OrganizeIntent.MoveDownCompleted(app.pkg, app.userId),
+        )
+
+        val folder = state as OrganizeState.FolderSelected
+        assertEquals(AppTarget.create(app.pkg, 999).getOrThrow(), folder.subFolderAppTarget)
     }
 }

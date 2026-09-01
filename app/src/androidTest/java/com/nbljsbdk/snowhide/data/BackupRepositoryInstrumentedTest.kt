@@ -110,4 +110,26 @@ class BackupRepositoryInstrumentedTest {
         BackupRepository.importBackup(replacement.toString())
         assertEquals(3, settings.getInt("animation_level", -1))
     }
+
+    @Test
+    fun v1ImportAcceptsTargetObjectForQuickToggleMembers() {
+        val settings = context.getSharedPreferences("snowhide_settings", Context.MODE_PRIVATE)
+        settings.edit().clear().commit()
+        val replacement = JSONObject()
+            .put("version", 1)
+            .put(
+                "settings",
+                JSONObject().put(
+                    "quick_toggle_members",
+                    "[{\"pkg\":\"com.example.clone\",\"userId\":999}]",
+                ),
+            )
+
+        BackupRepository.importBackup(replacement.toString())
+
+        assertEquals(
+            "[{\"pkg\":\"com.example.clone\",\"userId\":999}]",
+            settings.getString("quick_toggle_members", null),
+        )
+    }
 }
