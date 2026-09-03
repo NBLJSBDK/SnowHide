@@ -106,6 +106,46 @@ class AppCloneUseCaseTest {
     }
 
     @Test
+    fun refreshFailsWhenSystemPackageQueryFails() = runBlocking {
+        val engine = FakePowerEngine().apply {
+            usersResult = Result.success(listOf(UserProfile(10, "Clone")))
+            installedPackagesByUser[10] = listOf("com.example.system")
+            systemPackagesResultByUser[10] =
+                Result.failure(IllegalStateException("system package query failed"))
+        }
+        val useCase = AppCloneUseCase(
+            FakeEngineProvider(engine),
+            FakeAppCloneSelectionStore(),
+            selfPackageName = "com.nbljsbdk.snowhide",
+        )
+
+        val result = useCase.refresh()
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun refreshDeduplicatesSamePackageReturnedBySystemQueries() = runBlocking {
+        val engine = FakePowerEngine().apply {
+            usersResult = Result.success(listOf(UserProfile(10, "Clone")))
+            installedPackagesByUser[10] = listOf("com.example.app", "com.example.app")
+            frozenPackagesByUser[10] = listOf("com.example.app")
+            systemPackagesByUser[10] = listOf("com.example.app")
+        }
+        val useCase = AppCloneUseCase(
+            FakeEngineProvider(engine),
+            FakeAppCloneSelectionStore(),
+            selfPackageName = "com.nbljsbdk.snowhide",
+        )
+
+        val snapshot = useCase.refresh().getOrThrow()
+
+        assertEquals(listOf("com.example.app"), snapshot.apps.map { it.packageName })
+        assertTrue(snapshot.apps.single().frozen)
+        assertTrue(snapshot.apps.single().isSystem)
+    }
+
+    @Test
     fun consecutiveFreezeRequestsAreQueuedAndAllExecuted() = runBlocking {
         val first = AppTarget.create("com.example.first", 10).getOrThrow()
         val second = AppTarget.create("com.example.second", 10).getOrThrow()

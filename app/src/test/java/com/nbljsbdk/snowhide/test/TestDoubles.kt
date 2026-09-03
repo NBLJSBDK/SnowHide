@@ -23,19 +23,27 @@ class FakePowerEngine : PowerEngine, TargetedPowerEngine {
     var frozenPackagesResult: Result<List<String>> = Result.success(emptyList())
     var frozenResult: Result<Boolean> = Result.success(false)
     var failExec: Boolean = false
+    var execResult: Result<String>? = null
+    var disableResult: Result<Unit>? = null
+    var enableResult: Result<Unit>? = null
     var usersResult: Result<List<UserProfile>> = Result.success(emptyList())
     val installedPackagesByUser = mutableMapOf<Int, List<String>>()
     val frozenPackagesByUser = mutableMapOf<Int, List<String>>()
     val systemPackagesByUser = mutableMapOf<Int, List<String>>()
+    val installedPackagesResultByUser = mutableMapOf<Int, Result<List<String>>>()
+    val frozenPackagesResultByUser = mutableMapOf<Int, Result<List<String>>>()
+    val systemPackagesResultByUser = mutableMapOf<Int, Result<List<String>>>()
     val targetedDisabledTargets = mutableListOf<AppTarget>()
     val targetedEnabledTargets = mutableListOf<AppTarget>()
+    var targetedDisableResult: Result<Unit>? = null
+    var targetedEnableResult: Result<Unit>? = null
     var targetedOperationDelayMs: Long = 0
     var activeTargetedOperations: Int = 0
     var maxConcurrentTargetedOperations: Int = 0
 
     override suspend fun exec(cmd: String): Result<String> {
         executedCommands += cmd
-        return if (failExec) {
+        return execResult ?: if (failExec) {
             Result.failure(IllegalStateException("fake command failure"))
         } else {
             Result.success("")
@@ -44,12 +52,20 @@ class FakePowerEngine : PowerEngine, TargetedPowerEngine {
 
     override suspend fun disableApp(pkg: String): Result<Unit> {
         disabledPackages += pkg
-        return if (failExec) Result.failure(IllegalStateException("fake disable failure")) else Result.success(Unit)
+        return disableResult ?: if (failExec) {
+            Result.failure(IllegalStateException("fake disable failure"))
+        } else {
+            Result.success(Unit)
+        }
     }
 
     override suspend fun enableApp(pkg: String): Result<Unit> {
         enabledPackages += pkg
-        return if (failExec) Result.failure(IllegalStateException("fake enable failure")) else Result.success(Unit)
+        return enableResult ?: if (failExec) {
+            Result.failure(IllegalStateException("fake enable failure"))
+        } else {
+            Result.success(Unit)
+        }
     }
 
     override suspend fun isFrozen(pkg: String): Result<Boolean> = frozenResult
@@ -65,15 +81,34 @@ class FakePowerEngine : PowerEngine, TargetedPowerEngine {
     override suspend fun listUsers(): Result<List<UserProfile>> = usersResult
 
     override suspend fun listInstalledPackages(userId: Int): Result<List<String>> =
-        Result.success(installedPackagesByUser[userId].orEmpty())
+        installedPackagesResultByUser[userId] ?: Result.success(installedPackagesByUser[userId].orEmpty())
 
     override suspend fun listFrozenPackages(userId: Int): Result<List<String>> =
-        Result.success(frozenPackagesByUser[userId].orEmpty())
+        frozenPackagesResultByUser[userId] ?: Result.success(frozenPackagesByUser[userId].orEmpty())
 
     override suspend fun listSystemPackages(userId: Int): Result<List<String>> =
-        Result.success(systemPackagesByUser[userId].orEmpty())
+        systemPackagesResultByUser[userId] ?: Result.success(systemPackagesByUser[userId].orEmpty())
 
-    override suspend fun disableApp(target: AppTarget): Result<Unit> {
+    override suspend fun disableApp(target: AppTarget): Result<Unit> = targetedOperation(
+        target = target,
+        recordedTargets = targetedDisabledTargets,
+        configuredResult = targetedDisableResult,
+        failureMessage = "fake targeted disable failure",
+    )
+
+    override suspend fun enableApp(target: AppTarget): Result<Unit> = targetedOperation(
+        target = target,
+        recordedTargets = targetedEnabledTargets,
+        configuredResult = targetedEnableResult,
+        failureMessage = "fake targeted enable failure",
+    )
+
+    private suspend fun targetedOperation(
+        target: AppTarget,
+        recordedTargets: MutableList<AppTarget>,
+        configuredResult: Result<Unit>?,
+        failureMessage: String,
+    ): Result<Unit> {
         activeTargetedOperations += 1
         maxConcurrentTargetedOperations = maxOf(
             maxConcurrentTargetedOperations,
@@ -81,18 +116,15 @@ class FakePowerEngine : PowerEngine, TargetedPowerEngine {
         )
         return try {
             if (targetedOperationDelayMs > 0) delay(targetedOperationDelayMs)
-            targetedDisabledTargets += target
-            if (failExec) Result.failure(IllegalStateException("fake targeted disable failure"))
-            else Result.success(Unit)
+            recordedTargets += target
+            configuredResult ?: if (failExec) {
+                Result.failure(IllegalStateException(failureMessage))
+            } else {
+                Result.success(Unit)
+            }
         } finally {
             activeTargetedOperations -= 1
         }
-    }
-
-    override suspend fun enableApp(target: AppTarget): Result<Unit> {
-        targetedEnabledTargets += target
-        return if (failExec) Result.failure(IllegalStateException("fake targeted enable failure"))
-        else Result.success(Unit)
     }
 }
 

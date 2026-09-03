@@ -89,6 +89,7 @@ fun AppManageScreen(
     val selectedCloneUserId by viewModel.selectedCloneUserId.collectAsState()
     val cloneLoading by viewModel.cloneLoading.collectAsState()
     val cloneError by viewModel.cloneError.collectAsState()
+    val applying by viewModel.applying.collectAsState()
     val loaded by AppListRepository.loaded.collectAsState()
     val context = LocalContext.current
 
@@ -135,8 +136,8 @@ fun AppManageScreen(
                     // 两按钮：确认=退出；应用=只冻结本次新增且未冻结的应用并退出（长按=说明）
                     TopBarAction("确认", onClick = { onClose() },
                         onLongClick = { dialog = "help-confirm" })
-                    TopBarAction("应用", onClick = { dialog = "apply" },
-                        onLongClick = { dialog = "help-apply" })
+                    TopBarAction("应用", onClick = { if (!applying) dialog = "apply" },
+                        onLongClick = { if (!applying) dialog = "help-apply" })
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -311,9 +312,15 @@ fun AppManageScreen(
                 Text("将冻结本次进入页面后新加入、且当前未冻结的应用并退出。\n（增删即时生效，已有应用不会被处理）")
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.applyAndFreeze(); dialog = null; onClose()
-                }) { Text("确认") }
+                TextButton(
+                    enabled = !applying,
+                    onClick = {
+                        dialog = null
+                        viewModel.applyAndFreeze { result ->
+                            if (result.isSuccess) onClose()
+                        }
+                    },
+                ) { Text("确认") }
             },
             dismissButton = {
                 TextButton(onClick = { dialog = null }) { Text("取消") }

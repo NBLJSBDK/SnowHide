@@ -8,6 +8,8 @@ import com.nbljsbdk.snowhide.test.FakeEngineProvider
 import com.nbljsbdk.snowhide.test.FakeFreezeTargetStore
 import com.nbljsbdk.snowhide.test.FakePowerEngine
 import com.nbljsbdk.snowhide.test.FakeTargetFreezeStore
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -162,6 +164,97 @@ class FreezeUseCaseTest {
 
         assertTrue(useCase.freezeTargets(listOf(target)).isFailure)
         assertTrue(engine.executedCommands.isEmpty())
+    }
+
+    @Test
+    fun targetBatchRejectsInstalledQueryFailureBeforeExecutingAnyCommand() = runBlocking {
+        val target = AppTarget.create("com.example.clone", 999).getOrThrow()
+        val engine = FakePowerEngine().apply {
+            usersResult = Result.success(listOf(UserProfile(999, "MultiApp")))
+            installedPackagesResultByUser[999] =
+                Result.failure(IllegalStateException("installed query failed"))
+        }
+        val provider = FakeEngineProvider(engine)
+        val useCase = FreezeUseCase(
+            FreezeExecutor(provider),
+            FakeTargetFreezeStore(setOf(target)),
+            provider,
+        )
+
+        assertTrue(useCase.freezeTargets(listOf(target)).isFailure)
+        assertTrue(engine.executedCommands.isEmpty())
+        assertTrue(engine.targetedDisabledTargets.isEmpty())
+    }
+
+    @Test
+    fun targetUnfreezePropagatesEnableFailure() = runBlocking {
+        val target = AppTarget.create("com.example.clone", 999).getOrThrow()
+        val engine = FakePowerEngine().apply {
+            usersResult = Result.success(listOf(UserProfile(999, "MultiApp")))
+            installedPackagesByUser[999] = listOf(target.packageName.value)
+            targetedEnableResult = Result.failure(IllegalStateException("permission denied"))
+        }
+        val provider = FakeEngineProvider(engine)
+        val useCase = FreezeUseCase(
+            FreezeExecutor(provider),
+            FakeTargetFreezeStore(setOf(target)),
+            provider,
+        )
+
+        val result = useCase.unfreezeApp(target)
+
+        assertTrue(result.isFailure)
+        assertEquals(listOf(target), engine.targetedEnabledTargets)
+    }
+
+    @Test
+    fun targetUnfreezeRejectsMissingPackageWithoutEnabling() = runBlocking {
+        val target = AppTarget.create("com.example.missing", 999).getOrThrow()
+        val engine = FakePowerEngine().apply {
+            usersResult = Result.success(listOf(UserProfile(999, "MultiApp")))
+            installedPackagesByUser[999] = emptyList()
+        }
+        val provider = FakeEngineProvider(engine)
+        val useCase = FreezeUseCase(
+            FreezeExecutor(provider),
+            FakeTargetFreezeStore(setOf(target)),
+            provider,
+        )
+
+        val result = useCase.unfreezeApp(target)
+
+        assertTrue(result.isFailure)
+        assertTrue(engine.targetedEnabledTargets.isEmpty())
+    }
+
+    @Test
+    fun targetEnableAndDisableRequestsAreSerialized() = runBlocking {
+        val first = AppTarget.create("com.example.first", 999).getOrThrow()
+        val second = AppTarget.create("com.example.second", 999).getOrThrow()
+        val engine = FakePowerEngine().apply {
+            usersResult = Result.success(listOf(UserProfile(999, "MultiApp")))
+            installedPackagesByUser[999] = listOf(
+                first.packageName.value,
+                second.packageName.value,
+            )
+            targetedOperationDelayMs = 20
+        }
+        val provider = FakeEngineProvider(engine)
+        val useCase = FreezeUseCase(
+            FreezeExecutor(provider),
+            FakeTargetFreezeStore(setOf(first, second)),
+            provider,
+        )
+
+        val results = listOf(
+            async { useCase.freezeApp(first) },
+            async { useCase.unfreezeApp(second) },
+        ).awaitAll()
+
+        assertTrue(results.all { it.isSuccess })
+        assertEquals(listOf(first), engine.targetedDisabledTargets)
+        assertEquals(listOf(second), engine.targetedEnabledTargets)
+        assertEquals(1, engine.maxConcurrentTargetedOperations)
     }
 
     @Test

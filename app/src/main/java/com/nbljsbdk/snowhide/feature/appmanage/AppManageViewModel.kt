@@ -15,6 +15,7 @@ import com.nbljsbdk.snowhide.domain.FreezeUseCase
 import com.nbljsbdk.snowhide.domain.appclone.AppCloneSnapshot
 import com.nbljsbdk.snowhide.domain.appclone.AppCloneUseCase
 import com.nbljsbdk.snowhide.domain.appclone.AppCloneUser
+import com.nbljsbdk.snowhide.domain.appmanage.AppManageFilterPolicy
 import com.nbljsbdk.snowhide.domain.appmanage.AppManageFreezePlanner
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +57,9 @@ class AppManageViewModel(
 
     private val context get() = getApplication<Application>()
     private var initialTargets: Set<AppTarget>? = null
+    private var sessionGeneration = 0L
+    private var applyJob: Job? = null
+    private var applyingGeneration: Long? = null
 
     class Factory(
         private val application: Application,
@@ -97,6 +101,9 @@ class AppManageViewModel(
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _applying = MutableStateFlow(false)
+    val applying: StateFlow<Boolean> = _applying.asStateFlow()
 
     fun consumeMessage() {
         _message.value = null
@@ -248,11 +255,12 @@ class AppManageViewModel(
         }
     }
 
-    private fun systemOk(isSystem: Boolean, filter: Filter): Boolean = when {
-        !filter.systemUnlocked -> !isSystem
-        filter.showSystemOnly -> isSystem
-        else -> !isSystem
-    }
+    private fun systemOk(isSystem: Boolean, filter: Filter): Boolean =
+        AppManageFilterPolicy.allowsSystemApp(
+            isSystem = isSystem,
+            systemUnlocked = filter.systemUnlocked,
+            showSystemOnly = filter.showSystemOnly,
+        )
 
     private fun queryOk(item: AppManageItem, query: String): Boolean =
         query.isEmpty() || item.label.contains(query, ignoreCase = true) ||
@@ -325,6 +333,7 @@ class AppManageViewModel(
 
     /** 每次进入增删页建立本体和分身的完整目标基线。 */
     fun beginSession() {
+        sessionGeneration++
         initialTargets = GridRepository.allAddedTargets().toSet()
         _cloneMode.value = false
         _filter.update { it.copy(query = "") }
@@ -368,22 +377,58 @@ class AppManageViewModel(
         }
     }
 
-    /** “应用”：只冻结本次进入页面后新增、且当前未冻结的目标。 */
-    fun applyAndFreeze() {
-        viewModelScope.launch {
-            val initial = initialTargets ?: return@launch
-            val targets = AppManageFreezePlanner.newlyAddedUnfrozenTargets(
-                initialTargets = initial,
-                currentTargets = GridRepository.allAddedTargets(),
-                frozenStates = FrozenStateStore.targetStates.value,
-            )
-            freezeUseCase.freezeTargets(targets)
-                .onSuccess {
+    /**
+     * “应用”：只冻结本次进入页面后新增、且当前状态明确为 ACTIVE 的目标。
+     *
+     * baseline 和 generation 必须在启动协程前捕获，避免旧页面的协程读取新会话。
+     * 结果通过回调交给 UI；失败时保留页面，由 message/Snackbar 展示原因。
+     */
+    fun applyAndFreeze(onResult: (Result<Int>) -> Unit = {}) {
+        val initial = initialTargets
+        val generation = sessionGeneration
+        if (applyingGeneration != null || applyJob?.isActive == true) return
+        if (initial == null) {
+            val result = Result.failure<Int>(IllegalStateException("应用管理会话未开始"))
+            _message.value = "冻结失败：${result.exceptionOrNull()?.message ?: "操作失败"}"
+            onResult(result)
+            return
+        }
+
+        applyingGeneration = generation
+        _applying.value = true
+        applyJob = viewModelScope.launch {
+            try {
+                if (generation != sessionGeneration) return@launch
+
+                var targets = emptyList<AppTarget>()
+                val result = runCatching {
+                    targets = AppManageFreezePlanner.newlyAddedUnfrozenTargets(
+                        initialTargets = initial,
+                        currentTargets = GridRepository.allAddedTargets(),
+                        runtimeStates = FrozenStateStore.targetAppStates.value,
+                    )
+                    freezeUseCase.freezeTargets(targets)
+                }.getOrElse { Result.failure(it) }
+
+                // 页面已重新进入时，旧操作的结果不能驱动新会话退出或显示错误。
+                if (generation != sessionGeneration) return@launch
+
+                result.onSuccess {
                     targets.forEach { target ->
                         FrozenStateStore.applyCommandResult(target, frozen = true)
                     }
                 }
-            FrozenStateStore.refresh()
+                FrozenStateStore.refresh()
+                result.onFailure {
+                    _message.value = "冻结失败：${it.message ?: "操作失败"}"
+                }
+                onResult(result)
+            } finally {
+                if (applyingGeneration == generation) {
+                    applyingGeneration = null
+                    _applying.value = false
+                }
+            }
         }
     }
 
