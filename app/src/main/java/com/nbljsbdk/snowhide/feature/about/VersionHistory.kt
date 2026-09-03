@@ -9,9 +9,9 @@ data class VersionRecord(
 
 val versionHistory = listOf(
     VersionRecord(
-        "v5.0",
+        "v0.5.0",
         "应用分身与多用户隔离",
-        "将应用分身并入增删应用左右栏，按完整 AppTarget（包名 + 用户空间）保存到主屏和文件夹；分身支持用户/系统应用筛选、冻结状态读取、目标校验和串行冻结/解冻。所有 PM 命令和冻结状态查询均显式指定 --user，主应用与分身不再互相影响。Recent 划卡停用通过 dumpsys activity recents 保留任务 userId，缺少用户信息且目标有歧义时拒绝执行；补执行队列保存用户空间身份并清理旧格式队列。增加状态刷新竞态保护、无障碍依赖引导和跨用户回归测试；保持 Backup v1、versionCode=1、Shizuku 执行链和应用数据安全边界不变。",
+        "将应用分身并入增删应用左右栏，按完整 AppTarget（包名 + 用户空间）保存到主屏和文件夹；分身支持用户/系统应用筛选、冻结状态读取、目标校验和串行冻结/解冻。所有 PM 命令和冻结状态查询均显式指定 --user，主应用与分身不再互相影响。Recent 划卡停用通过 dumpsys activity recents 保留任务 userId，缺少用户信息且目标有歧义时拒绝执行；补执行队列保存用户空间身份并清理旧格式队列。增加状态刷新竞态保护、无障碍依赖引导和跨用户回归测试；应用管理新增仅允许明确 ACTIVE 目标进入冻结计划的安全门，未知、缺失或冻结状态不会误执行，失败结果保留在页面并提示；保持 Backup v1、versionCode=1、Shizuku 执行链和应用数据安全边界不变。",
     ),
     VersionRecord(
         "v0.4.2",
