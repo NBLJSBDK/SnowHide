@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +69,13 @@ object AppIconLoader {
         val icon = loadIconPackIcon(pkg) ?: loadSystemIcon(pkg)
         cache[pkg] = icon
         icon
+    }
+
+    /** 给桌面快捷方式复用与宫格相同的图标包图标。 */
+    suspend fun loadShortcutIcon(pkg: String): Bitmap? = withContext(Dispatchers.IO) {
+        runCatching {
+            loadIcon(pkg).asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, true)
+        }.getOrNull()
     }
 
     /** 清空缓存（切换图标包时调用） */

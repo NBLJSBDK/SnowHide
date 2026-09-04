@@ -10,6 +10,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.UserHandle
@@ -20,10 +22,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-/** Android 桌面固定快捷方式适配：系统应用图标 + 雪藏角标。 */
+/** Android 桌面固定快捷方式适配：图标包图标（可回退系统图标）+ 雪藏角标。 */
 class AndroidDesktopShortcutCreator(
     context: Context,
     private val shortcutActivity: Class<out Activity>,
+    private val iconProvider: ShortcutIconProvider,
+    private val iconShapeProvider: () -> String,
 ) : DesktopShortcutCreator {
 
     private val appContext = context.applicationContext
@@ -45,16 +49,18 @@ class AndroidDesktopShortcutCreator(
                 )
             }
 
-            val baseIcon = loadSystemLauncherIcon(target)
+            val baseIcon = loadBaseIcon(target)
                 ?: return@withContext Result.failure(
-                    IllegalStateException("无法读取应用原始图标"),
+                    IllegalStateException("无法读取应用图标"),
                 )
             val snowHideIcon = runCatching {
                 appContext.packageManager.getApplicationIcon(appContext.packageName)
             }.getOrNull() ?: return@withContext Result.failure(
                 IllegalStateException("无法读取雪藏图标"),
             )
-            val icon = runCatching { composeIcon(baseIcon, snowHideIcon) }
+            val icon = runCatching {
+                composeIcon(baseIcon, snowHideIcon, iconShapeProvider())
+            }
                 .getOrElse { error ->
                     return@withContext Result.failure(error)
                 }
@@ -68,7 +74,7 @@ class AndroidDesktopShortcutCreator(
                 ShortcutInfo.Builder(appContext, DesktopShortcutSpec.shortcutId(target))
                     .setShortLabel(DesktopShortcutSpec.shortLabel(target, appLabel))
                     .setLongLabel(displayLabel.take(MAX_LONG_LABEL_LENGTH))
-                    .setIcon(Icon.createWithAdaptiveBitmap(icon))
+                    .setIcon(Icon.createWithBitmap(icon))
                     .setIntent(shortcutIntent)
                     .build()
             } catch (error: Throwable) {
@@ -90,24 +96,66 @@ class AndroidDesktopShortcutCreator(
             )
         }
 
+    /** 图标包优先；分身在自定义图标上继续叠加系统用户徽标。 */
+    private suspend fun loadBaseIcon(target: AppTarget): Drawable? {
+        val customIcon = runCatching { iconProvider.load(target) }
+            .getOrNull()
+            ?.let { BitmapDrawable(appContext.resources, it) }
+        if (customIcon != null) {
+            return if (target.isPrimaryUser) {
+                customIcon
+            } else {
+                runCatching {
+                    appContext.packageManager.getUserBadgedIcon(
+                        customIcon,
+                        UserHandle.getUserHandleForUid(target.userId * USER_ID_RANGE),
+                    )
+                }.getOrDefault(customIcon)
+            }
+        }
+        return loadSystemLauncherIcon(target)
+    }
+
     /** LauncherActivityInfo 能按目标用户空间返回系统桌面感知的图标和分身角标。 */
     private fun loadSystemLauncherIcon(target: AppTarget): Drawable? {
         val user = UserHandle.getUserHandleForUid(target.userId * USER_ID_RANGE)
         val launcherIcon = runCatching {
             appContext.getSystemService(LauncherApps::class.java)
                 ?.getActivityList(target.packageName.value, user)
-                ?.firstOrNull()
-                ?.getBadgedIcon(appContext.resources.displayMetrics.densityDpi)
+            ?.firstOrNull()
+            ?.getBadgedIcon(appContext.resources.displayMetrics.densityDpi)
         }.getOrNull()
-        return launcherIcon ?: runCatching {
-            appContext.packageManager.getApplicationIcon(target.packageName.value)
-        }.getOrNull()
+        if (launcherIcon != null) return launcherIcon
+        if (!target.isPrimaryUser) return null
+        return runCatching { appContext.packageManager.getApplicationIcon(target.packageName.value) }
+            .getOrNull()
     }
 
-    /** 合成固定尺寸图标，给雪藏角标留出安全边距，避免被桌面再次裁剪。 */
-    private fun composeIcon(baseIcon: Drawable, badgeIcon: Drawable): Bitmap {
-        val bitmap = render(baseIcon, ICON_SIZE)
+    /** 合成固定尺寸图标，先按应用图标形状裁剪，再叠加雪藏角标。 */
+    private fun composeIcon(
+        baseIcon: Drawable,
+        badgeIcon: Drawable,
+        iconShape: String,
+    ): Bitmap {
+        val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
+        val clipped = iconShape == "circle"
+        if (clipped) {
+            val circle = Path().apply {
+                addCircle(
+                    ICON_SIZE / 2f,
+                    ICON_SIZE / 2f,
+                    ICON_SIZE / 2f,
+                    Path.Direction.CW,
+                )
+            }
+            canvas.save()
+            canvas.clipPath(circle)
+        }
+        baseIcon.mutate().setBounds(0, 0, ICON_SIZE, ICON_SIZE)
+        baseIcon.draw(canvas)
+        if (clipped) canvas.restore()
+
         val badgeSize = (ICON_SIZE * 0.30f).roundToInt()
         val margin = (ICON_SIZE * 0.045f).roundToInt()
         val center = ICON_SIZE - margin - badgeSize / 2f
@@ -127,13 +175,6 @@ class AndroidDesktopShortcutCreator(
         badgeIcon.draw(canvas)
         return bitmap
     }
-
-    private fun render(drawable: Drawable, size: Int): Bitmap =
-        Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
-            val canvas = Canvas(bitmap)
-            drawable.mutate().setBounds(0, 0, size, size)
-            drawable.draw(canvas)
-        }
 
     private companion object {
         private const val USER_ID_RANGE = 100_000

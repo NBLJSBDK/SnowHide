@@ -20,8 +20,12 @@ import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.domain.appclone.AppCloneUseCase
 import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementUseCase
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutTargetUseCase
 import com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity
 import com.nbljsbdk.snowhide.platform.shortcut.AndroidDesktopShortcutCreator
+import com.nbljsbdk.snowhide.platform.shortcut.ShortcutIconProvider
+import com.nbljsbdk.snowhide.ui.util.AppIconLoader
+import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 
 /**
  * 进程级依赖容器——UseCase 的唯一构造点。
@@ -91,6 +95,22 @@ class AppContainer(
 
     /** 桌面固定快捷方式适配，使用完整 AppTarget 区分主应用和分身。 */
     val desktopShortcutCreator: DesktopShortcutCreator by lazy {
-        AndroidDesktopShortcutCreator(appContext, ShortcutActionActivity::class.java)
+        AndroidDesktopShortcutCreator(
+            appContext,
+            ShortcutActionActivity::class.java,
+            ShortcutIconProvider { target ->
+                AppIconLoader.loadShortcutIcon(target.packageName.value)
+            },
+            iconShapeProvider = { SettingsRepository.iconShape.value },
+        )
+    }
+
+    /** 桌面快捷方式打开策略：复用宫格目标校验和临时解冻行为。 */
+    val desktopShortcutTargetUseCase: DesktopShortcutTargetUseCase by lazy {
+        DesktopShortcutTargetUseCase(
+            targetStore = GridRepository,
+            isFrozen = { target -> FrozenStateStore.targetStates.value[target] == true },
+            unfreeze = { target -> freezeUseCase.unfreezeApp(target) },
+        )
     }
 }

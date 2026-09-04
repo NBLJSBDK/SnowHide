@@ -1,6 +1,7 @@
 package com.nbljsbdk.snowhide.feature.shortcut
 
 import android.os.Bundle
+import android.content.Intent
 import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.activity.compose.setContent
@@ -30,10 +31,10 @@ import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import com.nbljsbdk.snowhide.core.feedback.HapticType
-import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutSpec
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutTargetUseCase
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -54,7 +55,7 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
         val container = CompositionRoot.appContainer(appContext)
 
         if (action == DesktopShortcutSpec.ACTION_OPEN_TARGET) {
-            handleOpenTargetShortcut()
+            handleOpenTargetShortcut(container.desktopShortcutTargetUseCase)
             return
         }
 
@@ -174,8 +175,8 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
         }.start()
     }
 
-    /** 从固定快捷方式启动明确用户空间目标，不自动解冻。 */
-    private fun handleOpenTargetShortcut() {
+    /** 从固定快捷方式启动明确用户空间目标，行为与宫格内点击一致。 */
+    private fun handleOpenTargetShortcut(targetUseCase: DesktopShortcutTargetUseCase) {
         val target = shortcutTarget()
         if (target == null) {
             FeedbackRegistry.notifyFailure("打开快捷方式失败", "快捷方式目标无效")
@@ -183,7 +184,12 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
             return
         }
         Thread {
-            val result = runCatching { launchTarget(target) }
+            val result = runCatching {
+                runBlocking {
+                    targetUseCase.prepareToOpen(target).getOrThrow()
+                }
+                launchTarget(target)
+            }
             runOnUiThread {
                 result.exceptionOrNull()?.let {
                     FeedbackRegistry.notifyFailure(
@@ -204,11 +210,15 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
     }
 
     private fun launchTarget(target: AppTarget) {
-        if (target !in GridRepository.allAddedTargets()) {
-            error("应用已不在雪藏宫格中")
-        }
         if (target.userId > Int.MAX_VALUE / USER_ID_RANGE) {
             error("非法用户空间：${target.userId}")
+        }
+        if (target.isPrimaryUser) {
+            val launchIntent = packageManager.getLaunchIntentForPackage(target.packageName.value)
+                ?: error("应用当前没有可用的启动入口，可能已被冻结")
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launchIntent)
+            return
         }
         val launcherApps = getSystemService(LauncherApps::class.java)
             ?: error("系统不支持按用户空间启动应用")
