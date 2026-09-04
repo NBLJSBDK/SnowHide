@@ -17,6 +17,7 @@ import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
 import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
 import com.nbljsbdk.snowhide.feature.about.AboutRoute
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
@@ -44,6 +45,7 @@ fun AppShell(
     folderPageSettingsUseCase: FolderPageSettingsUseCase,
     appCloneUseCase: AppCloneUseCase,
     accessibilityRequirementUseCase: AccessibilityRequirementUseCase,
+    desktopShortcutCreator: DesktopShortcutCreator,
     homeViewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.Factory(
             LocalContext.current.applicationContext as Application,
@@ -51,6 +53,7 @@ fun AppShell(
             appearanceSettingsUseCase,
             folderPageSettingsUseCase,
             accessibilityRequirementUseCase,
+            desktopShortcutCreator,
         )
     ),
     appManageViewModel: AppManageViewModel = viewModel(

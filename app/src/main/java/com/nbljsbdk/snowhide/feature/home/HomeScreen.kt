@@ -952,8 +952,9 @@ fun HomeContent(
             targetFolder = folders.find { it.id == target.folderId },
             onDismiss = { longPressTarget = null },
              onToggleFreeze = { target -> actions.toggleFreeze(target); longPressTarget = null },
-            onOpen = { target -> handleAppClick(target); longPressTarget = null },
-            onRemove = { target ->
+             onOpen = { target -> handleAppClick(target); longPressTarget = null },
+             onCreateShortcut = { target -> actions.createDesktopShortcut(target); longPressTarget = null },
+             onRemove = { target ->
                 removeAppTarget = target
                 longPressTarget = null
             },
@@ -1653,6 +1654,7 @@ private fun ContextMenu(
     onDismiss: () -> Unit,
     onToggleFreeze: (AppTarget) -> Unit,
     onOpen: (AppTarget) -> Unit,
+    onCreateShortcut: (AppTarget) -> Unit,
     onRemove: (AppTarget) -> Unit,
     onRenameFolder: (Long) -> Unit,
     onDeleteFolder: (Long) -> Unit,
@@ -1696,6 +1698,7 @@ private fun ContextMenu(
                     val target = item.appTarget ?: return@Column
                     DialogAction(if (frozen) "解冻" else "冻结") { onToggleFreeze(target) }
                     DialogAction("打开应用") { onOpen(target) }
+                    DialogAction("创建快捷方式到桌面") { onCreateShortcut(target) }
                     DialogAction("移除应用") { onRemove(target) }
                 }
             }

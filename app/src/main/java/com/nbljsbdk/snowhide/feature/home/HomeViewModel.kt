@@ -32,6 +32,8 @@ import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
 import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
 import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutSpec
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
@@ -56,6 +58,7 @@ class HomeViewModel(
     private val appearanceSettingsUseCase: AppearanceSettingsUseCase,
     private val folderPageSettingsUseCase: FolderPageSettingsUseCase,
     private val accessibilityRequirementUseCase: AccessibilityRequirementUseCase,
+    private val desktopShortcutCreator: DesktopShortcutCreator,
 ) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
@@ -117,6 +120,7 @@ class HomeViewModel(
         private val appearanceSettingsUseCase: AppearanceSettingsUseCase,
         private val folderPageSettingsUseCase: FolderPageSettingsUseCase,
         private val accessibilityRequirementUseCase: AccessibilityRequirementUseCase,
+        private val desktopShortcutCreator: DesktopShortcutCreator,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -127,6 +131,7 @@ class HomeViewModel(
                     appearanceSettingsUseCase,
                     folderPageSettingsUseCase,
                     accessibilityRequirementUseCase,
+                    desktopShortcutCreator,
                 ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
@@ -536,6 +541,25 @@ class HomeViewModel(
             } else {
                 showMessage("分身应用无可用启动入口")
             }
+        }
+    }
+
+    /** 请求系统桌面固定一个宫格目标，不修改目标的冻结状态。 */
+    fun createDesktopShortcut(target: AppTarget) {
+        viewModelScope.launch {
+            if (target !in gridRepository.allAddedTargets()) {
+                showMessage("应用已不在雪藏宫格中")
+                return@launch
+            }
+            val appLabel = _labels.value[target]
+                ?.takeIf { it.isNotBlank() }
+                ?: target.packageName.value
+            desktopShortcutCreator.requestPin(target, appLabel)
+                .onSuccess {
+                    val label = DesktopShortcutSpec.longLabel(target, appLabel)
+                    showMessage("已请求将 $label 固定到桌面，请在系统提示中确认")
+                }
+                .onFailure { showMessage("创建桌面快捷方式失败：${it.message}") }
         }
     }
 

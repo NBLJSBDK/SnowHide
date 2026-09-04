@@ -60,7 +60,7 @@ object CompositionRoot {
             app,
             ComponentName(app, LockCleanAccessibilityService::class.java),
         )
-        container = AppContainer(app.packageName, accessibilitySettingsReader)
+        container = AppContainer(app, app.packageName, accessibilitySettingsReader)
         initialized = true
     }
 

@@ -1,6 +1,8 @@
 package com.nbljsbdk.snowhide.feature.shortcut
 
 import android.os.Bundle
+import android.content.pm.LauncherApps
+import android.os.UserHandle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -25,10 +27,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.nbljsbdk.snowhide.app.CompositionRoot
+import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import com.nbljsbdk.snowhide.core.feedback.HapticType
+import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.BatchProgress
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutSpec
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -47,6 +52,12 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
         val action = intent.action
         val appContext = applicationContext
         val container = CompositionRoot.appContainer(appContext)
+
+        if (action == DesktopShortcutSpec.ACTION_OPEN_TARGET) {
+            handleOpenTargetShortcut()
+            return
+        }
+
         val freezeUseCase = container.freezeUseCase
         val quickToggle = container.quickToggleUseCase
 
@@ -163,11 +174,58 @@ class ShortcutActionActivity : androidx.activity.ComponentActivity() {
         }.start()
     }
 
+    /** 从固定快捷方式启动明确用户空间目标，不自动解冻。 */
+    private fun handleOpenTargetShortcut() {
+        val target = shortcutTarget()
+        if (target == null) {
+            FeedbackRegistry.notifyFailure("打开快捷方式失败", "快捷方式目标无效")
+            finish()
+            return
+        }
+        Thread {
+            val result = runCatching { launchTarget(target) }
+            runOnUiThread {
+                result.exceptionOrNull()?.let {
+                    FeedbackRegistry.notifyFailure(
+                        "打开快捷方式失败",
+                        it.message ?: "目标应用不可用",
+                    )
+                }
+                finish()
+            }
+        }.start()
+    }
+
+    private fun shortcutTarget(): AppTarget? {
+        val packageName = intent.getStringExtra(DesktopShortcutSpec.EXTRA_PACKAGE_NAME)
+        val userId = intent.getIntExtra(DesktopShortcutSpec.EXTRA_USER_ID, INVALID_USER_ID)
+        if (packageName.isNullOrBlank() || userId == INVALID_USER_ID) return null
+        return AppTarget.create(packageName, userId).getOrNull()
+    }
+
+    private fun launchTarget(target: AppTarget) {
+        if (target !in GridRepository.allAddedTargets()) {
+            error("应用已不在雪藏宫格中")
+        }
+        if (target.userId > Int.MAX_VALUE / USER_ID_RANGE) {
+            error("非法用户空间：${target.userId}")
+        }
+        val launcherApps = getSystemService(LauncherApps::class.java)
+            ?: error("系统不支持按用户空间启动应用")
+        val user = UserHandle.getUserHandleForUid(target.userId * USER_ID_RANGE)
+        val activity = launcherApps.getActivityList(target.packageName.value, user).firstOrNull()
+            ?: error("应用当前没有可用的启动入口，可能已被冻结")
+        launcherApps.startMainActivity(activity.componentName, user, null, null)
+    }
+
     companion object {
         const val ACTION_SMART_CLEAN = "com.nbljsbdk.snowhide.shortcut.SMART_CLEAN"
         const val ACTION_FREEZE_ALL = "com.nbljsbdk.snowhide.shortcut.FREEZE_ALL"
         const val ACTION_TOGGLE_QUICK = "com.nbljsbdk.snowhide.shortcut.TOGGLE_QUICK"
         // 第 4 位：临时「启用全部」（用户测试用，后续可替换）
         const val ACTION_ENABLE_ALL = "com.nbljsbdk.snowhide.shortcut.ENABLE_ALL"
+        const val ACTION_OPEN_TARGET = DesktopShortcutSpec.ACTION_OPEN_TARGET
+        private const val INVALID_USER_ID = Int.MIN_VALUE
+        private const val USER_ID_RANGE = 100_000
     }
 }

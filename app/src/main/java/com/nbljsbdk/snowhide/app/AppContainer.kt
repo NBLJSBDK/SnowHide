@@ -1,5 +1,6 @@
 package com.nbljsbdk.snowhide.app
 
+import android.content.Context
 import com.nbljsbdk.snowhide.core.engine.EngineManager
 import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceConnectionState
 import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceSettingsReader
@@ -18,6 +19,9 @@ import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
 import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.domain.appclone.AppCloneUseCase
 import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementUseCase
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
+import com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity
+import com.nbljsbdk.snowhide.platform.shortcut.AndroidDesktopShortcutCreator
 
 /**
  * 进程级依赖容器——UseCase 的唯一构造点。
@@ -26,6 +30,7 @@ import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementUseCas
  * Tile 等 Android 入口只从容器取依赖，禁止在各入口内直接 new UseCase。
  */
 class AppContainer(
+    private val appContext: Context,
     private val appPackageName: String,
     private val accessibilitySettingsReader: AccessibilityServiceSettingsReader,
 ) {
@@ -82,5 +87,10 @@ class AppContainer(
             accessibilitySettingsReader,
             AccessibilityServiceConnectionState,
         )
+    }
+
+    /** 桌面固定快捷方式适配，使用完整 AppTarget 区分主应用和分身。 */
+    val desktopShortcutCreator: DesktopShortcutCreator by lazy {
+        AndroidDesktopShortcutCreator(appContext, ShortcutActionActivity::class.java)
     }
 }

@@ -111,6 +111,7 @@ private class HomeViewModelActions(
     private val viewModel: HomeViewModel,
 ) : HomeActions {
     override fun openApp(target: AppTarget) = viewModel.openApp(target)
+    override fun createDesktopShortcut(target: AppTarget) = viewModel.createDesktopShortcut(target)
     override fun consumeMessage() = viewModel.consumeMessage()
     override fun syncActualStatus(silent: Boolean) = viewModel.syncActualStatus(silent)
     override fun refreshFrozenStates() = viewModel.refreshFrozenStates()

@@ -84,9 +84,10 @@ class MainActivity : ComponentActivity() {
                     recentCalibrationUseCase = appContainer.recentCalibrationUseCase,
                     appearanceSettingsUseCase = appContainer.appearanceSettingsUseCase,
                     folderPageSettingsUseCase = appContainer.folderPageSettingsUseCase,
-                    appCloneUseCase = appContainer.appCloneUseCase,
-                    accessibilityRequirementUseCase = appContainer.accessibilityRequirementUseCase,
-                )
+                     appCloneUseCase = appContainer.appCloneUseCase,
+                     accessibilityRequirementUseCase = appContainer.accessibilityRequirementUseCase,
+                     desktopShortcutCreator = appContainer.desktopShortcutCreator,
+                 )
             }
         }
     }

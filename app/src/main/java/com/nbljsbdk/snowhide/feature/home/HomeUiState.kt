@@ -54,6 +54,7 @@ data class HomeUiState(
 /** HomeContent 的业务回调端口；具体 ViewModel 只在 Route 层出现。 */
 interface HomeActions {
     fun openApp(target: AppTarget)
+    fun createDesktopShortcut(target: AppTarget)
     fun consumeMessage()
     fun syncActualStatus(silent: Boolean = false)
     fun refreshFrozenStates()
