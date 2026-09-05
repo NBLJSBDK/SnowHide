@@ -133,7 +133,11 @@ fun BeautyPanel(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        text = if (iconPack.isEmpty()) "系统默认 ▸" else "$iconPack ▸",
+                        text = if (iconPack.isEmpty()) {
+                            "系统默认 ▸"
+                        } else {
+                            "${iconPacks.firstOrNull { it.pkg == iconPack }?.label ?: iconPack} ▸"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )

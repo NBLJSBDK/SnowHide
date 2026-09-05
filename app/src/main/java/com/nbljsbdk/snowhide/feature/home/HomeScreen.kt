@@ -1467,6 +1467,7 @@ private fun DockBar(
                         target = target,
                         bitmap = bitmap,
                         iconSize = iconSize,
+                        iconShape = iconShape,
                         animationDurationMillis = animationDurationMillis,
                         locked = target in lockedTargets,
                         onClick = { onAppClick(target) },
@@ -1511,6 +1512,7 @@ private fun DockIcon(
     target: AppTarget,
     bitmap: ImageBitmap,
     iconSize: androidx.compose.ui.unit.Dp,
+    iconShape: String,
     animationDurationMillis: Int,
     locked: Boolean,
     onClick: () -> Unit,
@@ -1551,7 +1553,10 @@ private fun DockIcon(
                     alpha = 1f - (offsetY / -maxDrag).coerceIn(0f, 1f) * 0.55f
                 }
                 .size(iconSize)
-                .clip(RoundedCornerShape(iconSize.value * 0.22f))
+                .clip(
+                    if (iconShape == "circle") CircleShape
+                    else RoundedCornerShape(iconSize.value * 0.22f),
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
