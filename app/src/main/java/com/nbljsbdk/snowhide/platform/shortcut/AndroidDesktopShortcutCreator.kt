@@ -16,6 +16,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.UserHandle
 import com.nbljsbdk.snowhide.core.model.AppTarget
+import com.nbljsbdk.snowhide.core.model.CloneBadgePalette
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutSpec
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,11 @@ class AndroidDesktopShortcutCreator(
                     badgeIcon = snowHideIcon,
                     iconShape = iconShapeProvider(),
                     badgeAtTopStart = !target.isPrimaryUser,
+                    badgeAccentColor = if (target.isPrimaryUser) {
+                        null
+                    } else {
+                        CloneBadgePalette.colorFor(target.userId)
+                    },
                 )
             }
                 .getOrElse { error ->
@@ -145,6 +151,7 @@ class AndroidDesktopShortcutCreator(
         badgeIcon: Drawable,
         iconShape: String,
         badgeAtTopStart: Boolean,
+        badgeAccentColor: Int?,
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -176,6 +183,18 @@ class AndroidDesktopShortcutCreator(
             margin + badgeSize / 2f
         } else {
             ICON_SIZE - margin - badgeSize / 2f
+        }
+        if (badgeAccentColor != null) {
+            val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = badgeAccentColor
+                style = Paint.Style.FILL
+            }
+            canvas.drawCircle(
+                centerX,
+                centerY,
+                badgeSize / 2f + margin * 0.45f,
+                accentPaint,
+            )
         }
         val backingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE

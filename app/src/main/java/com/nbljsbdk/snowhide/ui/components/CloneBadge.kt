@@ -17,15 +17,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-
-private val cloneBadgeColors = listOf(
-    Color(0xFFE85D75),
-    Color(0xFFF0A94B),
-    Color(0xFF45C486),
-    Color(0xFF4B9FE3),
-    Color(0xFF8870E8),
-    Color(0xFFE16CB0),
-)
+import com.nbljsbdk.snowhide.core.model.CloneBadgePalette
 
 /**
  * 分身图标角标：保持原图标完整，只在右上角叠加轻量的复制标记。
@@ -43,7 +35,7 @@ fun CloneBadge(
     val badgeSize = (iconSize * 0.30f).coerceAtLeast(if (compact) 8.dp else 12.dp)
     val innerPadding = if (compact) 1.dp else 1.5.dp
     // 用用户空间稳定取色，避免 Compose 重组或应用重启后颜色跳变。
-    val badgeColor = cloneBadgeColors[userId % cloneBadgeColors.size]
+    val badgeColor = Color(CloneBadgePalette.colorFor(userId))
 
     Box(
         modifier = modifier
