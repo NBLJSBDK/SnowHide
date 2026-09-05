@@ -9,6 +9,11 @@ data class VersionRecord(
 
 val versionHistory = listOf(
     VersionRecord(
+        "v0.5.3",
+        "应用分身徽标与快捷方式视觉优化",
+        "将主屏和文件夹中的分身徽标移到右上角，使用按用户空间稳定分配的多彩配色并隐藏内部用户 ID；调整分身桌面快捷方式的雪藏徽标位置，避开系统右下角分身徽标，并为不同分身增加对应颜色外圈。保持 versionCode=1、Backup v1、Shizuku 执行链和应用数据安全边界不变。",
+    ),
+    VersionRecord(
         "v0.5.2",
         "布局默认值与图标显示修复",
         "调整默认布局为主屏图标 48dp、Dock 图标 48dp、操作图标 24dp、上下间距 0、文件夹预览 2×2；修复 Dock 图标未遵循圆形设置的问题，未被图标包覆盖的图标也按选定形状裁剪；修复美化设置将图标包包名显示为摘要的问题，改为显示图标包名称。保持 versionCode=1、Backup v1、Shizuku 执行链和应用数据安全边界不变。",
