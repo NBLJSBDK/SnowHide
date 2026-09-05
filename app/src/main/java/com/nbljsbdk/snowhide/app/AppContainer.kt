@@ -20,9 +20,12 @@ import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.domain.appclone.AppCloneUseCase
 import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementUseCase
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutMaintenance
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutTargetUseCase
 import com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity
 import com.nbljsbdk.snowhide.platform.shortcut.AndroidDesktopShortcutCreator
+import com.nbljsbdk.snowhide.platform.shortcut.AndroidDynamicShortcutRegistrar
+import com.nbljsbdk.snowhide.platform.shortcut.AndroidDesktopShortcutMaintenance
 import com.nbljsbdk.snowhide.platform.shortcut.ShortcutIconProvider
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.data.repo.FrozenStateStore
@@ -102,6 +105,20 @@ class AppContainer(
                 AppIconLoader.loadShortcutIcon(target.packageName.value)
             },
             iconShapeProvider = { SettingsRepository.iconShape.value },
+        )
+    }
+
+    /** 雪藏图标长按菜单的动态快捷方式注册器。 */
+    val dynamicShortcutRegistrar: AndroidDynamicShortcutRegistrar by lazy {
+        AndroidDynamicShortcutRegistrar(appContext)
+    }
+
+    /** 系统集成页的桌面快捷方式清理适配。 */
+    val desktopShortcutMaintenance: DesktopShortcutMaintenance by lazy {
+        AndroidDesktopShortcutMaintenance(
+            appContext,
+            EngineManager,
+            dynamicShortcutRegistrar,
         )
     }
 

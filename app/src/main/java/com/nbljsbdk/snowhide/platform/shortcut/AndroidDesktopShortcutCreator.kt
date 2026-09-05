@@ -76,13 +76,24 @@ class AndroidDesktopShortcutCreator(
                     return@withContext Result.failure(error)
                 }
             val displayLabel = DesktopShortcutSpec.longLabel(target, appLabel)
+            val shortcutId = DesktopShortcutSpec.shortcutId(target)
+            val disabledPinnedShortcut = shortcutManager.pinnedShortcuts.firstOrNull {
+                it.id == shortcutId && !it.isEnabled
+            }
+            if (disabledPinnedShortcut != null) {
+                // Realme 可能保留不可见的 disabled 记录；先恢复它，避免创建时被同 ID 拒绝。
+                runCatching { shortcutManager.enableShortcuts(listOf(shortcutId)) }
+                    .getOrElse { error ->
+                        return@withContext Result.failure(error)
+                    }
+            }
             val shortcutIntent = Intent(appContext, shortcutActivity).apply {
                 action = DesktopShortcutSpec.ACTION_OPEN_TARGET
                 putExtra(DesktopShortcutSpec.EXTRA_PACKAGE_NAME, target.packageName.value)
                 putExtra(DesktopShortcutSpec.EXTRA_USER_ID, target.userId)
             }
             val shortcutInfo = try {
-                ShortcutInfo.Builder(appContext, DesktopShortcutSpec.shortcutId(target))
+                ShortcutInfo.Builder(appContext, shortcutId)
                     .setShortLabel(DesktopShortcutSpec.shortLabel(target, appLabel))
                     .setLongLabel(displayLabel.take(MAX_LONG_LABEL_LENGTH))
                     .setIcon(Icon.createWithBitmap(icon))

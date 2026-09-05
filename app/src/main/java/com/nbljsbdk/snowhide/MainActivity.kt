@@ -7,7 +7,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceConnectionState
 import com.nbljsbdk.snowhide.core.engine.EngineManager
@@ -51,7 +50,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CompositionRoot.initActivity(applicationContext)
-        registerDynamicShortcuts()
+        appContainer.dynamicShortcutRegistrar.register()
         requestNotificationPermissionIfNeeded()
         applyTransparentWallpaper()
         enableEdgeToEdge()
@@ -85,9 +84,10 @@ class MainActivity : ComponentActivity() {
                     appearanceSettingsUseCase = appContainer.appearanceSettingsUseCase,
                     folderPageSettingsUseCase = appContainer.folderPageSettingsUseCase,
                      appCloneUseCase = appContainer.appCloneUseCase,
-                     accessibilityRequirementUseCase = appContainer.accessibilityRequirementUseCase,
-                     desktopShortcutCreator = appContainer.desktopShortcutCreator,
-                 )
+                      accessibilityRequirementUseCase = appContainer.accessibilityRequirementUseCase,
+                      desktopShortcutCreator = appContainer.desktopShortcutCreator,
+                      desktopShortcutMaintenance = appContainer.desktopShortcutMaintenance,
+                  )
             }
         }
     }
@@ -128,61 +128,6 @@ class MainActivity : ComponentActivity() {
         Shizuku.removeRequestPermissionResultListener(permissionListener)
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         super.onPause()
-    }
-
-    // ═══════════════════════════════════════
-    // App Shortcuts（设计文档 §3.12）
-    // ═══════════════════════════════════════
-
-    /** 注册 3 个动态快捷方式（第 4 位留空备用——系统上限 5） */
-    private fun registerDynamicShortcuts() {
-        runCatching {
-            val scm = getSystemService(android.content.pm.ShortcutManager::class.java)
-            val shortcuts = listOf(
-                android.content.pm.ShortcutInfo.Builder(this, "smart_clean")
-                    .setShortLabel("智能清理")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_smart_clean))
-                    .setIntent(
-                        android.content.Intent(
-                            this,
-                            com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity::class.java,
-                        ).setAction(com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity.ACTION_SMART_CLEAN)
-                    )
-                    .build(),
-                android.content.pm.ShortcutInfo.Builder(this, "freeze_all")
-                    .setShortLabel("全部停用")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_freeze_all))
-                    .setIntent(
-                        android.content.Intent(
-                            this,
-                            com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity::class.java,
-                        ).setAction(com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity.ACTION_FREEZE_ALL)
-                    )
-                    .build(),
-                android.content.pm.ShortcutInfo.Builder(this, "toggle_quick")
-                    .setShortLabel("快速启停")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_toggle))
-                    .setIntent(
-                        android.content.Intent(
-                            this,
-                            com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity::class.java,
-                        ).setAction(com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity.ACTION_TOGGLE_QUICK)
-                    )
-                    .build(),
-                // 第 4 位：临时「启用全部」（用户测试用，后续可替换）
-                android.content.pm.ShortcutInfo.Builder(this, "enable_all")
-                    .setShortLabel("启用全部")
-                    .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_sc_enable_all))
-                    .setIntent(
-                        android.content.Intent(
-                            this,
-                            com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity::class.java,
-                        ).setAction(com.nbljsbdk.snowhide.feature.shortcut.ShortcutActionActivity.ACTION_ENABLE_ALL)
-                    )
-                    .build(),
-            )
-            scm.setDynamicShortcuts(shortcuts)
-        }
     }
 
     /** Android 13+ 通知权限（快捷方式结果通知用，一次性弹窗） */

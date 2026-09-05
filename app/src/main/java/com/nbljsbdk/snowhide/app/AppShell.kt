@@ -18,6 +18,7 @@ import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
 import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutMaintenance
 import com.nbljsbdk.snowhide.feature.about.AboutRoute
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageScreen
 import com.nbljsbdk.snowhide.feature.appmanage.AppManageViewModel
@@ -46,6 +47,7 @@ fun AppShell(
     appCloneUseCase: AppCloneUseCase,
     accessibilityRequirementUseCase: AccessibilityRequirementUseCase,
     desktopShortcutCreator: DesktopShortcutCreator,
+    desktopShortcutMaintenance: DesktopShortcutMaintenance,
     homeViewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.Factory(
             LocalContext.current.applicationContext as Application,
@@ -97,6 +99,7 @@ fun AppShell(
                 onSyncStatus = { homeViewModel.syncActualStatus() },
                 backupUseCase = backupUseCase,
                 recentCalibrationUseCase = recentCalibrationUseCase,
+                desktopShortcutMaintenance = desktopShortcutMaintenance,
                 onRequestRecentCalibration = {
                     RecentSwipeController.requestCalibration(context)
                 },

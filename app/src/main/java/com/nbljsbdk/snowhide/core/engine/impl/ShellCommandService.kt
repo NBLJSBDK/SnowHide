@@ -86,7 +86,8 @@ class ShellCommandService : Binder {
             command == "dumpsys activity recents"
         ) return true
         return command.matches(pmUserPackageCommand) ||
-            command.matches(pmUserQueryCommand)
+            command.matches(pmUserQueryCommand) ||
+            command.matches(clearShortcutsCommand)
     }
 
     private fun readTask(task: Future<String>): String =
@@ -138,6 +139,8 @@ class ShellCommandService : Binder {
             Regex("^pm (disable-user|enable|disable|uninstall) --user ([0-9]+) ($PACKAGE_NAME_PATTERN)\\z")
         private val pmUserQueryCommand =
             Regex("^pm list packages --user ([0-9]+)( -(d|s))?\\z")
+        private val clearShortcutsCommand =
+            Regex("^cmd shortcut clear-shortcuts --user ([0-9]+) ($PACKAGE_NAME_PATTERN)\\z")
 
         private val streamExecutor = Executors.newCachedThreadPool { runnable ->
             Thread(runnable, "snowhide-shell-stream").apply { isDaemon = true }

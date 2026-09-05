@@ -54,6 +54,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nbljsbdk.snowhide.domain.backup.BackupUseCase
 import com.nbljsbdk.snowhide.domain.recent.RecentCalibrationUseCase
+import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutMaintenance
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
 
 /**
@@ -70,6 +71,7 @@ fun SettingsScreen(
     onClose: () -> Unit,
     backupUseCase: BackupUseCase,
     recentCalibrationUseCase: RecentCalibrationUseCase,
+    desktopShortcutMaintenance: DesktopShortcutMaintenance,
     onRequestRecentCalibration: () -> Unit,
     onSyncStatus: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(
@@ -89,8 +91,8 @@ fun SettingsScreen(
     val lockCleanDelay by settings.lockCleanDelay.collectAsState()
     val lockCleanNotify by settings.lockCleanNotify.collectAsState()
 
-    // 三级菜单：创建快捷方式子屏
-    var showShortcutCreate by remember { mutableStateOf(false) }
+    // 三级菜单：快捷方式管理子屏
+    var showShortcutManagement by remember { mutableStateOf(false) }
     var showFeedbackSettings by remember { mutableStateOf(false) }
     var showHapticSettings by remember { mutableStateOf(false) }
     var showSwipeDisableSettings by remember { mutableStateOf(false) }
@@ -219,8 +221,11 @@ fun SettingsScreen(
     // 返回键回到主界面（而非退出到桌面）
     BackHandler(onBack = onClose)
 
-    if (showShortcutCreate) {
-        ShortcutCreateScreen(onBack = { showShortcutCreate = false })
+    if (showShortcutManagement) {
+        ShortcutManagementScreen(
+            onBack = { showShortcutManagement = false },
+            onClearAllShortcuts = desktopShortcutMaintenance::clearAllShortcuts,
+        )
         return
     }
     if (showFeedbackSettings) {
@@ -357,9 +362,9 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showShortcutCreate = true },
+                        .clickable { showShortcutManagement = true },
                 ) {
-                    Text("创建快捷方式", modifier = Modifier.weight(1f))
+                     Text("快捷方式管理", modifier = Modifier.weight(1f))
                     Text("▸", color = MaterialTheme.colorScheme.primary)
                 }
             }

@@ -8,11 +8,16 @@ object DesktopShortcutSpec {
     const val EXTRA_PACKAGE_NAME = "com.nbljsbdk.snowhide.shortcut.PACKAGE_NAME"
     const val EXTRA_USER_ID = "com.nbljsbdk.snowhide.shortcut.USER_ID"
 
-    private const val ID_PREFIX = "app_target:"
+    const val APP_TARGET_ID_PREFIX = "app_target:"
     private const val MAX_SHORT_LABEL_LENGTH = 25
 
+    const val SMART_CLEAN_ID = "smart_clean"
+    const val FREEZE_ALL_ID = "freeze_all"
+    const val TOGGLE_QUICK_ID = "toggle_quick"
+    const val ENABLE_ALL_ID = "enable_all"
+
     /** 包名相同但用户空间不同的目标必须生成不同的桌面快捷方式 ID。 */
-    fun shortcutId(target: AppTarget): String = "$ID_PREFIX${target.key}"
+    fun shortcutId(target: AppTarget): String = "$APP_TARGET_ID_PREFIX${target.key}"
 
     /** 用桌面短标签明确标出分身用户空间，同时遵守系统短标签长度限制。 */
     fun shortLabel(target: AppTarget, appLabel: String): String {
