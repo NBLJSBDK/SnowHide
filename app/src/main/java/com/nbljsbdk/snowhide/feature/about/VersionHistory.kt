@@ -9,6 +9,11 @@ data class VersionRecord(
 
 val versionHistory = listOf(
     VersionRecord(
+        "v0.5.2",
+        "布局默认值与图标显示修复",
+        "调整默认布局为主屏图标 48dp、Dock 图标 48dp、操作图标 24dp、上下间距 0、文件夹预览 2×2；修复 Dock 图标未遵循圆形设置的问题，未被图标包覆盖的图标也按选定形状裁剪；修复美化设置将图标包包名显示为摘要的问题，改为显示图标包名称。保持 versionCode=1、Backup v1、Shizuku 执行链和应用数据安全边界不变。",
+    ),
+    VersionRecord(
         "v0.5.1",
         "桌面快捷方式与模块化收口",
         "从主屏或文件夹宫格长按菜单创建桌面快捷方式，使用完整 AppTarget 区分主应用和分身；快捷方式优先复用当前图标包和图标形状，并叠加雪藏徽标与分身用户徽标。点击快捷方式沿用宫格单击行为，目标仍在宫格中且已冻结时先临时解冻，再按用户空间启动主应用或分身。将目标校验和临时解冻策略收口到 domain/shortcut，通过组合根注入 Android 适配，补充 JVM 回归测试；保持 versionCode=1、Backup v1、Shizuku 执行链和应用数据安全边界不变。",
