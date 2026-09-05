@@ -164,7 +164,7 @@ fun FolderScreen(
                              CloneBadge(
                                  userId = target.userId,
                                  iconSize = iconSize,
-                                 modifier = Modifier.align(Alignment.BottomEnd),
+                                 modifier = Modifier.align(Alignment.TopEnd),
                              )
                         }
                     }

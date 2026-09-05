@@ -59,7 +59,12 @@ class AndroidDesktopShortcutCreator(
                 IllegalStateException("无法读取雪藏图标"),
             )
             val icon = runCatching {
-                composeIcon(baseIcon, snowHideIcon, iconShapeProvider())
+                composeIcon(
+                    baseIcon = baseIcon,
+                    badgeIcon = snowHideIcon,
+                    iconShape = iconShapeProvider(),
+                    badgeAtTopStart = !target.isPrimaryUser,
+                )
             }
                 .getOrElse { error ->
                     return@withContext Result.failure(error)
@@ -131,11 +136,15 @@ class AndroidDesktopShortcutCreator(
             .getOrNull()
     }
 
-    /** 合成固定尺寸图标，先按应用图标形状裁剪，再叠加雪藏角标。 */
+    /**
+     * 合成固定尺寸图标，先按应用图标形状裁剪，再叠加雪藏角标。
+     * 分身快捷方式把雪藏角标放到左上角，给系统右下角分身角标留位。
+     */
     private fun composeIcon(
         baseIcon: Drawable,
         badgeIcon: Drawable,
         iconShape: String,
+        badgeAtTopStart: Boolean,
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -158,19 +167,28 @@ class AndroidDesktopShortcutCreator(
 
         val badgeSize = (ICON_SIZE * 0.30f).roundToInt()
         val margin = (ICON_SIZE * 0.045f).roundToInt()
-        val center = ICON_SIZE - margin - badgeSize / 2f
+        val centerX = if (badgeAtTopStart) {
+            margin + badgeSize / 2f
+        } else {
+            ICON_SIZE - margin - badgeSize / 2f
+        }
+        val centerY = if (badgeAtTopStart) {
+            margin + badgeSize / 2f
+        } else {
+            ICON_SIZE - margin - badgeSize / 2f
+        }
         val backingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(center, center, badgeSize / 2f + margin * 0.18f, backingPaint)
+        canvas.drawCircle(centerX, centerY, badgeSize / 2f + margin * 0.18f, backingPaint)
 
         val inset = (badgeSize * 0.12f).roundToInt()
         badgeIcon.mutate().setBounds(
-            (center - badgeSize / 2f + inset).roundToInt(),
-            (center - badgeSize / 2f + inset).roundToInt(),
-            (center + badgeSize / 2f - inset).roundToInt(),
-            (center + badgeSize / 2f - inset).roundToInt(),
+            (centerX - badgeSize / 2f + inset).roundToInt(),
+            (centerY - badgeSize / 2f + inset).roundToInt(),
+            (centerX + badgeSize / 2f - inset).roundToInt(),
+            (centerY + badgeSize / 2f - inset).roundToInt(),
         )
         badgeIcon.draw(canvas)
         return bitmap

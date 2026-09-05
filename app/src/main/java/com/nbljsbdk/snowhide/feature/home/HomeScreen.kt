@@ -1265,7 +1265,7 @@ private fun AppCell(
                 CloneBadge(
                     userId = target.userId,
                     iconSize = size,
-                    modifier = Modifier.align(Alignment.BottomEnd),
+                    modifier = Modifier.align(Alignment.TopEnd),
                 )
             }
         }
@@ -1379,7 +1379,7 @@ private fun FolderCell(
                                                   CloneBadge(
                                                       userId = target.userId,
                                                       iconSize = size / grid * 0.88f,
-                                                      modifier = Modifier.align(Alignment.BottomEnd),
+                                                      modifier = Modifier.align(Alignment.TopEnd),
                                                       compact = true,
                                                   )
                                              }
