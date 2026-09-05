@@ -28,10 +28,10 @@ object SettingsRepository : AccessibilityFeatureSettings {
         const val RESET_HOME_ON_REENTRY = true
         const val HAPTIC_LEVEL = 4
         const val HAPTIC_ENABLED = true
-        const val ICON_SIZE = 47
+        const val ICON_SIZE = 48
         const val VERTICAL_SPACE = 0
-        const val DOCK_ICON_SIZE = 47
-        const val DOCK_ACTION_ICON_SIZE = 26
+        const val DOCK_ICON_SIZE = 48
+        const val DOCK_ACTION_ICON_SIZE = 24
         const val FOLDER_PREVIEW = 2
         const val ICON_PACK = "me.morirain.dev.iconpack.pure"
         const val ICON_SHAPE = "circle"
