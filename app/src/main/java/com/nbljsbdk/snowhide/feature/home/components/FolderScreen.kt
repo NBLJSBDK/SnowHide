@@ -39,6 +39,7 @@ import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.Folder
 import com.nbljsbdk.snowhide.data.model.GridItem
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
+import com.nbljsbdk.snowhide.ui.components.CloneBadge
 import com.nbljsbdk.snowhide.ui.theme.TianyiBlue
 import com.nbljsbdk.snowhide.ui.util.frosted
 
@@ -149,27 +150,22 @@ fun FolderScreen(
                                 painter = painterResource(R.drawable.ic_snowflake),
                                 contentDescription = "已冻结",
                                 colorFilter = ColorFilter.tint(TianyiBlue),
-                                modifier = Modifier.size(iconSize * 0.38f),
+                                modifier = Modifier.size(iconSize * 0.28f),
                             )
                         } else if (missing) {
                             Image(
                                 painter = painterResource(R.drawable.ic_trash),
                                 contentDescription = "应用已删除",
                                 colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.error),
-                                modifier = Modifier.size(iconSize * 0.38f),
+                                 modifier = Modifier.size(iconSize * 0.28f),
                             )
                         }
                         if (!target.isPrimaryUser) {
-                            Text(
-                                text = "分身${target.userId}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
-                                    .padding(horizontal = 2.dp, vertical = 1.dp),
-                            )
+                             CloneBadge(
+                                 userId = target.userId,
+                                 iconSize = iconSize,
+                                 modifier = Modifier.align(Alignment.BottomEnd),
+                             )
                         }
                     }
                     if (showAppName) {

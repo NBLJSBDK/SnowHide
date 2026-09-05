@@ -99,6 +99,7 @@ import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementStatus
 import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
 import com.nbljsbdk.snowhide.domain.folder.FolderPageOption
+import com.nbljsbdk.snowhide.ui.components.CloneBadge
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeViewModel
@@ -1098,28 +1099,6 @@ private fun dockTargets(
     }
 }
 
-/** 分身图标角标；冻结雪花仍固定在左上角。 */
-@Composable
-private fun TargetBadge(
-    text: String,
-    modifier: Modifier = Modifier,
-    compact: Boolean = false,
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(if (compact) 4.dp else 6.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
-            .padding(horizontal = if (compact) 2.dp else 3.dp, vertical = 1.dp),
-    ) {
-        Text(
-            text = text,
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onPrimary,
-            maxLines = 1,
-        )
-    }
-}
-
 /** Shizuku 引导卡（区分「服务未运行」与「未授权」两种状态） */
 @Composable
 private fun ShizukuGuideCard(
@@ -1269,7 +1248,7 @@ private fun AppCell(
                     contentDescription = "已冻结",
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(TianyiBlue),
                     modifier = Modifier
-                        .size(size * 0.38f)
+                        .size(size * 0.28f)
                         .align(Alignment.TopStart),
                 )
             } else if (missing) {
@@ -1278,14 +1257,15 @@ private fun AppCell(
                     contentDescription = "应用已删除",
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.error),
                     modifier = Modifier
-                        .size(size * 0.38f)
-                    .align(Alignment.TopStart),
+                        .size(size * 0.28f)
+                        .align(Alignment.TopStart),
                 )
             }
             if (!target.isPrimaryUser) {
-                TargetBadge(
-                    text = "分身${target.userId}",
-                    modifier = Modifier.align(Alignment.TopEnd),
+                CloneBadge(
+                    userId = target.userId,
+                    iconSize = size,
+                    modifier = Modifier.align(Alignment.BottomEnd),
                 )
             }
         }
@@ -1385,22 +1365,23 @@ private fun FolderCell(
                                                     painter = painterResource(R.drawable.ic_snowflake),
                                                     contentDescription = "已冻结",
                                                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(TianyiBlue),
-                                                    modifier = Modifier.size(size / grid * 0.32f),
+                                                     modifier = Modifier.size(size / grid * 0.26f),
                                                 )
                                              } else if (missing) {
                                                 androidx.compose.foundation.Image(
                                                     painter = painterResource(R.drawable.ic_trash),
                                                     contentDescription = "应用已删除",
                                                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.error),
-                                                    modifier = Modifier.size(size / grid * 0.32f),
+                                                     modifier = Modifier.size(size / grid * 0.26f),
                                                 )
                                              }
                                              if (!target.isPrimaryUser) {
-                                                 TargetBadge(
-                                                     text = "${target.userId}",
-                                                     modifier = Modifier.align(Alignment.TopEnd),
-                                                     compact = true,
-                                                 )
+                                                  CloneBadge(
+                                                      userId = target.userId,
+                                                      iconSize = size / grid * 0.88f,
+                                                      modifier = Modifier.align(Alignment.BottomEnd),
+                                                      compact = true,
+                                                  )
                                              }
                                          }
                                     }
@@ -1592,10 +1573,11 @@ private fun DockIcon(
             )
         }
         if (!target.isPrimaryUser) {
-            TargetBadge(
-                text = "分身${target.userId}",
+            // Dock 右下角给锁定角标，分身标记放到右上角避免重叠。
+            CloneBadge(
+                userId = target.userId,
+                iconSize = iconSize,
                 modifier = Modifier.align(Alignment.TopEnd),
-                compact = true,
             )
         }
     }
