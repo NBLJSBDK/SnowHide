@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +68,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +96,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.nbljsbdk.snowhide.R
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
@@ -340,6 +343,12 @@ fun HomeContent(
         ) {
             if (folderPageLoopEnabled) LOOP_TOTAL * actualCount else actualCount
         }
+        val pagerFlingBehavior = PagerDefaults.flingBehavior(
+            state = pagerState,
+            snapAnimationSpec = tween(animationDurationMillis),
+            // 宫格内的点击/垂直滚动会分走少量水平位移，降低阈值避免快滑被判定为回退。
+            snapPositionalThreshold = PAGER_SNAP_THRESHOLD,
+        )
         // 当前页索引（0=主屏）：顶栏动态显示主屏「雪藏」/ 文件夹名
         val pageIdx = folderPagePlan.logicalIndex(pagerState.currentPage)
         // 滑动过程中不切换图标加载集合，等 Pager 稳定后再加载下一页，避免跨页时抢占 UI 线程。
@@ -571,6 +580,8 @@ fun HomeContent(
         // - 整理模式：锁定主屏
         // - 非整理：删除文件夹的唯一入口是主屏长按（用户本在主屏），漂移即对齐回主屏
         LaunchedEffect(organizing, actualCount, folderPageLoopEnabled) {
+            // 页面计划变化可能与用户快滑同时发生；不能用瞬时对齐抢占 Pager 的手势。
+            snapshotFlow { pagerState.isScrollInProgress }.first { !it }
             val needsHome = if (folderPageLoopEnabled) {
                 pagerState.currentPage % actualCount != 0
             } else {
@@ -597,6 +608,8 @@ fun HomeContent(
         ) {
         HorizontalPager(
             state = pagerState,
+            beyondViewportPageCount = 1,
+            flingBehavior = pagerFlingBehavior,
             // 只有一个主屏（没有文件夹）时禁用滑动；搜索/整理期间锁定主屏
             userScrollEnabled = directFolderId == null &&
                 !organizing && sortedFolders.isNotEmpty() && searchQuery.isBlank(),
@@ -1768,4 +1781,5 @@ private fun DialogAction(label: String, onClick: () -> Unit) {
 /** 循环 Pager 放大倍数（大页数实现无缝循环，取模定位真实页） */
 private const val LOOP_BASE = 500
 private const val LOOP_TOTAL = 1000
+private const val PAGER_SNAP_THRESHOLD = 0.20f
 private const val REENTRY_HOME_DELAY_MS = 10_000L
