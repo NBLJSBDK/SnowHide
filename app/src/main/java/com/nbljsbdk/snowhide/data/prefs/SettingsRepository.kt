@@ -40,7 +40,7 @@ object SettingsRepository : AccessibilityFeatureSettings {
         const val LOCK_CLEAN_NOTIFY = true
         const val WALLPAPER_OVERLAY = 0.1f
         const val TRANSPARENT_BACKGROUND = true
-        const val ANIMATION_LEVEL = 2 // 中档；旧 animations_enabled=true 也映射到这里
+        const val ANIMATION_LEVEL = 1 // 统一最快；旧 animations_enabled/animation_level 只保留兼容字段
         const val AUTO_SYNC_STATUS = true
         const val COLUMNS = 4
         const val BACKGROUND_IMAGE_PATH = ""
@@ -386,7 +386,7 @@ object SettingsRepository : AccessibilityFeatureSettings {
     val bgImagePath: StateFlow<String> = _bgImagePath.asStateFlow()
 
     private val _animationLevel = MutableStateFlow(readAnimationLevel())
-    /** 应用显式动画速度档位：0=关，1=高，2=中，3=低。 */
+    /** 应用固定使用最快连续动画；字段保留用于旧备份兼容。 */
     val animationLevel: StateFlow<Int> = _animationLevel.asStateFlow()
 
     fun setAnimationLevel(level: Int) {
@@ -396,7 +396,7 @@ object SettingsRepository : AccessibilityFeatureSettings {
             prefs.edit()
                 .putInt(KEY_ANIMATION_LEVEL, normalized)
                 // 保留旧开关字段，便于旧版本继续读取“是否开启动画”。
-                .putBoolean(KEY_ANIMATIONS, normalized != ANIMATION_LEVEL_OFF)
+                .putBoolean(KEY_ANIMATIONS, true)
                 .apply()
         }
     }
@@ -433,22 +433,10 @@ object SettingsRepository : AccessibilityFeatureSettings {
     }
 
     private fun readAnimationLevel(): Int {
-        val stored = if (::prefs.isInitialized) prefs.all[KEY_ANIMATION_LEVEL] else null
-        if (stored is Number) return normalizeAnimationLevel(stored.toInt())
-        val legacyEnabled = runCatching {
-            getBool(KEY_ANIMATIONS, true)
-        }.getOrDefault(true)
-        return if (legacyEnabled) DefaultSettings.ANIMATION_LEVEL else ANIMATION_LEVEL_OFF
+        return DefaultSettings.ANIMATION_LEVEL
     }
 
-    private fun normalizeAnimationLevel(value: Int): Int = when (value) {
-        ANIMATION_LEVEL_OFF,
-        ANIMATION_LEVEL_HIGH,
-        ANIMATION_LEVEL_MEDIUM,
-        ANIMATION_LEVEL_LOW,
-        -> value
-        else -> DefaultSettings.ANIMATION_LEVEL
-    }
+    private fun normalizeAnimationLevel(value: Int): Int = DefaultSettings.ANIMATION_LEVEL
 
     private fun encodeLongSet(values: Set<Long>): String = JSONArray().apply {
         values.sorted().forEach(::put)
@@ -499,8 +487,4 @@ object SettingsRepository : AccessibilityFeatureSettings {
     private const val KEY_AUTO_SYNC_STATUS = "auto_sync_status"
     private const val KEY_FOLDER_PAGE_LOOP_ENABLED = "folder_page_loop_enabled"
     private const val KEY_EXCLUDED_FOLDER_IDS = "excluded_folder_ids"
-    private const val ANIMATION_LEVEL_OFF = 0
-    private const val ANIMATION_LEVEL_HIGH = 1
-    private const val ANIMATION_LEVEL_MEDIUM = 2
-    private const val ANIMATION_LEVEL_LOW = 3
 }

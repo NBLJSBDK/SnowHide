@@ -72,7 +72,7 @@
         <!-- 锁屏自动清理保活：无障碍服务（系统信任组件防杀，不读取屏幕内容） -->
         <service
             android:name=".service.LockCleanAccessibilityService"
-            android:exported="false"
+            android:exported="true"
             android:stopWithTask="false"
             android:label="@string/accessibility_lock_clean_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

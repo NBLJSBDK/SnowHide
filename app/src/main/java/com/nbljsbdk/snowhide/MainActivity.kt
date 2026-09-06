@@ -147,6 +147,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQUEST_SHIZUKU = 1000
         private const val REQUEST_NOTIFICATION = 1001
-        private const val ACCESSIBILITY_CONNECTION_GRACE_MS = 1_500L
+        private const val ACCESSIBILITY_CONNECTION_GRACE_MS = 5_000L
     }
 }

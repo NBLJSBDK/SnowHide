@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
@@ -44,15 +45,16 @@ object AppIconLoader {
     data class IconPackInfo(val pkg: String, val label: String, val icon: ImageBitmap)
 
     private val pm: PackageManager get() = context.packageManager
-    private val cache = mutableMapOf<String, ImageBitmap>()
+    private val cache = ConcurrentHashMap<String, ImageBitmap>()
 
     /** 已解析的 appfilter 映射缓存（图标包 → component→drawable 名） */
-    private val appFilterCache = mutableMapOf<String, Map<String, String>>()
+    private val appFilterCache = ConcurrentHashMap<String, Map<String, String>>()
 
     /** drawable 名 → 资源 ID 缓存（getIdentifier 是 IPC，113 次很慢） */
-    private val resIdCache = mutableMapOf<String, Int>()
+    private val resIdCache = ConcurrentHashMap<String, Int>()
 
     /** appfilter 扫描结果缓存（避免每次全量遍历已装包） */
+    @Volatile
     private var scannedPacks: List<IconPackInfo>? = null
 
     /** 当前使用的图标包包名（空 = 系统默认） */
@@ -170,7 +172,7 @@ object AppIconLoader {
     }
 
     /** 图标包是否声明 RESOLVE_ICON receiver（结果缓存，避免每次查询） */
-    private val resolveIconSupport = mutableMapOf<String, Boolean>()
+    private val resolveIconSupport = ConcurrentHashMap<String, Boolean>()
 
     private fun supportsResolveIcon(packPkg: String): Boolean =
         resolveIconSupport.getOrPut(packPkg) {

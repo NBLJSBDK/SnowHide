@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    kotlinx.coroutines.ExperimentalCoroutinesApi::class,
+)
 
 package com.nbljsbdk.snowhide.feature.home
 
@@ -79,6 +82,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,6 +92,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.nbljsbdk.snowhide.R
@@ -99,7 +105,9 @@ import com.nbljsbdk.snowhide.domain.accessibility.AccessibilityRequirementStatus
 import com.nbljsbdk.snowhide.feature.home.components.FolderScreen
 import com.nbljsbdk.snowhide.domain.organize.OrganizeState
 import com.nbljsbdk.snowhide.domain.folder.FolderPageOption
+import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 import com.nbljsbdk.snowhide.ui.components.CloneBadge
+import com.nbljsbdk.snowhide.ui.components.OutlinedIcon
 import com.nbljsbdk.snowhide.ui.components.OutlinedText
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeOverlay
 import com.nbljsbdk.snowhide.feature.home.organize.OrganizeViewModel
@@ -135,9 +143,10 @@ fun HomeContent(
     val lockedTargets = state.lockedTargets
     var icons by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
     var loadedIconPack by remember { mutableStateOf<String?>(null) }
-    val iconPackages = remember(gridItems, folderApps) {
+    val allIconPackages = remember(gridItems, folderApps) {
         (gridItems.mapNotNull { it.pkg } + folderApps.map { it.pkg }).distinct()
     }
+    val iconLoadDispatcher = remember { Dispatchers.IO.limitedParallelism(4) }
     val labels = state.labels
     val engineReady = state.engineReady
     val shizukuRunning = state.shizukuRunning
@@ -209,11 +218,52 @@ fun HomeContent(
     var currentFolderId by remember { mutableStateOf<Long?>(null) }
     var directFolderId by remember { mutableStateOf<Long?>(null) }
 
-    val sortedFolders = folderPagePlan.folderIds.mapNotNull { id -> folders.firstOrNull { it.id == id } }
+    val foldersById = remember(folders) {
+        folders.associateBy { it.id }
+    }
+    val sortedFolders = remember(foldersById, folderPagePlan.folderIds) {
+        folderPagePlan.folderIds.mapNotNull { id -> foldersById[id] }
+    }
+    val folderTargetsByFolder = remember(folderApps) {
+        folderApps
+            .groupBy { it.folderId }
+            .mapValues { (_, apps) -> apps.sortedBy { it.sortOrder }.mapNotNull { it.appTarget } }
+    }
+    val visibleGridItems = remember(gridItems, folderApps, foldersById, labels, searchQuery) {
+        val ordered = gridItems.sortedBy { it.sortOrder }
+        if (searchQuery.isBlank()) {
+            ordered
+        } else {
+            // 搜索范围包含主屏项和文件夹成员，但只构造一次，避免每次重组重复过滤排序。
+            val memberItems = folderApps.mapIndexed { index, folderApp ->
+                GridItem(
+                    id = Long.MIN_VALUE + index,
+                    type = "app",
+                    pkg = folderApp.pkg,
+                    sortOrder = Int.MAX_VALUE,
+                    userId = folderApp.userId,
+                )
+            }
+            (gridItems + memberItems).filter { item ->
+                val name = item.appTarget?.let { labels[it] ?: it.packageName.value }
+                    ?: foldersById[item.folderId]?.name.orEmpty()
+                name.contains(searchQuery, ignoreCase = true) ||
+                    item.pkg?.contains(searchQuery, ignoreCase = true) == true
+            }.sortedBy { it.sortOrder }
+        }
+    }
     val actualCount = folderPagePlan.pageCount
-    val directFolder = directFolderId?.let { id -> folders.firstOrNull { it.id == id } }
+    val directFolder = directFolderId?.let { id -> foldersById[id] }
     val folderPageOptions = remember(folders) {
         folders.map { FolderPageOption(it.id, it.name, it.sortOrder) }
+    }
+    val dockAppTargets = remember(gridItems, folderApps, frozenStates, appStates) {
+        dockTargets(gridItems, folderApps, frozenStates, appStates)
+    }
+    val folderPreviewTargetsByFolder = remember(folderTargetsByFolder, folderPreview) {
+        folderTargetsByFolder.mapValues { (_, targets) ->
+            targets.take(if (folderPreview >= 3) 9 else 4)
+        }
     }
     LaunchedEffect(directFolderId, folders) {
         if (directFolderId != null && directFolder == null) directFolderId = null
@@ -224,36 +274,13 @@ fun HomeContent(
     val transparentBg = state.transparentBg
     val wallpaperOverlay = state.wallpaperOverlay
     val iconShape = state.iconShape
-    val animationLevel = state.animationLevel
-    val animationDurationMillis = animationLevel.durationMillis
+    // 统一固定最快的连续动画；不再暴露多档设置，避免不同组件各自走慢回弹。
+    val animationDurationMillis = AnimationLevel.FAST.durationMillis
     val freezeStyleName = state.freezeStyle
     val freezeStyle = com.nbljsbdk.snowhide.ui.util.FreezeStyle.entries
         .firstOrNull { it.name == freezeStyleName } ?: com.nbljsbdk.snowhide.ui.util.FreezeStyle.BLUE
     var iconPacks by remember { mutableStateOf<List<com.nbljsbdk.snowhide.ui.util.AppIconLoader.IconPackInfo>>(emptyList()) }
     var iconPacksLoading by remember { mutableStateOf(false) }
-    LaunchedEffect(iconPack, iconPackages) {
-        com.nbljsbdk.snowhide.ui.util.AppIconLoader.iconPackPkg = iconPack
-        if (loadedIconPack != iconPack) {
-            icons = emptyMap()
-            loadedIconPack = iconPack
-        }
-        com.nbljsbdk.snowhide.ui.util.AppIconLoader.prewarm()
-        val current = icons
-        val loaded = iconPackages
-            .filterNot { it in current }
-            .map { pkg ->
-                async {
-                    pkg to runCatching {
-                        com.nbljsbdk.snowhide.ui.util.AppIconLoader.loadIcon(pkg)
-                    }.getOrNull()
-                }
-            }
-            .awaitAll()
-        icons = current
-            .filterKeys { it in iconPackages }
-            .toMutableMap()
-            .apply { loaded.forEach { (pkg, icon) -> if (icon != null) put(pkg, icon) } }
-    }
     LaunchedEffect(beautyPanelOpen) {
         // 打开时若列表为空才扫描（AppIconLoader 内部有扫描缓存，秒回）
         if (beautyPanelOpen && iconPacks.isEmpty()) {
@@ -315,7 +342,57 @@ fun HomeContent(
         }
         // 当前页索引（0=主屏）：顶栏动态显示主屏「雪藏」/ 文件夹名
         val pageIdx = folderPagePlan.logicalIndex(pagerState.currentPage)
+        // 滑动过程中不切换图标加载集合，等 Pager 稳定后再加载下一页，避免跨页时抢占 UI 线程。
+        val iconPageIdx = folderPagePlan.logicalIndex(pagerState.settledPage)
         val inFolder = directFolder != null || (!organizing && pageIdx != 0)
+        val iconPackages = remember(
+            iconPageIdx,
+            directFolderId,
+            visibleGridItems,
+            folderTargetsByFolder,
+            sortedFolders,
+            folderPreviewTargetsByFolder,
+            dockAppTargets,
+        ) {
+            val currentFolderId = directFolder?.id ?: sortedFolders.getOrNull(iconPageIdx - 1)?.id
+            val pageTargets = if (currentFolderId != null) {
+                folderTargetsByFolder[currentFolderId].orEmpty()
+            } else {
+                visibleGridItems.flatMap { item ->
+                    when {
+                        item.appTarget != null -> listOf(item.appTarget!!)
+                        item.type == "folder" -> folderPreviewTargetsByFolder[item.folderId].orEmpty()
+                        else -> emptyList()
+                    }
+                }
+            }
+            (pageTargets + dockAppTargets)
+                .map { it.packageName.value }
+                .distinct()
+        }
+        LaunchedEffect(iconPack, iconPackages, allIconPackages) {
+            com.nbljsbdk.snowhide.ui.util.AppIconLoader.iconPackPkg = iconPack
+            if (loadedIconPack != iconPack) {
+                icons = emptyMap()
+                loadedIconPack = iconPack
+            }
+            com.nbljsbdk.snowhide.ui.util.AppIconLoader.prewarm()
+            val current = icons
+            val loaded = iconPackages
+                .filterNot { it in current }
+                .map { pkg ->
+                    async(iconLoadDispatcher) {
+                        pkg to runCatching {
+                            com.nbljsbdk.snowhide.ui.util.AppIconLoader.loadIcon(pkg)
+                        }.getOrNull()
+                    }
+                }
+                .awaitAll()
+            icons = current
+                .filterKeys { it in allIconPackages }
+                .toMutableMap()
+                .apply { loaded.forEach { (pkg, icon) -> if (icon != null) put(pkg, icon) } }
+        }
         LaunchedEffect(pageIdx, folderPagePlan.folderIds, directFolderId) {
             currentFolderId = directFolder?.id ?: folderPagePlan.folderIds.getOrNull(pageIdx - 1)
         }
@@ -327,7 +404,6 @@ fun HomeContent(
             actualCount,
             autoSyncStatus,
             engineReady,
-            animationLevel,
         ) {
             var stoppedAt = 0L
             var hasStarted = false
@@ -371,15 +447,25 @@ fun HomeContent(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = when {
-                            organizing -> "整理目录"
-                            directFolder != null -> directFolder.name
-                            inFolder -> sortedFolders[pageIdx - 1].name
-                            else -> stringResource(com.nbljsbdk.snowhide.R.string.app_name)
-                        },
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(FrostCard.copy(alpha = 0.25f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        Text(
+                            text = when {
+                                organizing -> "整理目录"
+                                directFolder != null -> directFolder.name
+                                inFolder -> sortedFolders[pageIdx - 1].name
+                                else -> stringResource(com.nbljsbdk.snowhide.R.string.app_name)
+                            },
+                            color = Color.Black,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 },
                 actions = {
                     if (organizing) {
@@ -411,21 +497,13 @@ fun HomeContent(
                             searchOpen = false
                              actions.setSearchQuery("")
                         }) { Text("取消") }
-                    } else {
-                        IconButton(onClick = { searchOpen = true }) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "搜索",
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
+                        } else {
+                            IconButton(onClick = { searchOpen = true }) {
+                                OutlinedIcon(Icons.Default.Search, contentDescription = "搜索")
+                            }
                          IconButton(onClick = { actions.toggleMenu() }) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "设置",
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
+                                OutlinedIcon(Icons.Default.Settings, contentDescription = "设置")
+                         }
                         GearMenu(
                             expanded = menuOpen,
                             onDismiss = { actions.dismissMenu() },
@@ -532,11 +610,8 @@ fun HomeContent(
             if (directFolderId != null) {
                 directFolder?.let { folder ->
                     FolderScreen(
-                        folder = folder,
-                        memberTargets = folderApps
-                            .filter { it.folderId == folder.id }
-                            .sortedBy { it.sortOrder }
-                            .mapNotNull { it.appTarget },
+                         folder = folder,
+                         memberTargets = folderTargetsByFolder[folder.id].orEmpty(),
                         icons = icons,
                         frozenStates = frozenStates,
                         columns = columns,
@@ -593,41 +668,16 @@ fun HomeContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(verticalSpace.dp),
                     ) {
-                        val searchFiltered = if (searchQuery.isBlank()) {
-                            gridItems.sortedBy { it.sortOrder }
-                        } else {
-                            // 搜索范围 = 主屏项 + 文件夹内应用（文件夹成员也能搜到，结果点击直接打开）
-                            // 成员 id 用负数索引绝对唯一（hash 32 位会碰撞导致 LazyGrid key 重复崩溃）
-                             val memberItems = folderApps.mapIndexed { index, fa ->
-                                GridItem(
-                                    id = Long.MIN_VALUE + index,
-                                    type = "app",
-                                    pkg = fa.pkg,
-                                    sortOrder = Int.MAX_VALUE,
-                                    userId = fa.userId,
-                                )
-                            }
-                            (gridItems + memberItems).filter { item ->
-                                val name = item.appTarget?.let { labels[it] ?: it.packageName.value }
-                                    ?: folders.find { f -> f.id == item.folderId }?.name ?: ""
-                                name.contains(searchQuery, ignoreCase = true) ||
-                                    (item.pkg?.contains(searchQuery, ignoreCase = true) == true)
-                            }.sortedBy { it.sortOrder }
-                        }
-                        items(searchFiltered, key = { it.id }) { item ->
+                        items(visibleGridItems, key = { it.id }) { item ->
                             when {
                                 item.type == "folder" -> {
-                                    val folder = folders.find { it.id == item.folderId }
+                                     val folder = foldersById[item.folderId]
                                     if (folder != null) {
                                         FolderCell(
                                             folderId = folder.id,
                                             name = folder.name,
                                             size = iconSize.dp,
-                                             previewTargets = folderApps
-                                                 .filter { it.folderId == folder.id }
-                                                 .sortedBy { it.sortOrder }
-                                                 .mapNotNull { it.appTarget }
-                                                 .take(if (folderPreview >= 3) 9 else 4),
+                                             previewTargets = folderPreviewTargetsByFolder[folder.id].orEmpty(),
                                             icons = icons,
                                             frozenStates = frozenStates,
                                             appStates = appStates,
@@ -704,10 +754,7 @@ fun HomeContent(
                 val folder = sortedFolders[idx - 1]
                 FolderScreen(
                     folder = folder,
-                             memberTargets = folderApps
-                                 .filter { it.folderId == folder.id }
-                                 .sortedBy { it.sortOrder }
-                                 .mapNotNull { it.appTarget },
+                              memberTargets = folderTargetsByFolder[folder.id].orEmpty(),
                     icons = icons,
                     frozenStates = frozenStates,
                     columns = columns,
@@ -800,7 +847,7 @@ fun HomeContent(
             )
         } else {
             DockBar(
-                targets = dockTargets(gridItems, folderApps, frozenStates, appStates)
+                targets = dockAppTargets
                     .filterNot { it in state.pendingFreezeTargets },
                 lockedTargets = lockedTargets,
                 icons = icons,
@@ -947,10 +994,10 @@ fun HomeContent(
         ContextMenu(
             item = target,
             frozen = target.appTarget?.let { frozenStates[it] == true } ?: false,
-            folderName = folders.find { it.id == target.folderId }?.name ?: "",
+            folderName = foldersById[target.folderId]?.name ?: "",
             appLabel = target.appTarget?.let { labels[it] ?: it.packageName.value } ?: "",
             locationName = target.appTarget?.let(::appLocation) ?: "",
-            targetFolder = folders.find { it.id == target.folderId },
+            targetFolder = foldersById[target.folderId],
             onDismiss = { longPressTarget = null },
              onToggleFreeze = { target -> actions.toggleFreeze(target); longPressTarget = null },
              onOpen = { target -> handleAppClick(target); longPressTarget = null },
@@ -960,7 +1007,7 @@ fun HomeContent(
                 longPressTarget = null
             },
             onRenameFolder = { id ->
-                val folder = folders.find { it.id == id }
+                val folder = foldersById[id]
                 if (folder != null) {
                     renameFolder = folder
                     renameText = folder.name
@@ -968,7 +1015,7 @@ fun HomeContent(
                 longPressTarget = null
             },
             onDeleteFolder = { id ->
-                val folder = folders.find { it.id == id }
+                val folder = foldersById[id]
                 if (folder != null) deleteFolderTarget = folder
                 longPressTarget = null
             },
@@ -1016,7 +1063,6 @@ fun HomeContent(
             iconPack = iconPack,
             transparentBg = transparentBg,
             wallpaperOverlay = wallpaperOverlay,
-            animationLevel = animationLevel,
             showAppName = showAppName,
             freezeStyle = freezeStyle,
             iconPacks = iconPacks,
@@ -1026,7 +1072,6 @@ fun HomeContent(
             onIconPackSelect = { pkg -> actions.applyIconPack(pkg) },
             onTransparentToggle = { on -> actions.setTransparentBg(on) },
             onWallpaperOverlayChange = { alpha -> actions.setWallpaperOverlay(alpha) },
-            onAnimationLevelChange = { level -> actions.setAnimationLevel(level) },
             onShowAppNameChange = { on -> actions.setShowAppName(on) },
             onFreezeStyleSelect = { style -> actions.setFreezeStyle(style.name) },
             onIconShapeSelect = { shape -> actions.setIconShape(shape) },
@@ -1178,10 +1223,20 @@ private fun AccessibilityGuideCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                androidx.compose.material3.Button(onClick = onOpenSettings) {
+                androidx.compose.material3.Button(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.semantics(mergeDescendants = true) {
+                        contentDescription = "打开无障碍设置"
+                    },
+                ) {
                     Text("打开无障碍设置")
                 }
-                androidx.compose.material3.OutlinedButton(onClick = onRefresh) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onRefresh,
+                    modifier = Modifier.semantics(mergeDescendants = true) {
+                        contentDescription = "刷新状态"
+                    },
+                ) {
                     Text("刷新状态")
                 }
             }

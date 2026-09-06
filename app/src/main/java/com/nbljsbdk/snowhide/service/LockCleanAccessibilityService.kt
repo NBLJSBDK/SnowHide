@@ -22,11 +22,17 @@ class LockCleanAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        CompositionRoot.init(this)
-        // 服务常驻：在这里注册息屏/解锁广播（比 MainActivity 更可靠）
-        LockCleanReceiver.register(this)
-        recentSwipeController.onServiceConnected()
+        // 先报告系统已连接，再做业务初始化，避免 ColorOS 初始化耗时触发误报。
         AccessibilityServiceConnectionState.markConnected()
+        try {
+            CompositionRoot.init(this)
+            // 服务常驻：在这里注册息屏/解锁广播（比 MainActivity 更可靠）
+            LockCleanReceiver.register(this)
+            recentSwipeController.onServiceConnected()
+        } catch (error: Throwable) {
+            AccessibilityServiceConnectionState.markDisconnected()
+            throw error
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -37,7 +43,14 @@ class LockCleanAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         AccessibilityServiceConnectionState.markDisconnected()
-        return super.onUnbind(intent)
+        // 允许系统在应用更新或服务短暂断开后通过 onRebind 恢复连接。
+        super.onUnbind(intent)
+        return true
+    }
+
+    override fun onRebind(intent: Intent?) {
+        super.onRebind(intent)
+        AccessibilityServiceConnectionState.markConnected()
     }
 
     override fun onDestroy() {

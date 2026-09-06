@@ -8,12 +8,16 @@ import com.nbljsbdk.snowhide.core.engine.TargetedPowerEngine
 import com.nbljsbdk.snowhide.core.model.AppTarget
 import com.nbljsbdk.snowhide.data.model.AppRuntimeState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,12 +33,17 @@ object FrozenStateStore {
     private lateinit var appContext: Context
     private val stateLock = Any()
     private val refreshMutex = Mutex()
+    private val persistenceChannel = Channel<Map<AppTarget, Boolean>>(Channel.CONFLATED)
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var mutationVersion = 0L
 
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         appContext = context.applicationContext
         prefs = context.getSharedPreferences("snowhide_grid", Context.MODE_PRIVATE)
+        persistenceScope.launch {
+            for (states in persistenceChannel) persistCacheNow(states)
+        }
         publishPairs(loadCache().mapValues { (_, frozen) ->
             frozen to if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE
         })
@@ -59,18 +68,24 @@ object FrozenStateStore {
     /** 单个命令成功后立即更新内存，后台 refresh 再校正真实状态。 */
     fun applyCommandResult(pkg: String, frozen: Boolean) {
         AppTarget.create(pkg, AppTarget.PRIMARY_USER_ID).getOrNull()
-            ?.let { applyCommandResult(it, frozen) }
+            ?.let { applyCommandResults(mapOf(it to frozen)) }
     }
 
     fun applyCommandResult(target: AppTarget, frozen: Boolean) {
+        applyCommandResults(mapOf(target to frozen))
+    }
+
+    /** 批量命令完成后一次性发布状态，避免每个目标都触发一轮重组和持久化。 */
+    fun applyCommandResults(results: Map<AppTarget, Boolean>) {
+        if (results.isEmpty()) return
         synchronized(stateLock) {
             mutationVersion++
-            val states = _targetStates.value + (target to frozen)
+            val states = _targetStates.value + results
             val appStates = _targetAppStates.value +
-                (target to if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE)
-            publishPairs(states.mapValues { (key, value) ->
-                value to (appStates[key] ?: AppRuntimeState.UNKNOWN)
-            })
+                results.mapValues { (_, frozen) ->
+                    if (frozen) AppRuntimeState.FROZEN else AppRuntimeState.ACTIVE
+                }
+            publish(states, appStates)
             persistCache(states)
         }
     }
@@ -225,6 +240,10 @@ object FrozenStateStore {
 
     private fun persistCache(map: Map<AppTarget, Boolean>) {
         if (!::prefs.isInitialized) return
+        persistenceChannel.trySend(map.toMap())
+    }
+
+    private fun persistCacheNow(map: Map<AppTarget, Boolean>) {
         val arr = JSONArray()
         map.forEach { (target, frozen) ->
             arr.put(

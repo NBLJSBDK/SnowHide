@@ -7,22 +7,21 @@ import org.junit.Test
 class AnimationLevelTest {
 
     @Test
-    fun storageOrderMatchesSliderOrder() {
-        assertEquals(AnimationLevel.OFF, AnimationLevel.fromStorageValue(0))
-        assertEquals(AnimationLevel.HIGH, AnimationLevel.fromStorageValue(1))
-        assertEquals(AnimationLevel.MEDIUM, AnimationLevel.fromStorageValue(2))
-        assertEquals(AnimationLevel.LOW, AnimationLevel.fromStorageValue(3))
+    fun legacyStorageValuesUseFastAnimation() {
+        listOf(0, 1, 2, 3).forEach { value ->
+            assertEquals(AnimationLevel.FAST, AnimationLevel.fromStorageValue(value))
+        }
     }
 
     @Test
     fun invalidStorageFallsBackToDefault() {
-        assertEquals(AnimationLevel.MEDIUM, AnimationLevel.fromStorageValue(-1))
-        assertEquals(AnimationLevel.MEDIUM, AnimationLevel.fromStorageValue(4))
+        assertEquals(AnimationLevel.FAST, AnimationLevel.fromStorageValue(-1))
+        assertEquals(AnimationLevel.FAST, AnimationLevel.fromStorageValue(4))
     }
 
     @Test
     fun legacySwitchMapsToCompatibleLevels() {
-        assertEquals(AnimationLevel.MEDIUM, AnimationLevel.fromLegacy(true))
-        assertEquals(AnimationLevel.OFF, AnimationLevel.fromLegacy(false))
+        assertEquals(AnimationLevel.FAST, AnimationLevel.fromLegacy(true))
+        assertEquals(AnimationLevel.FAST, AnimationLevel.fromLegacy(false))
     }
 }

@@ -18,11 +18,13 @@ import com.nbljsbdk.snowhide.domain.appclone.AppCloneUser
 import com.nbljsbdk.snowhide.domain.appmanage.AppManageFilterPolicy
 import com.nbljsbdk.snowhide.domain.appmanage.AppManageFreezePlanner
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -56,6 +58,7 @@ class AppManageViewModel(
 ) : AndroidViewModel(application) {
 
     private val context get() = getApplication<Application>()
+    private val derivedSharing = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000)
     private var initialTargets: Set<AppTarget>? = null
     private var sessionGeneration = 0L
     private var applyJob: Job? = null
@@ -117,10 +120,10 @@ class AppManageViewModel(
     )
     val cloneUsers: StateFlow<List<AppCloneUser>> = _cloneSnapshot
         .map { it.users }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, derivedSharing, emptyList())
     val selectedCloneUserId: StateFlow<Int?> = _cloneSnapshot
         .map { it.selectedUserId }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, derivedSharing, null)
     private val _cloneLoading = MutableStateFlow(false)
     private val _cloneError = MutableStateFlow<String?>(null)
     /** 左滑移出期间的乐观 UI 状态；解冻失败时恢复到右栏。 */
@@ -162,7 +165,8 @@ class AppManageViewModel(
             // 必须包含全部用户空间目标：分身加入 Grid 时，左右栏也要立即重新计算。
             added = GridRepository.allAddedTargets().toSet(),
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, UserZeroCatalog(emptyList(), emptySet()))
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, derivedSharing, UserZeroCatalog(emptyList(), emptySet()))
 
     /** 当前用户空间的未添加列表；分身模式下仍然是左栏。 */
     val leftApps: StateFlow<List<AppManageItem>> = combine(
@@ -183,7 +187,8 @@ class AppManageViewModel(
             filter.leftSort,
             recentOrder = { ListOrderRepository.appManageRemoved.value[it.key] ?: 0L },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, derivedSharing, emptyList())
 
     /** 当前用户空间的已添加列表；分身和系统筛选同样影响右栏。 */
     val rightApps: StateFlow<List<AppManageItem>> = combine(
@@ -204,23 +209,24 @@ class AppManageViewModel(
             filter.rightSort,
             recentOrder = { ListOrderRepository.appManageAdded.value[it.key] ?: 0L },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, derivedSharing, emptyList())
 
     val searchQuery: StateFlow<String> = _filter
         .map { it.query }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+        .stateIn(viewModelScope, derivedSharing, "")
     val systemUnlocked: StateFlow<Boolean> = _filter
         .map { it.systemUnlocked }
         .stateIn(viewModelScope, SharingStarted.Eagerly, _filter.value.systemUnlocked)
     val showSystemOnly: StateFlow<Boolean> = _filter
         .map { it.showSystemOnly }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, derivedSharing, false)
     val leftSort: StateFlow<SortMode> = _filter
         .map { it.leftSort }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, SortMode.TIME_DESC)
+        .stateIn(viewModelScope, derivedSharing, SortMode.TIME_DESC)
     val rightSort: StateFlow<SortMode> = _filter
         .map { it.rightSort }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, SortMode.NAME_ASC)
+        .stateIn(viewModelScope, derivedSharing, SortMode.NAME_ASC)
 
     fun setSearchQuery(q: String) {
         _filter.update { it.copy(query = q) }
@@ -414,9 +420,7 @@ class AppManageViewModel(
                 if (generation != sessionGeneration) return@launch
 
                 result.onSuccess {
-                    targets.forEach { target ->
-                        FrozenStateStore.applyCommandResult(target, frozen = true)
-                    }
+                    FrozenStateStore.applyCommandResults(targets.associateWith { true })
                 }
                 FrozenStateStore.refresh()
                 result.onFailure {

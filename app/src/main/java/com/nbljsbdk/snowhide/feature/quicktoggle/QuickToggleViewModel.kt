@@ -8,11 +8,13 @@ import com.nbljsbdk.snowhide.data.repo.GridRepository
 import com.nbljsbdk.snowhide.data.repo.ListOrderRepository
 import com.nbljsbdk.snowhide.data.repo.QuickToggleRepository
 import com.nbljsbdk.snowhide.core.model.AppTarget
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -46,8 +48,6 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
         val leftSort: SortMode,
         val rightSort: SortMode,
     )
-
-    private val context get() = getApplication<Application>()
 
     /** 快速启停成员（仓库唯一数据源） */
     val members: StateFlow<List<AppTarget>> = QuickToggleRepository.members
@@ -84,7 +84,8 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
             mode = filter.leftSort,
             recentOrder = { ListOrderRepository.quickToggleRemoved.value[it.key] ?: 0L },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000), emptyList())
 
     /** 右栏：快速启停成员（已添加里移出的自动剔除） */
     val rightApps: StateFlow<List<AppTarget>> = combine(
@@ -103,7 +104,8 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
             mode = filter.rightSort,
             recentOrder = { ListOrderRepository.quickToggleAdded.value[it.key] ?: 0L },
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000), emptyList())
 
     init {
         ListOrderRepository.seedQuickToggleTargets(QuickToggleRepository.members.value)
@@ -216,12 +218,12 @@ class QuickToggleViewModel(application: Application) : AndroidViewModel(applicat
     /** 应用显示名（包名由 UI 追加显示在名称下方，不再二选一） */
     fun displayLabel(target: AppTarget): String {
         val pkg = target.packageName.value
-        return runCatching {
-            val pm = context.packageManager
-            val info = pm.getApplicationInfo(pkg, 0)
-            pm.getApplicationLabel(info).toString()
-        }.getOrDefault(pkg).let { label ->
-            if (target.isPrimaryUser) label else "$label（用户 ${target.userId}）"
+        val label = AppListRepository.installedApps.value
+            .firstOrNull { it.pkg == pkg }
+            ?.label
+            ?: pkg
+        return label.let {
+            if (target.isPrimaryUser) it else "$it（用户 ${target.userId}）"
         }
     }
 

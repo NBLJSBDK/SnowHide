@@ -30,7 +30,6 @@ import com.nbljsbdk.snowhide.domain.folder.FolderPageInput
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlan
 import com.nbljsbdk.snowhide.domain.folder.FolderPagePlanner
 import com.nbljsbdk.snowhide.domain.folder.FolderPageSettingsUseCase
-import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 import com.nbljsbdk.snowhide.domain.settings.AppearanceSettingsUseCase
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutCreator
 import com.nbljsbdk.snowhide.domain.shortcut.DesktopShortcutSpec
@@ -38,12 +37,14 @@ import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 import com.nbljsbdk.snowhide.ui.util.FeedbackController
 import com.nbljsbdk.snowhide.ui.util.HapticController
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
@@ -109,8 +110,6 @@ class HomeViewModel(
     val transparentBg: StateFlow<Boolean> = appearanceSettingsUseCase.transparentBg
     val wallpaperOverlay: StateFlow<Float> = appearanceSettingsUseCase.wallpaperOverlay
     val iconShape: StateFlow<String> = appearanceSettingsUseCase.iconShape
-    val animationLevel: StateFlow<AnimationLevel> = appearanceSettingsUseCase.animationLevel
-        .stateIn(viewModelScope, SharingStarted.Eagerly, AnimationLevel.MEDIUM)
     val freezeStyle: StateFlow<String> = appearanceSettingsUseCase.freezeStyle
 
     /** 由组合根注入业务用例，避免页面 ViewModel 自行装配依赖。 */
@@ -266,7 +265,7 @@ class HomeViewModel(
                     .distinct()
                     .associateWith { target -> infoByPackage[target.packageName.value]?.label ?: target.packageName.value }
                 _labels.value = labelMap
-            }.collect { }
+            }.flowOn(Dispatchers.Default).collect { }
         }
         viewModelScope.launch {
             EngineManager.primaryEngine.collect { _engineReady.value = it != null }
@@ -332,8 +331,6 @@ class HomeViewModel(
     fun setTransparentBg(enabled: Boolean) = appearanceSettingsUseCase.setTransparentBg(enabled)
 
     fun setWallpaperOverlay(alpha: Float) = appearanceSettingsUseCase.setWallpaperOverlay(alpha)
-
-    fun setAnimationLevel(level: AnimationLevel) = appearanceSettingsUseCase.setAnimationLevel(level)
 
     fun setFreezeStyle(style: String) = appearanceSettingsUseCase.setFreezeStyle(style)
 

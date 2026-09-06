@@ -20,7 +20,6 @@ import kotlin.math.roundToInt
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,13 +30,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.nbljsbdk.snowhide.domain.settings.AnimationLevel
 import com.nbljsbdk.snowhide.ui.util.AppIconLoader
 
 /**
  * 美化设置透明浮框（长按主屏空白 → 美化设置，与布局设置同款浮框）
  *
- * 内容：图标包选择（点击行在浮框内展开列表）+ 背景透明开关 + 显示图标名称 + 动画速度。
+ * 内容：图标包选择（点击行在浮框内展开列表）+ 背景透明开关 + 显示图标名称。
  * 无状态组件（值+回调）。
  */
 @Composable
@@ -45,7 +43,6 @@ fun BeautyPanel(
     iconPack: String,
     transparentBg: Boolean,
     wallpaperOverlay: Float = 0.25f,
-    animationLevel: AnimationLevel = AnimationLevel.MEDIUM,
     showAppName: Boolean = true,
     freezeStyle: com.nbljsbdk.snowhide.ui.util.FreezeStyle,
     iconShape: String = "round",
@@ -55,7 +52,6 @@ fun BeautyPanel(
     onIconPackSelect: (String) -> Unit,
     onTransparentToggle: (Boolean) -> Unit,
     onWallpaperOverlayChange: (Float) -> Unit = {},
-    onAnimationLevelChange: (AnimationLevel) -> Unit = {},
     onShowAppNameChange: (Boolean) -> Unit = {},
     onFreezeStyleSelect: (com.nbljsbdk.snowhide.ui.util.FreezeStyle) -> Unit,
     onIconShapeSelect: (String) -> Unit = {},
@@ -192,8 +188,6 @@ fun BeautyPanel(
                         onCheckedChange = onShowAppNameChange,
                     )
                 }
-                // 动画速度档位：与震动设置一致，拖动时预览、松手后保存。
-                AnimationLevelSlider(animationLevel, onAnimationLevelChange)
                 // 图标形状（用户拍板：未收录图标包的应用也裁成圆形）
                 Text(
                     text = "图标形状",
@@ -245,31 +239,6 @@ fun BeautyPanel(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AnimationLevelSlider(
-    level: AnimationLevel,
-    onFinished: (AnimationLevel) -> Unit,
-) {
-    var draft by remember(level) { mutableFloatStateOf(level.storageValue.toFloat()) }
-    Column {
-        Text("动画：${AnimationLevel.fromStorageValue(draft.roundToInt()).label}", style = MaterialTheme.typography.bodySmall)
-        Slider(
-            value = draft,
-            onValueChange = { draft = it },
-            onValueChangeFinished = {
-                onFinished(AnimationLevel.fromStorageValue(draft.roundToInt()))
-            },
-            valueRange = 0f..3f,
-            steps = 2,
-        )
-        Text(
-            text = "关=瞬时，高=最快，中=默认，低=最慢",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
