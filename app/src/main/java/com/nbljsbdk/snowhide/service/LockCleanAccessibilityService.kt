@@ -2,6 +2,7 @@ package com.nbljsbdk.snowhide.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceConnectionState
@@ -19,30 +20,47 @@ import com.nbljsbdk.snowhide.core.accessibility.AccessibilityServiceConnectionSt
 class LockCleanAccessibilityService : AccessibilityService() {
 
     private val recentSwipeController by lazy { RecentSwipeController(this) }
+    private var connectionInitialized = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // 先报告系统已连接，再做业务初始化，避免 ColorOS 初始化耗时触发误报。
-        AccessibilityServiceConnectionState.markConnected()
+        initializeConnection()
+    }
+
+    /** 首次连接和系统重绑定共用同一条幂等初始化路径。 */
+    private fun initializeConnection() {
+        if (connectionInitialized) {
+            AccessibilityServiceConnectionState.markConnected()
+            return
+        }
         try {
             CompositionRoot.init(this)
             // 服务常驻：在这里注册息屏/解锁广播（比 MainActivity 更可靠）
             LockCleanReceiver.register(this)
             recentSwipeController.onServiceConnected()
+            connectionInitialized = true
+            AccessibilityServiceConnectionState.markConnected()
         } catch (error: Throwable) {
+            connectionInitialized = false
             AccessibilityServiceConnectionState.markDisconnected()
-            throw error
+            runCatching { recentSwipeController.onServiceDisconnected() }
+            LockCleanReceiver.unregister(this)
+            Log.e(TAG, "无障碍服务初始化失败", error)
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        recentSwipeController.onAccessibilityEvent(event)
+        runCatching { recentSwipeController.onAccessibilityEvent(event) }
+            .onFailure { error -> Log.e(TAG, "无障碍事件接收失败", error) }
     }
 
     override fun onInterrupt() = Unit
 
     override fun onUnbind(intent: Intent?): Boolean {
+        connectionInitialized = false
         AccessibilityServiceConnectionState.markDisconnected()
+        recentSwipeController.onServiceDisconnected()
+        LockCleanReceiver.unregister(this)
         // 允许系统在应用更新或服务短暂断开后通过 onRebind 恢复连接。
         super.onUnbind(intent)
         return true
@@ -50,13 +68,18 @@ class LockCleanAccessibilityService : AccessibilityService() {
 
     override fun onRebind(intent: Intent?) {
         super.onRebind(intent)
-        AccessibilityServiceConnectionState.markConnected()
+        initializeConnection()
     }
 
     override fun onDestroy() {
+        connectionInitialized = false
         AccessibilityServiceConnectionState.markDisconnected()
         recentSwipeController.onDestroy()
         LockCleanReceiver.unregister(this)
         super.onDestroy()
+    }
+
+    private companion object {
+        const val TAG = "SnowHideAccessibility"
     }
 }

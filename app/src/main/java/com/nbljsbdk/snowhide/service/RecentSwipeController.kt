@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.nbljsbdk.snowhide.app.CompositionRoot
 import com.nbljsbdk.snowhide.data.prefs.SettingsRepository
@@ -21,6 +22,7 @@ import com.nbljsbdk.snowhide.domain.recent.RecentFreezePolicy
 import com.nbljsbdk.snowhide.domain.recent.RecentSessionState
 import com.nbljsbdk.snowhide.core.feedback.FeedbackRegistry
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -41,7 +43,11 @@ internal class RecentSwipeController(
     private val context: Context
         get() = service.applicationContext
     private val handler = Handler(Looper.getMainLooper())
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, error ->
+            Log.e(TAG, "无障碍后台任务失败", error)
+        },
+    )
     private val freezeMutex = Mutex()
 
     private var pendingEvent: AccessibilityEvent? = null
@@ -74,6 +80,7 @@ internal class RecentSwipeController(
     private val sessionGeneration: Long get() = sessionState.generation
     private var queueDrainInFlight = false
     private var queueDrainAttemptedAt = 0L
+    private var connectionInitialized = false
     private lateinit var freezeUseCase: FreezeUseCase
 
     private data class RecentFreezeOutcome(
@@ -84,6 +91,7 @@ internal class RecentSwipeController(
 
     fun onServiceConnected() {
         current = this
+        if (connectionInitialized) return
         CompositionRoot.init(context)
         knownWindowPackage = RecentCalibrationRepository.windowPackage
         knownWindowClass = RecentCalibrationRepository.windowClass
@@ -92,7 +100,13 @@ internal class RecentSwipeController(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
             0,
         )?.activityInfo?.packageName
+        connectionInitialized = true
         handler.postDelayed(::drainQueuedFreezes, QUEUE_INITIAL_DELAY_MS)
+    }
+
+    fun onServiceDisconnected() {
+        connectionInitialized = false
+        if (current === this) current = null
     }
 
     /** 合并高频事件，滑动/窗口切换优先处理。 */
@@ -116,7 +130,7 @@ internal class RecentSwipeController(
     }
 
     fun onDestroy() {
-        if (current === this) current = null
+        onServiceDisconnected()
         handler.removeCallbacksAndMessages(null)
         pendingEvent?.recycle()
         pendingEvent = null
@@ -155,6 +169,9 @@ internal class RecentSwipeController(
         pendingEvent = null
         try {
             processEvent(event)
+        } catch (error: Throwable) {
+            // 解析 ROM 无障碍树失败不能杀掉整个服务进程，下一条事件仍可恢复处理。
+            Log.e(TAG, "无障碍事件处理失败", error)
         } finally {
             event.recycle()
         }
@@ -476,12 +493,14 @@ internal class RecentSwipeController(
             if (!recentSessionActive) return
             val root = runCatching { service.rootInActiveWindow }.getOrNull()
             val isRecent = root?.let {
-                RecentTaskParser.isRecentWindow(
-                    root = it,
-                    launcherPackage = launcherPackage,
-                    knownWindowPackage = knownWindowPackage,
-                    knownWindowClass = knownWindowClass,
-                )
+                runCatching {
+                    RecentTaskParser.isRecentWindow(
+                        root = it,
+                        launcherPackage = launcherPackage,
+                        knownWindowPackage = knownWindowPackage,
+                        knownWindowClass = knownWindowClass,
+                    )
+                }.getOrDefault(false)
             } == true
             root?.recycle()
             if (isRecent) {
@@ -535,6 +554,7 @@ internal class RecentSwipeController(
         private const val QUEUE_RETRY_INTERVAL_MS = 2_000L
         private const val MANUAL_CALIBRATION_TIMEOUT_MS = 30_000L
         private const val EMPTY_SNAPSHOT_CONFIRMATIONS = 2
+        private const val TAG = "SnowHideAccessibility"
         private val SUPPORTED_EVENT_TYPES = setOf(
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
